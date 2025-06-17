@@ -32,7 +32,7 @@ public:
     void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     void GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArray &msgSkeletonGraph);
-    void GrabGNNRoomCandidates(const vs_graphs::vSGraphs_AllDetectdetRooms &msgGNNRooms);
+    void GrabGNNRoomCandidates(const vs_graphs::VSGraphsAllDetectdetRooms &msgGNNRooms);
     void GrabRGBD(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD,
                   const sensor_msgs::PointCloud2ConstPtr &msgPC);
 };
@@ -236,7 +236,7 @@ void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArra
  *
  * @param msgGNNRooms The room candidates detected by the GNN module
  */
-void ImageGrabber::GrabGNNRoomCandidates(const vs_graphs::vSGraphs_AllDetectdetRooms &msgGNNRooms)
+void ImageGrabber::GrabGNNRoomCandidates(const vs_graphs::VSGraphsAllDetectdetRooms &msgGNNRooms)
 {
     // Set the GNN room candidates in the SLAM system
     setGNNBasedRoomCandidates(msgGNNRooms);

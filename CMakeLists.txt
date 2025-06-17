@@ -76,10 +76,10 @@ add_service_files(
 # Generate messages in the 'msg' folder
 add_message_files(
   FILES
-  vSGraphs_WallData.msg
-  vSGraphs_RoomData.msg
-  vSGraphs_AllWallsData.msg
-  vSGraphs_AllDetectdetRooms.msg
+  VSGraphsWallData.msg
+  VSGraphsRoomData.msg
+  VSGraphsAllWallsData.msg
+  VSGraphsAllDetectdetRooms.msg
 )
 
 generate_messages(

@@ -39,9 +39,9 @@ services:
       # Dev
       - /dev:/dev:rw
       # Working Directories (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/visual_sgraphs:/workspace/src/visual_sgraphs:rw"
+      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
       # Data Directories (** MODIFY **)
-      - "/media/alitourani/AT_SSD/Datasets:/home/user/datasets:rw"
+      - "[DATASET_PATH]:/home/user/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
@@ -53,6 +53,6 @@ services:
     command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
     volumes:
       # Working Directories (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/visual_sgraphs:/workspace/src/visual_sgraphs:rw"
+      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
     entrypoint: ""
     restart: "no"

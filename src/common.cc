@@ -121,7 +121,7 @@ void setupPublishers(ros::NodeHandle &nodeHandler, image_transport::ImageTranspo
     pubFiducialMarker = nodeHandler.advertise<visualization_msgs::MarkerArray>(node_name + "/fiducial_markers", 1);
     pubSegmentedPointcloud = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/segmented_point_clouds", 1);
     // [Building Components] Publishing Walls for GNN-based Room Detection
-    pubAllWalls = nodeHandler.advertise<vs_graphs::vSGraphs_AllWallsData>(node_name + "/all_mapped_walls", 10);
+    pubAllWalls = nodeHandler.advertise<vs_graphs::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
 
     // Structural Elements
     pubRoom = nodeHandler.advertise<visualization_msgs::MarkerArray>(node_name + "/rooms", 1);
@@ -393,7 +393,7 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, ros:
 
 void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, ros::Time msgTime)
 {
-    vs_graphs::vSGraphs_AllWallsData wallDataMsg;
+    vs_graphs::VSGraphsAllWallsData wallDataMsg;
 
     // Fill the data message with wall information
     wallDataMsg.header.stamp = msgTime;
@@ -417,7 +417,7 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, ros::Time msgT
         }
 
         // Fill the wall data
-        vs_graphs::vSGraphs_WallData wallData;
+        vs_graphs::VSGraphsWallData wallData;
 
         wallData.length = length;
         wallData.id = wall->getId();
@@ -1316,7 +1316,7 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::MarkerArray &skeletonAr
     pSLAM->setSkeletonCluster(skeletonClusterPoints);
 }
 
-void setGNNBasedRoomCandidates(const vs_graphs::vSGraphs_AllDetectdetRooms &msgGNNRooms) {
+void setGNNBasedRoomCandidates(const vs_graphs::VSGraphsAllDetectdetRooms &msgGNNRooms) {
     // Reset the buffer
     gnnRoomCandidates.clear();
 

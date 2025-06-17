@@ -83,8 +83,8 @@
 #include "Semantic/Marker.h"
 
 // Custom Messages
-#include <vs_graphs/vSGraphs_AllWallsData.h>
-#include <vs_graphs/vSGraphs_AllDetectdetRooms.h>
+#include <vs_graphs/VSGraphsAllWallsData.h>
+#include <vs_graphs/VSGraphsAllDetectdetRooms.h>
 
 using json = nlohmann::json;
 
@@ -215,4 +215,4 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::MarkerArray &skeletonAr
  * @brief Gets the set of room candidates detected by the GNN-based room detection module
  * @param msgGNNRooms The message containing the detected room candidates
  */
-void setGNNBasedRoomCandidates(const vs_graphs::vSGraphs_AllDetectdetRooms &msgGNNRooms);
+void setGNNBasedRoomCandidates(const vs_graphs::VSGraphsAllDetectdetRooms &msgGNNRooms);
