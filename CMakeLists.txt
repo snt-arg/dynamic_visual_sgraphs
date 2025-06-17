@@ -98,11 +98,11 @@ catkin_package (
 include_directories(
   ${PROJECT_SOURCE_DIR}
   ${PROJECT_SOURCE_DIR}/include
-  ${PROJECT_SOURCE_DIR}/orb_slam3
-  ${PROJECT_SOURCE_DIR}/orb_slam3/include
-  ${PROJECT_SOURCE_DIR}/orb_slam3/include/CameraModels
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/Sophus
+  ${PROJECT_SOURCE_DIR}/core
+  ${PROJECT_SOURCE_DIR}/core/include
+  ${PROJECT_SOURCE_DIR}/core/include/CameraModels
+  ${PROJECT_SOURCE_DIR}/core/Thirdparty
+  ${PROJECT_SOURCE_DIR}/core/Thirdparty/Sophus
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_INCLUDE_DIRS}
   ${catkin_INCLUDE_DIRS}
@@ -112,93 +112,93 @@ include_directories(
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-include(${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/DBoW2/CMakeLists.txt)
-include(${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/g2o/CMakeLists.txt)
+include(${PROJECT_SOURCE_DIR}/core/Thirdparty/DBoW2/CMakeLists.txt)
+include(${PROJECT_SOURCE_DIR}/core/Thirdparty/g2o/CMakeLists.txt)
 
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/orb_slam3/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/core/lib)
 add_library(${PROJECT_NAME} SHARED
-  orb_slam3/src/System.cc
-  orb_slam3/src/Tracking.cc
-  orb_slam3/src/LocalMapping.cc
-  orb_slam3/src/LoopClosing.cc
-  orb_slam3/src/ORBextractor.cc
-  orb_slam3/src/ORBmatcher.cc
-  orb_slam3/src/FrameDrawer.cc
-  orb_slam3/src/Converter.cc
-  orb_slam3/src/MapPoint.cc
-  orb_slam3/src/KeyFrame.cc
-  orb_slam3/src/Atlas.cc
-  orb_slam3/src/Map.cc
-  orb_slam3/src/MapDrawer.cc
-  orb_slam3/src/Optimizer.cc
-  orb_slam3/src/Frame.cc
-  orb_slam3/src/KeyFrameDatabase.cc
-  orb_slam3/src/Sim3Solver.cc
-  orb_slam3/src/Viewer.cc
-  orb_slam3/src/ImuTypes.cc
-  orb_slam3/src/G2oTypes.cc
-  orb_slam3/src/CameraModels/Pinhole.cpp
-  orb_slam3/src/CameraModels/KannalaBrandt8.cpp
-  orb_slam3/src/OptimizableTypes.cpp
-  orb_slam3/src/MLPnPsolver.cpp
-  orb_slam3/src/GeometricTools.cc
-  orb_slam3/src/TwoViewReconstruction.cc
-  orb_slam3/src/Utils.cc
-  orb_slam3/src/Config.cc
-  orb_slam3/src/Settings.cc
-  orb_slam3/src/GeoSemHelpers.cc
-  orb_slam3/src/Geometric/Plane.cc
-  orb_slam3/src/Semantic/Marker.cc
-  orb_slam3/src/Semantic/Door.cc
-  orb_slam3/src/Semantic/Room.cc
-  orb_slam3/src/Semantic/Floor.cc
-  orb_slam3/src/DatabaseParser.cc
-  orb_slam3/src/Types/SystemParams.cc
-  orb_slam3/src/GeometricSegmentation.cc
-  orb_slam3/src/SemanticSegmentation.cc
-  orb_slam3/src/SemanticsManager.cc
-  orb_slam3/include/System.h
-  orb_slam3/include/Tracking.h
-  orb_slam3/include/LocalMapping.h
-  orb_slam3/include/LoopClosing.h
-  orb_slam3/include/ORBextractor.h
-  orb_slam3/include/ORBmatcher.h
-  orb_slam3/include/FrameDrawer.h
-  orb_slam3/include/Converter.h
-  orb_slam3/include/MapPoint.h
-  orb_slam3/include/KeyFrame.h
-  orb_slam3/include/Atlas.h
-  orb_slam3/include/Map.h
-  orb_slam3/include/MapDrawer.h
-  orb_slam3/include/Optimizer.h
-  orb_slam3/include/Frame.h
-  orb_slam3/include/KeyFrameDatabase.h
-  orb_slam3/include/Sim3Solver.h
-  orb_slam3/include/Viewer.h
-  orb_slam3/include/ImuTypes.h
-  orb_slam3/include/G2oTypes.h
-  orb_slam3/include/CameraModels/GeometricCamera.h
-  orb_slam3/include/CameraModels/Pinhole.h
-  orb_slam3/include/CameraModels/KannalaBrandt8.h
-  orb_slam3/include/OptimizableTypes.h
-  orb_slam3/include/MLPnPsolver.h
-  orb_slam3/include/GeometricTools.h
-  orb_slam3/include/TwoViewReconstruction.h
-  orb_slam3/include/SerializationUtils.h
-  orb_slam3/include/Config.h
-  orb_slam3/include/Utils.h
-  orb_slam3/include/Settings.h
-  orb_slam3/include/GeoSemHelpers.h
-  orb_slam3/include/Semantic/Door.h
-  orb_slam3/include/Semantic/Room.h
-  orb_slam3/include/Semantic/Floor.h
-  orb_slam3/include/DatabaseParser.h
-  orb_slam3/include/Semantic/Marker.h
-  orb_slam3/include/Geometric/Plane.h
-  orb_slam3/include/Types/SystemParams.h
-  orb_slam3/include/GeometricSegmentation.h
-  orb_slam3/include/SemanticSegmentation.h
-  orb_slam3/include/SemanticsManager.h
+  core/src/System.cc
+  core/src/Tracking.cc
+  core/src/LocalMapping.cc
+  core/src/LoopClosing.cc
+  core/src/ORBextractor.cc
+  core/src/ORBmatcher.cc
+  core/src/FrameDrawer.cc
+  core/src/Converter.cc
+  core/src/MapPoint.cc
+  core/src/KeyFrame.cc
+  core/src/Atlas.cc
+  core/src/Map.cc
+  core/src/MapDrawer.cc
+  core/src/Optimizer.cc
+  core/src/Frame.cc
+  core/src/KeyFrameDatabase.cc
+  core/src/Sim3Solver.cc
+  core/src/Viewer.cc
+  core/src/ImuTypes.cc
+  core/src/G2oTypes.cc
+  core/src/CameraModels/Pinhole.cpp
+  core/src/CameraModels/KannalaBrandt8.cpp
+  core/src/OptimizableTypes.cpp
+  core/src/MLPnPsolver.cpp
+  core/src/GeometricTools.cc
+  core/src/TwoViewReconstruction.cc
+  core/src/Utils.cc
+  core/src/Config.cc
+  core/src/Settings.cc
+  core/src/GeoSemHelpers.cc
+  core/src/Geometric/Plane.cc
+  core/src/Semantic/Marker.cc
+  core/src/Semantic/Door.cc
+  core/src/Semantic/Room.cc
+  core/src/Semantic/Floor.cc
+  core/src/DatabaseParser.cc
+  core/src/Types/SystemParams.cc
+  core/src/GeometricSegmentation.cc
+  core/src/SemanticSegmentation.cc
+  core/src/SemanticsManager.cc
+  core/include/System.h
+  core/include/Tracking.h
+  core/include/LocalMapping.h
+  core/include/LoopClosing.h
+  core/include/ORBextractor.h
+  core/include/ORBmatcher.h
+  core/include/FrameDrawer.h
+  core/include/Converter.h
+  core/include/MapPoint.h
+  core/include/KeyFrame.h
+  core/include/Atlas.h
+  core/include/Map.h
+  core/include/MapDrawer.h
+  core/include/Optimizer.h
+  core/include/Frame.h
+  core/include/KeyFrameDatabase.h
+  core/include/Sim3Solver.h
+  core/include/Viewer.h
+  core/include/ImuTypes.h
+  core/include/G2oTypes.h
+  core/include/CameraModels/GeometricCamera.h
+  core/include/CameraModels/Pinhole.h
+  core/include/CameraModels/KannalaBrandt8.h
+  core/include/OptimizableTypes.h
+  core/include/MLPnPsolver.h
+  core/include/GeometricTools.h
+  core/include/TwoViewReconstruction.h
+  core/include/SerializationUtils.h
+  core/include/Config.h
+  core/include/Utils.h
+  core/include/Settings.h
+  core/include/GeoSemHelpers.h
+  core/include/Semantic/Door.h
+  core/include/Semantic/Room.h
+  core/include/Semantic/Floor.h
+  core/include/DatabaseParser.h
+  core/include/Semantic/Marker.h
+  core/include/Geometric/Plane.h
+  core/include/Types/SystemParams.h
+  core/include/GeometricSegmentation.h
+  core/include/SemanticSegmentation.h
+  core/include/SemanticsManager.h
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -206,8 +206,8 @@ target_link_libraries(${PROJECT_NAME}
   ${EIGEN3_LIBS}
   ${Pangolin_LIBRARIES}
   ${PCL_LIBRARIES}
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/DBoW2/lib/libDBoW2.so
-  ${PROJECT_SOURCE_DIR}/orb_slam3/Thirdparty/g2o/lib/libg2o.so
+  ${PROJECT_SOURCE_DIR}/core/Thirdparty/DBoW2/lib/libDBoW2.so
+  ${PROJECT_SOURCE_DIR}/core/Thirdparty/g2o/lib/libg2o.so
   -lboost_system
   -lboost_serialization
   -lcrypto

@@ -48,3 +48,4 @@ borrar/*
 */ExecMean.txt
 
 !Dockerfile
+docker/docker-compose.yml

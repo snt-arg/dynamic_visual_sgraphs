@@ -21,7 +21,7 @@
         <remap from="/camera/rgb/image_raw" to="$(arg rgb_image_topic)"/>
         <remap from="/camera/depth_registered/image_raw" to="$(arg depth_image_topic)"/>
         <!-- Files -->
-        <param name="voc_file" type="string" value="$(find vs_graphs)/orb_slam3/Vocabulary/ORBvoc.txt.bin"/>
+        <param name="voc_file" type="string" value="$(find vs_graphs)/core/Vocabulary/ORBvoc.txt.bin"/>
         <param name="settings_file" type="string" value="$(find vs_graphs)/config/RGB-D/$(arg sensor_config).yaml"/>
         <param name="sys_params_file" type="string" value="$(find vs_graphs)/config/system_params.yaml"/>
         <!-- Environment -->
