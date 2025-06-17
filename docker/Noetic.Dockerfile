@@ -105,7 +105,7 @@ WORKDIR /workspace/src/
  
 # Mount the SSH keys for cloning private repositories
 RUN --mount=type=ssh git clone git@github.com:snt-arg/visual_sgraphs.git
-RUN --mount=type=ssh git clone git@github.com:snt-arg/scene_segment_ros.git
+RUN --mount=type=ssh git clone -b ros1-noetic git@github.com:snt-arg/scene_segment_ros.git
 RUN --mount=type=ssh git clone -b noetic-devel git@github.com:pal-robotics/aruco_ros.git
 
 # Other libraries

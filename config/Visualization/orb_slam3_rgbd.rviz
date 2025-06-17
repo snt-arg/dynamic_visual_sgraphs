@@ -88,7 +88,7 @@ Visualization Manager:
       Value: true
     - Class: rviz/Image
       Enabled: true
-      Image Topic: /orb_slam3/tracking_image
+      Image Topic: /vs_graphs/tracking_image
       Max Value: 1
       Median window: 5
       Min Value: 0
@@ -121,7 +121,7 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.029999999329447746
       Style: Spheres
-      Topic: /orb_slam3/tracked_points
+      Topic: /vs_graphs/tracked_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -149,14 +149,14 @@ Visualization Manager:
       Size (Pixels): 3
       Size (m): 0.009999999776482582
       Style: Flat Squares
-      Topic: /orb_slam3/all_points
+      Topic: /vs_graphs/all_points
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
     - Class: rviz/Marker
       Enabled: true
-      Marker Topic: /orb_slam3/kf_markers
+      Marker Topic: /vs_graphs/kf_markers
       Name: kf markers
       Namespaces:
         kf_markers: true

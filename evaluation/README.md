@@ -42,12 +42,12 @@ vS-Graphs uses `.osa` files to store maps. These files are saved by default in y
 - **Option 2**: Manually trigger a save using the following ROS service:
 
 ```bash
-rosservice call /orb_slam3/save_map [file_name]
+rosservice call /vs_graphs/save_map [file_name]
 ```
 
 ### 🛠️ Map and Trajectory ROS Services
 
 Use the following ROS services to save maps and trajectories during or after running vS-Graphs:
 
-- To save the current SLAM map to `~/.ros/[file_name].osa` use `rosservice call /orb_slam3/save_map [file_name]`.
-- To exports the estimated trajectories use `rosservice call /orb_slam3/save_traj [file_name]`
+- To save the current SLAM map to `~/.ros/[file_name].osa` use `rosservice call /vs_graphs/save_map [file_name]`.
+- To exports the estimated trajectories use `rosservice call /vs_graphs/save_traj [file_name]`
