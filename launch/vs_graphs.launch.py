@@ -7,6 +7,9 @@ from launch.conditions import IfCondition
 from ament_index_python.packages import get_package_share_directory
 import os.path
 
+from launch_ros.actions import ComposableNodeContainer
+from launch_ros.descriptions import ComposableNode
+
 
 def generate_launch_description():
     return LaunchDescription(
@@ -150,7 +153,7 @@ def generate_launch_description():
                         #     "find_package_share", default="orb_slam3_ros"
                         # ),
                         get_package_share_directory("orb_slam3_ros"),
-                        "/config/Visualization/vsgraphs_rgbd_asier.rviz",
+                        "/config/Visualization/vsgraphs_rgbd2.rviz",
                         # get_package_share_directory("orb_slam3_ros"),
                         # "/config/Visualization/",
                         # LaunchConfiguration("vsgraphs_rgbd"),
@@ -174,6 +177,34 @@ def generate_launch_description():
             #         ("depth_registered/points", "/camera/depth/points"),
             #     ],
             # ),
+            ComposableNodeContainer(
+                name="depth_image_proc_container",
+                package="rclcpp_components",
+                namespace="",
+                executable="component_container",
+                composable_node_descriptions=[
+                    ComposableNode(
+                        package="depth_image_proc",
+                        plugin="depth_image_proc::PointCloudXyzrgbNode",
+                        name="point_cloud_xyzrgb_node",
+                        remappings=[
+                            (
+                                "rgb/camera_info",
+                                LaunchConfiguration("rgb_camera_info_topic"),
+                            ),
+                            (
+                                "rgb/image_rect_color",
+                                LaunchConfiguration("rgb_image_topic"),
+                            ),
+                            (
+                                "depth_registered/image_rect",
+                                LaunchConfiguration("depth_image_topic"),
+                            ),
+                            ("points", "/camera/depth/points"),
+                        ],
+                    ),
+                ],
+            ),
             # Semantic Scene Segmenter Node
             Node(
                 package="segmenter_ros",
