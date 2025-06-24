@@ -39,6 +39,19 @@
 // #include <tf/transform_broadcaster.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <image_transport/image_transport.hpp>
+#include <geometry_msgs/msg/point.hpp>
+#include <tf2_ros/transform_listener.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <tf2/transform_datatypes.h>
+#include <tf2/time.h>  // for tf2::durationFromSec
+
+#include <tf2_ros/buffer.h>
+#include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp> // For doTransform
+// #include <tf2_geometry_msgs/tf2_geometry_msgs.h> // Make sure this include is present
+// #include <tf2/tf2.h>
+#include <functional>
 
 // #include <std_msgs/Header.hpp>
 #include <std_msgs/msg/header.hpp>
@@ -51,33 +64,15 @@
 // #include <pcl/filters/voxel_grid.hpp>
 //Tranfororm previos pcl headers for ros2
 #include <pcl_ros/transforms.hpp>      // From your pcl_ros/ folder
-#include <pcl_ros/point_cloud.hpp>    // From your pcl_ros/ folder (if needed)
+// #include <pcl_ros/point_cloud.hpp>    // From your pcl_ros/ folder (if needed)
+#include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/pcl_node.hpp>       // From your pcl_ros/ folder (if needed)
 
 // #include <sensor_msgs/PointCloud2.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 // #include <visualization_msgs/Marker.hpp>
 #include <visualization_msgs/msg/marker.hpp>
-
-// #include <segmenter_ros/VSGraphDataMsg.hpp>
-// #include <segmenter_ros/SegmenterDataMsg.hpp>
-// #include <nav_msgs/Path.hpp>
-// #include <visualization_msgs/MarkerArray.hpp>
-// #include <pcl_conversions/pcl_conversions.hpp>
-// #include <rviz_visual_tools/rviz_visual_tools.hpp>
-
-// #include <message_filters/subscriber.hpp>
-// #include <message_filters/time_synchronizer.hpp>
-// #include <message_filters/sync_policies/approximate_time.hpp>
-
-// // This file is created automatically, see here http://wiki.ros.org/ROS/Tutorials/CreatingMsgAndSrv#Creating_a_srv
-// #include <orb_slam3_ros/SaveMap.hpp>
-
-// // Transformation process
-// #include <pcl_ros/transforms.h>
-// #include <tf/transform_listener.h>
-// #include <tf/transform_datatypes.h>
-// #include <tf2_ros/static_transform_broadcaster.h>
+#include "sensor_msgs/msg/image.hpp"
 
 #include <segmenter_ros/msg/vs_graph_data_msg.hpp>
 #include <segmenter_ros/msg/segmenter_data_msg.hpp>
@@ -113,9 +108,6 @@
 #include "Semantic/Marker.h"
 
 // Custom Messages
-// #include <orb_slam3_ros/VSGraphsAllWallsData.h>
-// #include <orb_slam3_ros/VSGraphsAllDetectdetRooms.h>
-
 #include <orb_slam3_ros/msg/vs_graphs_all_walls_data.hpp>
 #include <orb_slam3_ros/msg/vs_graphs_wall_data.hpp>
 #include <orb_slam3_ros/msg/vs_graphs_room_data.hpp>
@@ -141,24 +133,45 @@ extern std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 // List of GNN-based room candidates
 extern std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
 
-extern ros::Publisher pubKFImage;
-extern ros::Publisher pubAllWalls;
-extern rclcpp::Time lastPlanePublishTime;
-extern image_transport::Publisher pubTrackingImage;
-extern ros::Publisher pubCameraPose, pubCameraPoseVis, pubOdometry, pubKeyFrameMarker;
-extern ros::Publisher pubTrackedMappoints, pubAllMappoints, pubSegmentedPointcloud;
+// extern ros::Publisher pubKFImage;
+// extern ros::Publisher pubAllWalls;
+// extern rclcpp::Time lastPlanePublishTime;
+// extern image_transport::Publisher pubTrackingImage;
+// extern ros::Publisher pubCameraPose, pubCameraPoseVis, pubOdometry, pubKeyFrameMarker;
+// extern ros::Publisher pubTrackedMappoints, pubAllMappoints, pubSegmentedPointcloud;
+extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
+extern rclcpp::Publisher<orb_slam3_ros::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
 
-struct MapPointStruct
-{
+extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
+extern rclcpp::Time lastPlanePublishTime;
+
+extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
+extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
+extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
+extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
+
+
+// struct MapPointStruct
+// {
+//     int clusterId;
+//     Eigen::Vector3f coordinates;
+
+//     MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
+// };
+class MapPointStruct {
     int clusterId;
     Eigen::Vector3f coordinates;
-
-    MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
+    MapPointStruct(Eigen::Vector3f coords) : clusterId(-1), coordinates(coords) {}
 };
 
-void setupServices(ros::NodeHandle &, std::string);
+// void setupServices(ros::NodeHandle &, std::string);
+void setupServices(std::shared_ptr<rclcpp::Node>, const std::string&);
 void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
-void setupPublishers(ros::NodeHandle &, image_transport::ImageTransport &, std::string);
+// void setupPublishers(ros::NodeHandle &, image_transport::ImageTransport &, std::string);
+void setupPublishers(std::shared_ptr<rclcpp::Node>, image_transport::ImageTransport&, const std::string&);
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
 void publishCameraPose(Sophus::SE3f, rclcpp::Time);
@@ -184,9 +197,20 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *>, rclcpp::Time);
 
 void clearKFClsClouds(std::vector<ORB_SLAM3::KeyFrame *>);
 
-bool saveMapService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
-bool saveTrajectoryService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
-bool saveMapPointsAsPCDService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
+// bool saveMapService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
+// bool saveTrajectoryService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
+// bool saveMapPointsAsPCDService(orb_slam3_ros::SaveMap::Request &, orb_slam3_ros::SaveMap::Response &);
+void saveMapService(
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Request> request,
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Response> response);
+
+void saveTrajectoryService(
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Request> request,
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Response> response);
+
+void saveMapPointsAsPCDService(
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Request> request,
+  std::shared_ptr<orb_slam3_ros::srv::SaveMap::Response> response);
 
 /**
  * @brief Converts a SE3f to a cv::Mat
@@ -200,7 +224,7 @@ cv::Mat SE3fToCvMat(Sophus::SE3f data);
  *
  * @param data The SE3f data to be converted
  */
-tf::Transform SE3fToTFTransform(Sophus::SE3f data);
+tf2::Transform SE3fToTFTransform(Sophus::SE3f data);
 
 /**
  * @brief Converts a vector of MapPoints to a PointCloud2 message
@@ -208,7 +232,8 @@ tf::Transform SE3fToTFTransform(Sophus::SE3f data);
  * @param mapPoints The vector of MapPoints to be converted
  * @param msgTime The timestamp for the PointCloud2 message
  */
-sensor_msgs::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime);
+// sensor_msgs::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime);
+sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime);
 
 /**
  * @brief Publishes a static transformation (TF) between two coordinate frames and define a
@@ -244,10 +269,12 @@ std::pair<double, std::vector<ORB_SLAM3::Marker *>> findNearestMarker(double fra
  * @brief Gets skeleton voxels from `voxblox_skeleton` to be processed
  * @param skeletonArray The array of skeleton voxels received
  */
-void setVoxbloxSkeletonCluster(const visualization_msgs::MarkerArray &skeletonArray);
+// void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skeletonArray);
+void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skeletonArray);
 
 /**
  * @brief Gets the set of room candidates detected by the GNN-based room detection module
  * @param msgGNNRooms The message containing the detected room candidates
  */
-void setGNNBasedRoomCandidates(const orb_slam3_ros::VSGraphsAllDetectdetRooms &msgGNNRooms);
+// void setGNNBasedRoomCandidates(const orb_slam3_ros::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
+void setGNNBasedRoomCandidates(const orb_slam3_ros::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
