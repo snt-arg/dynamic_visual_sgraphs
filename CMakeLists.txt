@@ -75,9 +75,14 @@ find_package(segmenter_ros REQUIRED)  # Comment out - check if ROS2 equivalent e
 
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
-find_package(PCL REQUIRED)
+# find_package(PCL REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
+
+find_package(PCL REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
 
 # Generate services
@@ -252,34 +257,39 @@ ament_target_dependencies(ros_rgbd
   message_filters
   tf2
   tf2_ros
-  # segmenter_ros
+  segmenter_ros
 )
 
 ## ROS2 node
-add_executable(ros_rgbd_inertial
-  src/ros_rgbd_inertial.cc
-  src/common.cc
-)
+# add_executable(ros_rgbd_inertial
+#   src/ros_rgbd_inertial.cc
+#   src/common.cc
+# )
 
-target_link_libraries(ros_rgbd_inertial
-  ${PROJECT_NAME}_lib
-)
-ament_target_dependencies(ros_rgbd_inertial
-  rclcpp
-  sensor_msgs
-  geometry_msgs
-  cv_bridge
-  std_msgs
-  nav_msgs
-  message_filters
-  tf2
-  tf2_ros
-  # segmenter_ros
-)
+# target_link_libraries(ros_rgbd_inertial
+#   ${PROJECT_NAME}_lib
+# )
+# ament_target_dependencies(ros_rgbd_inertial
+#   rclcpp
+#   sensor_msgs
+#   geometry_msgs
+#   cv_bridge
+#   std_msgs
+#   nav_msgs
+#   message_filters
+#   tf2
+#   tf2_ros
+#   segmenter_ros
+# )
 
 # Make sure executables can use the custom messages
 rosidl_target_interfaces(ros_rgbd ${PROJECT_NAME} "rosidl_typesupport_cpp")
-rosidl_target_interfaces(ros_rgbd_inertial ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# rosidl_target_interfaces(ros_rgbd_inertial ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+install(
+  DIRECTORY launch config orb_slam3/Vocabulary
+  DESTINATION share/${PROJECT_NAME}
+)
 
 # Install the library
 install(TARGETS ${PROJECT_NAME}_lib
@@ -289,7 +299,7 @@ install(TARGETS ${PROJECT_NAME}_lib
 # Install executables
 install(TARGETS
   ros_rgbd
-  ros_rgbd_inertial
+  # ros_rgbd_inertial
   DESTINATION lib/${PROJECT_NAME}
 )
 
