@@ -171,7 +171,8 @@ class MapPointStruct {
 void setupServices(std::shared_ptr<rclcpp::Node>, const std::string&);
 void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
 // void setupPublishers(ros::NodeHandle &, image_transport::ImageTransport &, std::string);
-void setupPublishers(std::shared_ptr<rclcpp::Node>, image_transport::ImageTransport&, const std::string&);
+//void setupPublishers(std::shared_ptr<rclcpp::Node>, image_transport::ImageTransport&, const std::string&);
+void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name);
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
 void publishCameraPose(Sophus::SE3f, rclcpp::Time);

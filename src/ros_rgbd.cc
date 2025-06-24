@@ -146,6 +146,9 @@ int main(int argc, char **argv) // Changed with Copilot's help
         [igb](const orb_slam3_ros::msg::VSGraphsAllDetectdetRooms::SharedPtr msg) { igb->GrabGNNRoomCandidates(*msg); });
 
     // TODO: Port setupPublishers and setupServices to ROS2 if needed
+    // setupPublishers(node, image_transport::ImageTransport(node), nodeName);
+    static std::shared_ptr<image_transport::ImageTransport> image_transport = std::make_shared<image_transport::ImageTransport>(node);
+    setupPublishers(node, image_transport, nodeName);
 
     rclcpp::spin(node);
 
@@ -161,6 +164,8 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRG
               const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
               const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC)
 {
+    RCLCPP_WARN(this->get_logger(), "GrabRGBD callback triggered.");
+    
     // Variables
     cv_bridge::CvImageConstPtr cv_ptrD, cv_ptrRGB;
 
