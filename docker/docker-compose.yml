@@ -36,6 +36,9 @@ services:
       - ~/.gitconfig:/root/.gitconfig_local
       # Dev
       - /dev:/dev:rw
+      # persistent bash history and config
+      # - ~/.bash_history:/root/.bash_history
+      # - container_home_cache:/root/.cache  # Optional: persist cache
       # Working Directories (** MODIFY **)
       - "/home/asier/mydockers/ubuntu24/ros_ws:/home/asier/ros2_ws"
       # Data Directories (** MODIFY **)
