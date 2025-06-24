@@ -1,5 +1,11 @@
-FROM nvidia/cuda:12.9.0-cudnn-devel-ubuntu24.04
+# FROM nvidia/cuda:12.9.0-cudnn-devel-ubuntu24.04
+FROM nvcr.io/nvidia/cuda-dl-base:25.04-cuda12.9-devel-ubuntu24.04
 ARG DEBIAN_FRONTEND=noninteractive
+
+### FIX MPI ISSUE ###
+RUN mkdir -p /opt/hpcx/ompi/lib/x86_64-linux-gnu
+RUN ln -s /opt/hpcx/ompi /opt/hpcx/ompi/lib/x86_64-linux-gnu/openmpi
+RUN dpkg-reconfigure libc-bin
 
 # User and group setup
 ARG USERNAME=user
@@ -61,24 +67,44 @@ RUN groupadd --gid $USER_GID $USERNAME \
     && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME \
     && echo "$USERNAME ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-##### Python environment setup #####
-# PyTorch and related libraries - networkx needs to be installed first because of version issue
-# RUN pip3 install networkx==3.1
+# ##### Python environment setup #####
+# # PyTorch and related libraries - networkx needs to be installed first because of version issue
+# # RUN pip3 install networkx==3.1
+# # RUN pip3 install torch==2.0.1+cu118 -f  https://download.pytorch.org/whl/torch_stable.html
+# # RUN pip3 install torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
+
+# RUN pip3 install --break-system-packages networkx==3.1
+# RUN pip3 install --break-system-packages torch==2.3.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html
+# # RUN pip3 install --break-system-packages torchvision==0.16.1+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+# RUN pip3 install --break-system-packages torchvision==0.18.1+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
+
+# # Replace your current PyTorch and torchvision install lines in your Dockerfile with the following: 
+# # RUN pip3 install --break-system-packages torch==1.10.0+cu113 torchvision==0.11.1+cu113 -f https://download.pytorch.org/whl/torch_stable.html
+
+
+# # detectron and CLIP
+# # Compute Capability 7.5 for T600 (SnT laptop) and 7.0 for V100 (HPC - Iris)
+# ARG TORCH_CUDA_ARCH_LIST="7.5;7.0+PTX"
+# ENV FORCE_CUDA="1"
+# RUN pip3 install --break-system-packages 'git+https://github.com/facebookresearch/detectron2.git'
+# RUN pip3 install --break-system-packages 'git+https://github.com/openai/CLIP.git'
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
+RUN pip3 install networkx==3.1
 # RUN pip3 install torch==2.0.1+cu118 -f  https://download.pytorch.org/whl/torch_stable.html
 # RUN pip3 install torchvision==0.15.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
 
-RUN pip3 install --break-system-packages networkx==3.1
-RUN pip3 install --break-system-packages torch==2.3.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html
-# RUN pip3 install --break-system-packages torchvision==0.16.1+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
-RUN pip3 install --break-system-packages torchvision==0.18.1+cu121 --extra-index-url https://download.pytorch.org/whl/cu121
-
+RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu121 \
+    torch \
+    torchvision
 
 # detectron and CLIP
 # Compute Capability 7.5 for T600 (SnT laptop) and 7.0 for V100 (HPC - Iris)
 ARG TORCH_CUDA_ARCH_LIST="7.5;7.0+PTX"
 ENV FORCE_CUDA="1"
-RUN pip3 install --break-system-packages 'git+https://github.com/facebookresearch/detectron2.git'
-RUN pip3 install --break-system-packages 'git+https://github.com/openai/CLIP.git'
+RUN pip3 install 'git+https://github.com/facebookresearch/detectron2.git'
+RUN pip3 install 'git+https://github.com/openai/CLIP.git'
+
 
 ##### SSH keys for GitHub #####
 
