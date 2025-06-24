@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 
-'''
- * This file is part of Visual S-Graphs (vS-Graphs).
- * Copyright (C) 2023-2025 SnT, University of Luxembourg
- *
- * 📝 Authors: Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- *
- * vS-Graphs is free software: you can redistribute it and/or modify it under the terms
- * of the GNU General Public License as published by the Free Software Foundation, either
- * version 3 of the License, or (at your option) any later version.
- *
- * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
- * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-'''
+"""
+* This file is part of Visual S-Graphs (vS-Graphs).
+* Copyright (C) 2023-2025 SnT, University of Luxembourg
+*
+* 📝 Authors: Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
+*
+* vS-Graphs is free software: you can redistribute it and/or modify it under the terms
+* of the GNU General Public License as published by the Free Software Foundation, either
+* version 3 of the License, or (at your option) any later version.
+*
+* This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+* without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+* See the GNU General Public License for more details: https://www.gnu.org/licenses/
+"""
 
 import sys
 import rospy
@@ -37,12 +37,10 @@ if len(sys.argv) > 1:
 
 # Creating a txt file that will contain poses
 print("Creating txt files for adding SLAM and Ground-Truth poses ...")
-gt_pose_file = open(
-    f"{files_path}/gt_pose_{slam_method}_{dataset_seq}.txt", "w+")
+gt_pose_file = open(f"{files_path}/gt_pose_{slam_method}_{dataset_seq}.txt", "w+")
 gt_pose_file.write("#timestamp tx ty tz qx qy qz qw\n")
 gt_pose_file.flush()
-slam_pose_file = open(
-    f"{files_path}/slam_pose_{slam_method}_{dataset_seq}.txt", "w+")
+slam_pose_file = open(f"{files_path}/slam_pose_{slam_method}_{dataset_seq}.txt", "w+")
 slam_pose_file.write("#timestamp tx ty tz qx qy qz qw\n")
 slam_pose_file.flush()
 
@@ -59,9 +57,22 @@ def groundtruthPoseCallback(groundtruth_pose_msg):
     rw = groundtruth_pose_msg.pose.orientation.w
     # Write to the Ground-Truth file
     gt_pose_file.write(
-        str(time) + " " + str(tx) + " " + str(ty) + " "
-        + str(tz) + " " + str(rx) + " " + str(ry) + " "
-        + str(rz) + " " + str(rw) + "\n"
+        str(time)
+        + " "
+        + str(tx)
+        + " "
+        + str(ty)
+        + " "
+        + str(tz)
+        + " "
+        + str(rx)
+        + " "
+        + str(ry)
+        + " "
+        + str(rz)
+        + " "
+        + str(rw)
+        + "\n"
     )
     gt_pose_file.flush()
 
@@ -78,9 +89,22 @@ def slamPoseCallback(slam_pose_msg):
     odom_rw = slam_pose_msg.pose.orientation.w
     # Write to the SLAM file
     slam_pose_file.write(
-        str(time) + " " + str(odom_x) + " " + str(odom_y) + " "
-        + str(odom_z) + " " + str(odom_rx) + " " + str(odom_ry) + " "
-        + str(odom_rz) + " " + str(odom_rw) + "\n"
+        str(time)
+        + " "
+        + str(odom_x)
+        + " "
+        + str(odom_y)
+        + " "
+        + str(odom_z)
+        + " "
+        + str(odom_rx)
+        + " "
+        + str(odom_ry)
+        + " "
+        + str(odom_rz)
+        + " "
+        + str(odom_rw)
+        + "\n"
     )
     slam_pose_file.flush()
 
@@ -88,8 +112,7 @@ def slamPoseCallback(slam_pose_msg):
 def subscribers():
     rospy.init_node("text_file_generator", anonymous=True)
     # Subscriber to the ground-truth topic
-    rospy.Subscriber(gt_pose_topic,
-                     ModelStates, groundtruthPoseCallback)
+    rospy.Subscriber(gt_pose_topic, ModelStates, groundtruthPoseCallback)
     # Subscriber to the SLAM topic
     rospy.Subscriber(slam_pose_topic, PoseStamped, slamPoseCallback)
     rospy.spin()
