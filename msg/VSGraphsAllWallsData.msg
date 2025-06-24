@@ -4,4 +4,4 @@
 
 std_msgs/Header header
 # Set of wall data messages
-VSGraphsWallData[] wallss
+VSGraphsWallData[] walls
