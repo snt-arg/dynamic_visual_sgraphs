@@ -1,8 +1,7 @@
 {
   "name": "vsgraphs_ros_jazzy",
-  "remoteUser": "asier", // Once the container is running, attach to it as the user asier
   //only works if that user actually exists inside the container.
-  // "remoteUser": "${env.USERNAME}",
+  "remoteUser": "${env.USERNAME}",
   "service": "vsgraphs_ros2",
   "customizations": {
     "vscode": {

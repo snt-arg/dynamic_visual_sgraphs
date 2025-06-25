@@ -169,10 +169,9 @@ RUN make install
 RUN mkdir -p /workspace/src
 WORKDIR /workspace/src/
 
-# # Mount the SSH keys for cloning private repositories
-# RUN --mount=type=ssh git clone git@github.com:snt-arg/visual_sgraphs.git
-# RUN --mount=type=ssh git clone git@github.com:snt-arg/scene_segment_ros.git
-# RUN --mount=type=ssh git clone git@github.com:snt-arg/scene_segment_ros2.git
+# Mount the SSH keys for cloning private repositories
+RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/visual_sgraphs.git
+RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segment_ros.git
 # RUN --mount=type=ssh git clone -b noetic-devel git@github.com:pal-robotics/aruco_ros.git
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
