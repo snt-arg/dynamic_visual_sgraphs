@@ -68,7 +68,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(rosidl_default_runtime REQUIRED)
 # find_package(aruco_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
 # find_package(aruco_msgs REQUIRED)  # Comment out - check if ROS2 equivalent exists
-find_package(backward_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
+# find_package(backward_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
 find_package(rviz_visual_tools REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(segmenter_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
