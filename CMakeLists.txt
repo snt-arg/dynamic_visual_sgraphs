@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)  # ros2 change
+cmake_minimum_required(VERSION 3.5)
 project(vs_graphs)
 
 IF(NOT CMAKE_BUILD_TYPE)
@@ -9,6 +9,7 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
+
 # [Hint] We commented below lines as it got stuck in the normalize function of g2o::plane3d
 # set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
@@ -235,18 +236,18 @@ ament_target_dependencies(${PROJECT_NAME}_lib
   image_transport
   pcl_ros
   rviz_visual_tools
-  # segmenter_ros
 )
 
-
-## ROS2 node
+# ROS2 node
 add_executable(ros_rgbd
   src/ros_rgbd.cc
   src/common.cc
 )
+
 target_link_libraries(ros_rgbd
   ${PROJECT_NAME}_lib
 )
+
 ament_target_dependencies(ros_rgbd
   rclcpp
   sensor_msgs
@@ -260,31 +261,8 @@ ament_target_dependencies(ros_rgbd
   segmenter_ros
 )
 
-## ROS2 node
-# add_executable(ros_rgbd_inertial
-#   src/ros_rgbd_inertial.cc
-#   src/common.cc
-# )
-
-# target_link_libraries(ros_rgbd_inertial
-#   ${PROJECT_NAME}_lib
-# )
-# ament_target_dependencies(ros_rgbd_inertial
-#   rclcpp
-#   sensor_msgs
-#   geometry_msgs
-#   cv_bridge
-#   std_msgs
-#   nav_msgs
-#   message_filters
-#   tf2
-#   tf2_ros
-#   segmenter_ros
-# )
-
 # Make sure executables can use the custom messages
 rosidl_target_interfaces(ros_rgbd ${PROJECT_NAME} "rosidl_typesupport_cpp")
-# rosidl_target_interfaces(ros_rgbd_inertial ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(
   DIRECTORY launch config core/Vocabulary
@@ -299,9 +277,8 @@ install(TARGETS ${PROJECT_NAME}_lib
 # Install executables
 install(TARGETS
   ros_rgbd
-  # ros_rgbd_inertial
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# IMPORTANT: This must be the very last line in CMakeLists.txt
+# Ament package configuration
 ament_package()
