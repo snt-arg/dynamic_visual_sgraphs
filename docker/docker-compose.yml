@@ -36,18 +36,18 @@ services:
       - ~/.gitconfig:/root/.gitconfig_local
       # Dev
       - /dev:/dev:rw
-      # persistent bash history and config
+      # persistent bash history and config from local to container
       # - ~/.bash_history:/root/.bash_history
+      # - "/home/asier/.bash_history:/root/.bash_history"
       # - container_home_cache:/root/.cache  # Optional: persist cache
+
       # Working Directories (** MODIFY **)
       - "/home/asier/mydockers/ubuntu24/ros_ws:/home/asier/ros2_ws"
       # Data Directories (** MODIFY **)
       - "/home/asier/Documents/datasets:/home/asier/datasets"
 
     network_mode: "host"
-    command:
-      tail -f /dev/null
-      # Used to set correct U/G(ID) for shared folder
+    command: tail -f /dev/null # Used to set correct U/G(ID) for shared folder
   #   depends_on:
   #     - volume-init
   # # volume-init:
@@ -58,3 +58,9 @@ services:
   #     - "/home/asier/mydockers/ubuntu24/ros_ws:/home/asier/ros2_ws"
   #   entrypoint: ""
   #   restart: "no"
+  # volumes:
+  # bash_history:
+  #   driver: local
+  # container_home_cache:
+  #   driver: local
+ 
