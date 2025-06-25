@@ -287,7 +287,7 @@ rosidl_target_interfaces(ros_rgbd ${PROJECT_NAME} "rosidl_typesupport_cpp")
 # rosidl_target_interfaces(ros_rgbd_inertial ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
 install(
-  DIRECTORY launch config orb_slam3/Vocabulary
+  DIRECTORY launch config core/Vocabulary
   DESTINATION share/${PROJECT_NAME}
 )
 

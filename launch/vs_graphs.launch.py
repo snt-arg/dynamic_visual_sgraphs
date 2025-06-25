@@ -34,9 +34,9 @@ def generate_launch_description():
             ),
             # VS-Graphs Node
             Node(
-                package="orb_slam3_ros",
+                package="vs_graphs",
                 executable="ros_rgbd",
-                # name="orb_slam3",
+                # name="vs_graphs",
                 output="screen",
                 parameters=[
                     {"use_sim_time": LaunchConfiguration("offline")},
@@ -45,9 +45,9 @@ def generate_launch_description():
                             "voc_file",
                             default=[
                                 # LaunchConfiguration(
-                                #     "find_package_share", default="orb_slam3_ros"
+                                #     "find_package_share", default="vs_graphs"
                                 # ),
-                                get_package_share_directory("orb_slam3_ros"),
+                                get_package_share_directory("vs_graphs"),
                                 "/Vocabulary/ORBvoc.txt.bin",
                             ],
                         )
@@ -57,10 +57,10 @@ def generate_launch_description():
                             "settings_file",
                             default=[
                                 # LaunchConfiguration(
-                                #     "find_package_share", default="orb_slam3_ros"
+                                #     "find_package_share", default="vs_graphs"
                                 # ),
-                                # "/home/asier/ros2_ws/install/orb_slam3_ros/share/orb_slam3_ros/",
-                                get_package_share_directory("orb_slam3_ros"),
+                                # "/home/asier/ros2_ws/install/vs_graphs/share/vs_graphs/",
+                                get_package_share_directory("vs_graphs"),
                                 "/config/RGB-D/",
                                 LaunchConfiguration("sensor_config"),
                                 ".yaml",
@@ -72,9 +72,9 @@ def generate_launch_description():
                             "sys_params_file",
                             default=[
                                 # LaunchConfiguration(
-                                #     "find_package_share", default="orb_slam3_ros"
+                                #     "find_package_share", default="vs_graphs"
                                 # ),
-                                get_package_share_directory("orb_slam3_ros"),
+                                get_package_share_directory("vs_graphs"),
                                 "/config/system_params.yaml",
                             ],
                         )
@@ -130,8 +130,8 @@ def generate_launch_description():
             # Node(
             #     package="hector_trajectory_server",
             #     executable="hector_trajectory_server",
-            #     name="trajectory_server_orb_slam3",
-            #     namespace="orb_slam3_ros",
+            #     name="trajectory_server_vs_graphs",
+            #     namespace="vs_graphs",
             #     output="screen",
             #     parameters=[
             #         {"target_frame_name": "/map"},
@@ -150,11 +150,11 @@ def generate_launch_description():
                     "-d",
                     [
                         # LaunchConfiguration(
-                        #     "find_package_share", default="orb_slam3_ros"
+                        #     "find_package_share", default="vs_graphs"
                         # ),
-                        get_package_share_directory("orb_slam3_ros"),
+                        get_package_share_directory("vs_graphs"),
                         "/config/Visualization/vsgraphs_rgbd2.rviz",
-                        # get_package_share_directory("orb_slam3_ros"),
+                        # get_package_share_directory("vs_graphs"),
                         # "/config/Visualization/",
                         # LaunchConfiguration("vsgraphs_rgbd"),
                         # ".rviz",
