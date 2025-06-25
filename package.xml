@@ -1,51 +1,40 @@
-<?xml version="1.0"?>
-<package>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypedPath="file"?>
+<package format="3">
   <name>vs_graphs</name>
   <version>1.2.0</version>
   <description>Visual S-Graphs (vS-Graphs) ROS-based Implementation.</description>
-  <maintainer email="ali.tourani@uni.lu">Ali Tourani</maintainer>
+  <maintainer email="a.tourani1991@gmail.com">Ali Tourani</maintainer>
   <maintainer email="saad.ejaz@uni.lu">Saad Ejaz</maintainer>
-
   <license>BSD</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <build_depend>roscpp</build_depend>
-  <build_depend>rospy</build_depend>
-  <build_depend>std_msgs</build_depend>
-  <build_depend>nav_msgs</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>tf2_geometry_msgs</build_depend>
-  <build_depend>cv_bridge</build_depend>
-  <build_depend>image_transport</build_depend>
-  <build_depend>tf</build_depend>
-  <build_depend>tf2_ros</build_depend>
-  <build_depend>dynamic_reconfigure</build_depend>
-  <build_depend>message_generation</build_depend>
-  <build_depend>aruco_ros</build_depend>
-  <build_depend>aruco_msgs</build_depend>
-  <build_depend>backward_ros</build_depend>
-  <build_depend>rviz_visual_tools</build_depend>
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>image_transport</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <!-- <depend>aruco_ros</depend>
+  <depend>aruco_msgs</depend> -->
+  <depend>backward_ros</depend>
+  <depend>rviz_visual_tools</depend>
+  <depend>segmenter_ros</depend>
 
-  <run_depend>roscpp</run_depend>
-  <run_depend>rospy</run_depend>
-  <run_depend>std_msgs</run_depend>
-  <run_depend>nav_msgs</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>tf2_geometry_msgs</run_depend>
-  <run_depend>cv_bridge</run_depend>
-  <run_depend>image_transport</run_depend>
-  <run_depend>tf</run_depend>
-  <run_depend>tf2_ros</run_depend>
-  <run_depend>dynamic_reconfigure</run_depend>
-  <run_depend>message_runtime</run_depend>
-  <run_depend>aruco_ros</run_depend>
-  <run_depend>aruco_msgs</run_depend>
-  <run_depend>backward_ros</run_depend>
-  <run_depend>rviz_visual_tools</run_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <member_of_group>rosidl_interface_packages</member_of_group>
+
   <export>
-
+    <build_type>ament_cmake</build_type>
   </export>
 </package>

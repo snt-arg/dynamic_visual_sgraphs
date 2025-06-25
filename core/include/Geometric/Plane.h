@@ -26,6 +26,7 @@
 #include <pcl/common/io.h>
 #include <pcl/common/centroid.h>
 #include <pcl/octree/octree_search.h>
+#include <boost/shared_ptr.hpp>
 
 namespace ORB_SLAM3
 {

@@ -1,7 +1,9 @@
 {
-  "name": "vsgraphs_ros1",
-  "remoteUser": "${env.USERNAME}",
-  "service": "vsgraphs",
+  "name": "vsgraphs_ros_jazzy",
+  "remoteUser": "asier", // Once the container is running, attach to it as the user asier
+  //only works if that user actually exists inside the container.
+  // "remoteUser": "${env.USERNAME}",
+  "service": "vsgraphs_ros2",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -10,12 +12,12 @@
         "ms-vscode.cpptools",
         "ms-vscode.cpptools-themes",
         "ms-vscode.cpptools-extension-pack",
-        "ms-iot.vscode-ros",
+        //     "ms-iot.vscode-ros",
         "ms-vscode.cmake-tools",
-        "esbenp.prettier-vscode",
-        "GitHub.copilot",
-        "eamodio.gitlens",
-        "PKief.material-icon-theme"
+        // "esbenp.prettier-vscode",
+        "GitHub.copilot"
+        // "eamodio.gitlens",
+        // "PKief.material-icon-theme"
       ],
       "settings": {
         "files.associations": {
@@ -27,6 +29,6 @@
       }
     }
   },
-  "workspaceFolder": "/workspace",
+  "workspaceFolder": "/home/asier/ros2_ws",
   "dockerComposeFile": "../docker/docker-compose.yml"
 }

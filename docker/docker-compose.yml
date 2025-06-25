@@ -1,16 +1,16 @@
 services:
-  vsgraphs:
-    image: vsgraphs
+  vsgraphs_ros2:
+    image: vsgraphs_ros2
     build:
       context: .
-      dockerfile: Noetic.Dockerfile
+      dockerfile: Jazzy.Dockerfile
       ssh:
         - default
       args:
         USERNAME: $USERNAME
         USER_UID: 1000
         USER_GID: 1000
-    container_name: vsgraphs
+    container_name: vsgraphs_ros2
     environment:
       DISPLAY: $DISPLAY
       XAUTHORITY: $XAUTHORITY
@@ -38,21 +38,30 @@ services:
       - ~/.gitconfig:/home/user/.gitconfig_local
       # Dev
       - /dev:/dev:rw
+      # persistent bash history and config from local to container
+      # - ~/.bash_history:/root/.bash_history
+      # - "/home/asier/.bash_history:/root/.bash_history"
+      # - container_home_cache:/root/.cache  # Optional: persist cache
+
       # Working Directories (** MODIFY **)
-      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
+      - "/home/asier/mydockers/ubuntu24/ros_ws:/home/asier/ros2_ws"
       # Data Directories (** MODIFY **)
       - "[DATASET_PATH]:/home/user/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
-      # Used to set correct U/G(ID) for shared folder
-    depends_on:
-      - volume-init
-  volume-init:
-    image: busybox
-    command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
-    volumes:
-      # Working Directories (** MODIFY **)
-      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
-    entrypoint: ""
-    restart: "no"
+      network_mode: "host"
+      command:
+        tail -f /dev/null
+        # Used to set correct U/G(ID) for shared folder
+      depends_on:
+        - volume-init
+    volume-init:
+      image: busybox
+      command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
+      volumes:
+        # Working Directories (** MODIFY **)
+        - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
+      entrypoint: ""
+      restart: "no"
+ 

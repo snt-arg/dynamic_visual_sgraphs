@@ -29,7 +29,7 @@ class ImageGrabber
 public:
     ImageGrabber() {};
 
-    void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
+    // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     void GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArray &msgSkeletonGraph);
     void GrabStereo(const sensor_msgs::ImageConstPtr &msgLeft, const sensor_msgs::ImageConstPtr &msgRight);
@@ -99,8 +99,8 @@ int main(int argc, char **argv)
     sync.registerCallback(boost::bind(&ImageGrabber::GrabStereo, &igb, _1, _2));
 
     // Subscribe to the markers detected by `aruco_ros` library
-    ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
-                                                      &ImageGrabber::GrabArUcoMarker, &igb);
+    // ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
+    //                                                   &ImageGrabber::GrabArUcoMarker, &igb);
 
     // Subscriber for images obtained from the Semantic Segmentater
     ros::Subscriber sub_segmented_img = nodeHandler.subscribe("/camera/color/image_segment", 50,
@@ -124,7 +124,7 @@ int main(int argc, char **argv)
 
 void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr &msgLeft, const sensor_msgs::ImageConstPtr &msgRight)
 {
-    ros::Time msg_time = msgLeft->header.stamp;
+    rclcpp::Time msg_time = msgLeft->header.stamp;
 
     // Copy the ros image message to cv::Mat.
     cv_bridge::CvImageConstPtr cv_ptrLeft, cv_ptrRight;
@@ -160,11 +160,11 @@ void ImageGrabber::GrabStereo(const sensor_msgs::ImageConstPtr &msgLeft, const s
     publishTopics(msg_time);
 }
 
-void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
-{
-    // Pass the visited markers to a buffer to be processed later
-    addMarkersToBuffer(markerArray);
-}
+// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
+// {
+//     // Pass the visited markers to a buffer to be processed later
+//     // addMarkersToBuffer(markerArray);
+// }
 
 void ImageGrabber::GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage)
 {

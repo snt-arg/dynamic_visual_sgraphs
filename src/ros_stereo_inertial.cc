@@ -42,7 +42,7 @@ public:
 
     void SyncWithImu();
 
-    void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
+    // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     void GrabImageLeft(const sensor_msgs::ImageConstPtr &msg);
     void GrabImageRight(const sensor_msgs::ImageConstPtr &msg);
     cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
@@ -117,8 +117,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_img_right = nodeHandler.subscribe("/camera/right/image_raw", 500, &ImageGrabber::GrabImageRight, &igb);
 
     // Subscribe to the markers detected by `aruco_ros` library
-    ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
-                                                      &ImageGrabber::GrabArUcoMarker, &igb);
+    // ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
+    //                                                   &ImageGrabber::GrabArUcoMarker, &igb);
 
     // Subscriber for images obtained from the Semantic Segmentater
     ros::Subscriber sub_segmented_img = nodeHandler.subscribe("/camera/color/image_segment", 50,
@@ -223,7 +223,7 @@ void ImageGrabber::SyncWithImu()
 
             this->mBufMutexLeft.lock();
             imLeft = GetImage(imgLeftBuf.front());
-            ros::Time msg_time = imgLeftBuf.front()->header.stamp;
+            rclcpp::Time msg_time = imgLeftBuf.front()->header.stamp;
             imgLeftBuf.pop();
             this->mBufMutexLeft.unlock();
 
@@ -290,11 +290,11 @@ void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
-void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
-{
-    // Pass the visited markers to a buffer to be processed later
-    addMarkersToBuffer(markerArray);
-}
+// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
+// {
+//     // Pass the visited markers to a buffer to be processed later
+//     // addMarkersToBuffer(markerArray);
+// }
 
 void ImageGrabber::GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage)
 {

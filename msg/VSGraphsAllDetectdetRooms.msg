@@ -1,4 +1,4 @@
-Header header
+std_msgs/Header header
 
-# Set of VSGraphsRoomData.msg
+# Set of vSGraphs_RoomData.msg
 VSGraphsRoomData[] rooms
