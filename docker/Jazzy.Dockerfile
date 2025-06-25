@@ -229,6 +229,17 @@ RUN apt-get update && apt-get install -y ros-jazzy-rviz-visual-tools
 # RUN sudo apt update && sudo apt install ros-jazzy-rviz-visual-tools
 RUN sudo apt install ros-jazzy-pcl-ros
 
+### New installations here:
+RUN apt-get update && \
+    apt-get install -y ros-jazzy-depth-image-proc ros-jazzy-backward-ros
+# colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
+#  ros2 launch orb_slam3_ros vs_graphs.launch.py 
+# sudo apt install ros-jazzy-depth-image-proc
+# sudo apt install ros-jazzy-backward-ros
+# export MAKEFLAGS="-j 12
+
+
+
 ##### Clean up #####
 # remove the apt list files
 RUN rm -rf /var/lib/apt/lists/*
