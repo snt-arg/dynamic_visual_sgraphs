@@ -44,24 +44,20 @@ services:
       # - container_home_cache:/root/.cache  # Optional: persist cache
 
       # Working Directories (** MODIFY **)
-      - "/home/asier/mydockers/ubuntu24/ros_ws:/home/asier/ros2_ws"
+      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
       # Data Directories (** MODIFY **)
       - "[DATASET_PATH]:/home/user/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
-      network_mode: "host"
-      command:
-        tail -f /dev/null
-        # Used to set correct U/G(ID) for shared folder
-      depends_on:
-        - volume-init
-    volume-init:
-      image: busybox
-      command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
-      volumes:
-        # Working Directories (** MODIFY **)
-        - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
-      entrypoint: ""
-      restart: "no"
- 
+      # Used to set correct U/G(ID) for shared folder
+    depends_on:
+      - volume-init
+  volume-init:
+    image: busybox
+    command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
+    volumes:
+      # Working Directories (** MODIFY **)
+      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
+    entrypoint: ""
+    restart: "no"

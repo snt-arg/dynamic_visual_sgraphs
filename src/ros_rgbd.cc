@@ -32,7 +32,7 @@ public:
     // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
-    void GrabGNNRoomCandidates(const orb_slam3_ros::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
+    void GrabGNNRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
     void GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB, const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
     const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC);
 };
@@ -136,9 +136,9 @@ int main(int argc, char **argv) // Changed with Copilot's help
         "/voxblox_skeletonizer/sparse_graph", 1,
         [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { igb->GrabVoxbloxSkeletonGraph(*msg); });
 
-    auto subGNNRooms = node->create_subscription<orb_slam3_ros::msg::VSGraphsAllDetectdetRooms>(
+    auto subGNNRooms = node->create_subscription<vs_graphs::msg::VSGraphsAllDetectdetRooms>(
         "/gnn_room_detector", 1,
-        [igb](const orb_slam3_ros::msg::VSGraphsAllDetectdetRooms::SharedPtr msg) { igb->GrabGNNRoomCandidates(*msg); });
+        [igb](const vs_graphs::msg::VSGraphsAllDetectdetRooms::SharedPtr msg) { igb->GrabGNNRoomCandidates(*msg); });
 
     // TODO: Port setupPublishers and setupServices to ROS2 if needed
     // setupPublishers(node, image_transport::ImageTransport(node), nodeName);

@@ -53,7 +53,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/Path
       Name: trajectory
       Enabled: true
-      Topic: /orb_slam3_ros/trajectory
+      Topic: /vs_graphs/trajectory
       Line Style: Billboards
       Line Width: 0.01
     - Class: rviz_default_plugins/MarkerArray

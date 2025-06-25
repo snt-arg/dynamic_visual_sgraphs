@@ -233,7 +233,7 @@ RUN sudo apt install ros-jazzy-pcl-ros
 RUN apt-get update && \
     apt-get install -y ros-jazzy-depth-image-proc ros-jazzy-backward-ros
 # colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=RelWithDebInfo
-#  ros2 launch orb_slam3_ros vs_graphs.launch.py 
+#  ros2 launch vs_graphs vs_graphs.launch.py 
 # sudo apt install ros-jazzy-depth-image-proc
 # sudo apt install ros-jazzy-backward-ros
 # export MAKEFLAGS="-j 12
