@@ -52,6 +52,7 @@ std::string world_frame_id, cam_frame_id, imu_frame_id, frameMap, frameBC, frame
 // ros::Publisher pubTrackedMappoints, pubSegmentedPointcloud, pubPlanePointcloud, pubPlaneLabel, pubDoor;
 // ros::Publisher pubCameraPose, pubCameraPoseVis, pubOdometry, pubKeyFrameMarker, pubKFImage, pubKeyFrameList;
 rclcpp::Time lastPlanePublishTime = rclcpp::Time(0);
+
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
@@ -1015,8 +1016,24 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
     if (numPlanes == 0)
         return;
 
+    
+    std::cout << "msgTime: " << msgTime.seconds() << " seconds" << std::endl;
+    std::cout << "lastPlanePublishTime: " << lastPlanePublishTime.seconds() << " seconds" << std::endl;
+    
+    // TODO: proper inicialization of lastPlanePublishTime
+    if ( lastPlanePublishTime.seconds() == 0)
+    {
+        lastPlanePublishTime = msgTime;
+    }
+    
     // Check if sufficient time has passed since the last plane publication
     // if ((msgTime - lastPlanePublishTime)rclcpp::Time::seconds() < 3)
+      
+    // double delta_time = (msgTime - lastPlanePublishTime).seconds();
+    // if (delta_time < 3)
+    // if (rclcpp::Duration(msgTime - lastPlanePublishTime).seconds() < 3.0)
+    // if ((msgTime - lastPlanePublishTime) < rclcpp::Duration::from_seconds(3.0))
+    // if ((msgTime - lastPlanePublishTime).nanoseconds() < 3000000000LL)
     if ((msgTime - lastPlanePublishTime).seconds() < 3)
         return;
     lastPlanePublishTime = msgTime;
