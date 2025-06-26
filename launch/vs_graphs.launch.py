@@ -1,14 +1,11 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.conditions import IfCondition
-from ament_index_python.packages import get_package_share_directory
-import os.path
-
-from launch_ros.actions import ComposableNodeContainer
+from launch.actions import DeclareLaunchArgument
 from launch_ros.descriptions import ComposableNode
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import ComposableNodeContainer
+from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
@@ -18,10 +15,12 @@ def generate_launch_description():
             DeclareLaunchArgument("offline", default_value="true"),
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
-            DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
+            DeclareLaunchArgument(
+                "visualize_segmented_scene", default_value="true"),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
-            DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
+            DeclareLaunchArgument(
+                "sensor_config", default_value="RealSense_D435i"),
             DeclareLaunchArgument(
                 "rgb_image_topic", default_value="/camera/color/image_raw"
             ),
@@ -34,9 +33,9 @@ def generate_launch_description():
             ),
             # VS-Graphs Node
             Node(
+                name="vs_graphs",
                 package="vs_graphs",
                 executable="ros_rgbd",
-                # name="vs_graphs",
                 output="screen",
                 parameters=[
                     {"use_sim_time": LaunchConfiguration("offline")},
@@ -44,9 +43,6 @@ def generate_launch_description():
                         "voc_file": LaunchConfiguration(
                             "voc_file",
                             default=[
-                                # LaunchConfiguration(
-                                #     "find_package_share", default="vs_graphs"
-                                # ),
                                 get_package_share_directory("vs_graphs"),
                                 "/Vocabulary/ORBvoc.txt.bin",
                             ],
@@ -56,10 +52,6 @@ def generate_launch_description():
                         "settings_file": LaunchConfiguration(
                             "settings_file",
                             default=[
-                                # LaunchConfiguration(
-                                #     "find_package_share", default="vs_graphs"
-                                # ),
-                                # "/home/asier/ros2_ws/install/vs_graphs/share/vs_graphs/",
                                 get_package_share_directory("vs_graphs"),
                                 "/config/RGB-D/",
                                 LaunchConfiguration("sensor_config"),
@@ -71,9 +63,6 @@ def generate_launch_description():
                         "sys_params_file": LaunchConfiguration(
                             "sys_params_file",
                             default=[
-                                # LaunchConfiguration(
-                                #     "find_package_share", default="vs_graphs"
-                                # ),
                                 get_package_share_directory("vs_graphs"),
                                 "/config/system_params.yaml",
                             ],
@@ -88,7 +77,8 @@ def generate_launch_description():
                     {"world_frame_id": "world"},
                     {"enable_pangolin": False},
                     {"publish_pointclouds": True},
-                    {"colored_pointcloud": LaunchConfiguration("colored_pointcloud")},
+                    {"colored_pointcloud": LaunchConfiguration(
+                        "colored_pointcloud")},
                 ],
                 remappings=[
                     ("/camera/rgb/image_raw", LaunchConfiguration("rgb_image_topic")),
@@ -98,7 +88,7 @@ def generate_launch_description():
                     ),
                 ],
             ),
-            # Static Transforms (use ROS 2 static_transform_publisher)
+            # Static Transforms
             Node(
                 package="tf2_ros",
                 executable="static_transform_publisher",
@@ -162,21 +152,7 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
-            # # Depth to Point Cloud (nodelet is not used in ROS 2, use component or node directly)
-            # Node(
-            #     package="depth_image_proc",
-            #     executable="point_cloud_xyzrgb",
-            #     name="point_cloud_xyzrgb",
-            #     remappings=[
-            #         ("rgb/camera_info", LaunchConfiguration("rgb_camera_info_topic")),
-            #         ("rgb/image_rect_color", LaunchConfiguration("rgb_image_topic")),
-            #         (
-            #             "depth_registered/image_rect",
-            #             LaunchConfiguration("depth_image_topic"),
-            #         ),
-            #         ("depth_registered/points", "/camera/depth/points"),
-            #     ],
-            # ),
+            # Depth to Colored Point Cloud
             ComposableNodeContainer(
                 name="depth_image_proc_container",
                 package="rclcpp_components",
@@ -207,20 +183,18 @@ def generate_launch_description():
             ),
             # Semantic Scene Segmenter Node
             Node(
+                name="segmenter_ros",
                 package="segmenter_ros",
                 executable="segmenter_yoso.py",
-                name="segmenter_ros",
                 output="screen",
                 parameters=[
-                    {"visualize": LaunchConfiguration("visualize_segmented_scene")}
+                    {"visualize": LaunchConfiguration(
+                        "visualize_segmented_scene")}
                 ],
                 arguments=[
                     "--ros-args",
                     "--params-file",
                     [
-                        # LaunchConfiguration(
-                        #     "find_package_share", default="segmenter_ros"
-                        # ),
                         get_package_share_directory("segmenter_ros"),
                         "/config/cfg_yoso.yaml",
                     ],
