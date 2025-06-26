@@ -5,6 +5,7 @@
   <description>Visual S-Graphs (vS-Graphs) ROS-based Implementation.</description>
   <maintainer email="a.tourani1991@gmail.com">Ali Tourani</maintainer>
   <maintainer email="saad.ejaz@uni.lu">Saad Ejaz</maintainer>
+  <maintainer email="asier.bikandi@uni.lu">Asier Bikandi</maintainer>
   <license>BSD</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
@@ -23,9 +24,9 @@
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <!-- <depend>aruco_ros</depend> -->
   <!-- <depend>aruco_msgs</depend> -->
+  <depend>backward_ros</depend>
   <depend>rviz_visual_tools</depend>
   <depend>segmenter_ros</depend>
-
   <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>

@@ -175,30 +175,10 @@ RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segmen
 # RUN --mount=type=ssh git clone -b noetic-devel git@github.com:pal-robotics/aruco_ros.git
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
-# # other libraries
+# Other libraries
 WORKDIR /workspace/src/visual_sgraphs/docker
-# RUN pip3 install -r requirements.txt
-# WORKDIR /workspace/src/
+RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
 
-RUN pip3 install --break-system-packages --ignore-installed typing_extensions \
-    networkx==3.1 \
-    ultralytics==8.0.120 \
-    matplotlib>=3.2.2 \
-    opencv-python==4.6.0.66 \
-    Pillow>=7.1.2 \
-    PyYAML>=5.3.1 \
-    requests>=2.23.0 \
-    scipy>=1.4.1 \
-    tqdm>=4.64.0 \
-    pandas>=1.1.4 \
-    seaborn>=0.11.0 \
-    gradio==4.11.0 \
-    wandb \
-    transformers \
-    ftfy \
-    regex \
-    timm \
-    evo
 WORKDIR /workspace/src/
 
 # # for ROS package: mav_voxblox_planning
@@ -206,21 +186,9 @@ WORKDIR /workspace/src/
 # RUN --mount=type=ssh wstool init . ./mav_voxblox_planning/install/install_ssh.rosinstall
 # RUN --mount=type=ssh wstool update
 
-# # download the yoso checkpoint
-# RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
-# RUN mv yoso_res50_coco.pth /workspace/src/scene_segment_ros/include/
-
-# # build the workspace
-WORKDIR /workspace/
-# RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && catkin build -j12 -DCMAKE_BUILD_TYPE=Release && rosclean purge -y"
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
-# RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --no-warn-unused-cli && rosdep update"
-
-
-##### Miscalleanous #####
-RUN ldconfig
-# RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/asier/.bashrc
-RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/$USERNAME/.bashrc
+# Download the yoso checkpoint
+RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
+RUN mv yoso_res50_coco.pth /workspace/src/scene_segment_ros/include/
 
 #### For cmakelist of vsual_sgraphs #####
 ENV DEBIAN_FRONTEND=noninteractive
@@ -237,7 +205,16 @@ RUN apt-get update && \
 # sudo apt install ros-jazzy-backward-ros
 # export MAKEFLAGS="-j 12
 
+# Build the workspace
+WORKDIR /workspace/
+# RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && catkin build -j12 -DCMAKE_BUILD_TYPE=Release && rosclean purge -y"
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
+# RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --no-warn-unused-cli && rosdep update"
 
+
+##### Miscalleanous #####
+RUN ldconfig
+RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/$USERNAME/.bashrc
 
 ##### Clean up #####
 # remove the apt list files
@@ -259,8 +236,6 @@ RUN echo "#!/bin/bash" >> /entrypoint.sh \
 WORKDIR /workspace/
 
 ENTRYPOINT ["/entrypoint.sh"]
-
 USER $USERNAME
 CMD ["/bin/bash"]
 SHELL ["/bin/bash"]
-

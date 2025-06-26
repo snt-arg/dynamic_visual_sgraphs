@@ -42,7 +42,7 @@ int main(int argc, char **argv) // Changed with Copilot's help
     // ros::init(argc, argv, "RGBD");
     // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     rclcpp::init(argc, argv);
-    auto node = std::make_shared<rclcpp::Node>("RGBD");
+    auto node = std::make_shared<rclcpp::Node>("vs_graphs");
 
     if (argc > 1)
         RCLCPP_WARN(node->get_logger(), "Arguments supplied via command line are ignored.");
@@ -158,9 +158,7 @@ int main(int argc, char **argv) // Changed with Copilot's help
 void ImageGrabber::GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB,
               const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
               const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC)
-{
-    RCLCPP_WARN(this->get_logger(), "GrabRGBD callback triggered.");
-    
+{   
     // Variables
     cv_bridge::CvImageConstPtr cv_ptrD, cv_ptrRGB;
 
