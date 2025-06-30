@@ -108,20 +108,6 @@ def generate_launch_description():
                 arguments=["0", "0", "0", "0", "0", "0",
                            "camera", "camera_color_optical_frame"],
             ),
-            # # Trajectory Path Server (if available in ROS 2)
-            # Node(
-            #     package="mogi_trajectory_server",
-            #     executable="mogi_trajectory_server",
-            #     name="trajectory_server_vs_graphs",
-            #     namespace="vs_graphs",
-            #     output="screen",
-            #     parameters=[
-            #         {"target_frame_name": "/map"},
-            #         {"source_frame_name": LaunchConfiguration("camera_frame")},
-            #         {"trajectory_update_rate": 20.0},
-            #         {"trajectory_publish_rate": 20.0},
-            #     ],
-            # ),
             # RViz
             Node(
                 condition=IfCondition(LaunchConfiguration("launch_rviz")),
