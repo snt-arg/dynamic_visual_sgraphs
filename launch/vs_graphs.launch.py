@@ -22,14 +22,14 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "sensor_config", default_value="RealSense_D435i"),
             DeclareLaunchArgument(
-                "rgb_image_topic", default_value="/camera/color/image_raw"
+                "rgb_image_topic", default_value="/camera/camera/color/image_raw"
             ),
             DeclareLaunchArgument(
-                "rgb_camera_info_topic", default_value="/camera/color/camera_info"
+                "rgb_camera_info_topic", default_value="/camera/camera/color/camera_info"
             ),
             DeclareLaunchArgument(
                 "depth_image_topic",
-                default_value="/camera/aligned_depth_to_color/image_raw",
+                default_value="/camera/camera/aligned_depth_to_color/image_raw",
             ),
             # VS-Graphs Node
             Node(
@@ -105,16 +105,8 @@ def generate_launch_description():
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="camera_to_camera_optical",
-                arguments=[
-                    "0",
-                    "0",
-                    "0",
-                    "0",
-                    "0",
-                    "0",
-                    "camera",
-                    "camera_color_optical_frame",
-                ],
+                arguments=["0", "0", "0", "0", "0", "0",
+                           "camera", "camera_color_optical_frame"],
             ),
             # # Trajectory Path Server (if available in ROS 2)
             # Node(

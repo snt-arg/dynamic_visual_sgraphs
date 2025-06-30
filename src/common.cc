@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "common.h"
 #include <rclcpp/rclcpp.hpp>
@@ -31,39 +31,37 @@ ORB_SLAM3::System::eSensor sensorType = ORB_SLAM3::System::NOT_SET;
 bool colorPointcloud = true;
 double roll = 0, pitch = 0, yaw = 0;
 bool pubStaticTransform, pubPointClouds;
-std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
+std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 // std::shared_ptr<tf2::TransformListener> transformListener;
 std::shared_ptr<rviz_visual_tools::RvizVisualTools> visualTools;
 std::shared_ptr<tf2_ros::Buffer> tfBuffer_;
 std::shared_ptr<tf2_ros::TransformListener> tfListener_{nullptr};
 
-std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster;
-std::unique_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster;
 std::vector<std::vector<ORB_SLAM3::Marker *>> markersBuffer;
+std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
 std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
+std::shared_ptr<tf2_ros::StaticTransformBroadcaster> staticTfBroadcaster;
 std::string world_frame_id, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
-// ros::Publisher pubAllWalls, pubAllMappoints, pubFiducialMarker, pubRoom, pubFreespaceCluster;
-// ros::Publisher pubTrackedMappoints, pubSegmentedPointcloud, pubPlanePointcloud, pubPlaneLabel, pubDoor;
-// ros::Publisher pubCameraPose, pubCameraPoseVis, pubOdometry, pubKeyFrameMarker, pubKFImage, pubKeyFrameList;
+
 rclcpp::Time lastPlanePublishTime = rclcpp::Time(0);
 
-rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
-rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
-rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
-rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubPlanePointcloud;
-rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
-rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubKeyFrameList;
 rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
-rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
-rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
-rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPlaneLabel;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubDoor;
-rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubFiducialMarker;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubRoom;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
+rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubPlanePointcloud;
 rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
+rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPlaneLabel;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
+rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
+rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
+rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubFiducialMarker;
 
 void saveMapService(
     std::shared_ptr<vs_graphs::srv::SaveMap::Request> req,
@@ -127,51 +125,9 @@ void setupServices(std::shared_ptr<rclcpp::Node> node, const std::string &node_n
         node_name + "/save_traj", &saveTrajectoryService);
 }
 
-// void setupPublishers(ros::NodeHandle &nodeHandler, image_transport::ImageTransport &image_transport, std::string node_name)
-// {
-//     // Basic
-//     pubTrackingImage = image_transport.advertise(node_name + "/tracking_image", 1);
-//     pubKeyFrameList = nodeHandler.advertise<nav_msgs::Path>(node_name + "/keyframe_list", 2);
-//     pubAllMappoints = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/all_points", 1);
-//     pubCameraPose = nodeHandler.advertise<geometry_msgs::msg::PoseStamped>(node_name + "/camera_pose", 1);
-//     pubKFImage = nodeHandler.advertise<segmenter_ros::VSGraphDataMsg>(node_name + "/keyframe_image", 50); // rate of keyframe generation is higher
-//     pubTrackedMappoints = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/tracked_points", 1);
-//     pubKeyFrameMarker = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/kf_markers", 1);
-//     pubFreespaceCluster = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/freespace_clusters", 1);
-//     pubCameraPoseVis = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/camera_pose_vis", 1);
-
-//     // Building Components
-//     pubDoor = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/doors", 1);
-//     pubPlaneLabel = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/plane_labels", 1);
-//     pubPlanePointcloud = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/plane_point_clouds", 1);
-//     pubFiducialMarker = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/fiducial_markers", 1);
-//     pubSegmentedPointcloud = nodeHandler.advertise<sensor_msgs::PointCloud2>(node_name + "/segmented_point_clouds", 1);
-//     // [Building Components] Publishing Walls for GNN-based Room Detection
-//     pubAllWalls = nodeHandler.advertise<vs_graphs::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
-
-//     // Structural Elements
-//     pubRoom = nodeHandler.advertise<visualization_msgs::msg::MarkerArray>(node_name + "/rooms", 1);
-
-//     // Get body odometry if IMU data is also available
-//     if (sensorType == ORB_SLAM3::System::IMU_MONOCULAR || sensorType == ORB_SLAM3::System::IMU_STEREO ||
-//         sensorType == ORB_SLAM3::System::IMU_RGBD)
-//         pubOdometry = nodeHandler.advertise< nav_msgs::msg::Odometry>(node_name + "/body_odom", 1);
-
-//     // Showing planes using RViz Visual Tools
-//     visualTools = std::make_shared<rviz_visual_tools::RvizVisualTools>(
-//         frameBC, "/plane_visuals", nodeHandler);
-//     visualTools->setAlpha(0.5);
-//     visualTools->loadMarkerPub();
-//     visualTools->deleteAllMarkers();
-//     visualTools->enableBatchPublishing();
-
-//     transformListener = std::make_shared<tf::TransformListener>();
-// }
-
 void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name)
 {
     // Basic
-    pubTrackingImage = std::make_shared<image_transport::Publisher>(image_transport->advertise(node_name + "/tracking_image", 1));
     pubKeyFrameList = node->create_publisher<nav_msgs::msg::Path>(node_name + "/keyframe_list", 2);
     pubAllMappoints = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/all_points", 1);
     pubCameraPose = node->create_publisher<geometry_msgs::msg::PoseStamped>(node_name + "/camera_pose", 1);
@@ -180,14 +136,15 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubKeyFrameMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/kf_markers", 1);
     pubFreespaceCluster = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/freespace_clusters", 1);
     pubCameraPoseVis = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/camera_pose_vis", 1);
+    pubTrackingImage = std::make_shared<image_transport::Publisher>(image_transport->advertise(node_name + "/tracking_image", 1));
 
     // Building Components
     pubDoor = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/doors", 1);
     pubPlaneLabel = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/plane_labels", 1);
+    pubAllWalls = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
     pubPlanePointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/plane_point_clouds", 1);
     pubFiducialMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/fiducial_markers", 1);
     pubSegmentedPointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/segmented_point_clouds", 1);
-    pubAllWalls = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
 
     // Structural Elements
     pubRoom = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/rooms", 1);
@@ -197,14 +154,14 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
         sensorType == ORB_SLAM3::System::IMU_RGBD)
         pubOdometry = node->create_publisher<nav_msgs::msg::Odometry>(node_name + "/body_odom", 1);
 
+    // Visualizing Planes
     visualTools = std::make_shared<rviz_visual_tools::RvizVisualTools>(
-    frameBC, "/plane_visuals", node);
+        frameBC, "/plane_visuals", node);
     visualTools->setAlpha(0.5);
     visualTools->loadMarkerPub();
     visualTools->deleteAllMarkers();
     visualTools->enableBatchPublishing();
 
-    // transformListener = std::make_shared<tf::TransformListener>(); 
     tfBuffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     tfListener_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);
 }
@@ -225,7 +182,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     if (pubStaticTransform)
         publishStaticTFTransform(world_frame_id, frameMap, msgTime);
 
-    // get the keyframes
+    // Get KeyFrames
     std::vector<ORB_SLAM3::KeyFrame *> keyframes = pSLAM->GetAllKeyFrames();
 
     // Setup publishers
@@ -235,7 +192,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     publishTrackingImage(pSLAM->GetCurrentFrame(), msgTime);
     publishKeyFrameImages(keyframes, msgTime);
     publishKeyFrameMarkers(keyframes, msgTime);
-    
+
     // Publish all mapped walls for GNN-based room detection
     publishAllMappedWalls(pSLAM->GetAllPlanes(), msgTime);
 
@@ -420,21 +377,16 @@ void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
     pubCameraPoseVis->publish(cameraVisualList);
 }
 
-// void publishTFTransform(Sophus::SE3f T_SE3f, string frame_id, string child_frame_id, rclcpp::Time msgTime)
-// {
-//     tf::Transform tf_transform = SE3fToTFTransform(T_SE3f);
-//     static tf::TransformBroadcaster tf_broadcaster;
-//     tf_broadcaster.sendTransform(tf::StampedTransform(tf_transform, msgTime, frame_id, child_frame_id));
-// }
-
-void publishTFTransform(Sophus::SE3f T_SE3f, std::string frame_id, std::string child_frame_id, rclcpp::Time msgTime)
+void publishTFTransform(Sophus::SE3f T_SE3f, std::string parentFrameId, std::string childFrameId, rclcpp::Time msgTime)
 {
+    // Variables
     geometry_msgs::msg::TransformStamped transformStamped;
-    transformStamped.header.stamp = msgTime;
-    transformStamped.header.frame_id = frame_id;
-    transformStamped.child_frame_id = child_frame_id;
 
-    // Fill translation
+    transformStamped.header.stamp = msgTime;
+    transformStamped.child_frame_id = childFrameId;
+    transformStamped.header.frame_id = parentFrameId;
+
+    // Set the values of transform messages
     transformStamped.transform.translation.x = T_SE3f.translation().x();
     transformStamped.transform.translation.y = T_SE3f.translation().y();
     transformStamped.transform.translation.z = T_SE3f.translation().z();
@@ -445,33 +397,39 @@ void publishTFTransform(Sophus::SE3f T_SE3f, std::string frame_id, std::string c
     transformStamped.transform.rotation.z = T_SE3f.unit_quaternion().z();
     transformStamped.transform.rotation.w = T_SE3f.unit_quaternion().w();
 
-    if (tf_broadcaster) {
-        tf_broadcaster->sendTransform(transformStamped);
-    }
+    if (tfBroadcaster)
+        tfBroadcaster->sendTransform(transformStamped);
+    else
+        RCLCPP_ERROR(rclcpp::get_logger("visual_sgraphs"), "TF broadcaster is not initialized.");
 }
 
 void publishStaticTFTransform(std::string parentFrameId, std::string childFrameId, rclcpp::Time msgTime)
 {
+    // Variables
     tf2::Quaternion quat;
     geometry_msgs::msg::TransformStamped transformStamped;
 
+    // Set the values of transform messages
     transformStamped.header.stamp = msgTime;
     transformStamped.child_frame_id = childFrameId;
     transformStamped.header.frame_id = parentFrameId;
 
+    // Set the translation to zero (static transform)
     transformStamped.transform.translation.x = 0;
     transformStamped.transform.translation.y = 0;
     transformStamped.transform.translation.z = 0;
 
+    // Set the rotation using roll, pitch, yaw
     quat.setRPY(roll, pitch, yaw);
     transformStamped.transform.rotation.x = quat.x();
     transformStamped.transform.rotation.y = quat.y();
     transformStamped.transform.rotation.z = quat.z();
     transformStamped.transform.rotation.w = quat.w();
 
-    if (static_tf_broadcaster) {
-        static_tf_broadcaster->sendTransform(transformStamped);
-    }
+    if (staticTfBroadcaster)
+        staticTfBroadcaster->sendTransform(transformStamped);
+    else
+        RCLCPP_ERROR(rclcpp::get_logger("visual_sgraphs"), "Static TF broadcaster is not initialized.");
 }
 
 void publishFreeSpaceClusters(std::vector<std::vector<Eigen::Vector3d>> clusterPoints, rclcpp::Time msgTime)
@@ -566,7 +524,7 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, rclcpp::Time m
     {
         if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
             continue;
-        
+
         // Calculate the length of the wall
         float length = 0.0f;
         pcl::PointCloud<pcl::PointXYZRGBA>::Ptr wallCloud = wall->getMapClouds();
@@ -716,7 +674,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
     kf_lines.ns = "kf_lines";
     kf_lines.lifetime = rclcpp::Duration::from_seconds(0);
     kf_lines.id = 1;
-    kf_lines.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+    kf_lines.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
     kf_lines.header.frame_id = world_frame_id;
     kf_lines.type = visualization_msgs::msg::Marker::LINE_LIST;
 
@@ -829,7 +787,7 @@ void publishFiducialMarkers(std::vector<ORB_SLAM3::Marker *> markers, rclcpp::Ti
         fiducial_marker.lifetime = rclcpp::Duration::from_seconds(0);
         fiducial_marker.action = fiducial_marker.ADD;
         fiducial_marker.id = markerArray.markers.size();
-        fiducial_marker.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        fiducial_marker.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         fiducial_marker.mesh_use_embedded_materials = true;
         fiducial_marker.header.frame_id = frameBC;
         fiducial_marker.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
@@ -875,7 +833,7 @@ void publishDoors(std::vector<ORB_SLAM3::Door *> doors, rclcpp::Time msgTime)
         door.action = door.ADD;
         door.lifetime = rclcpp::Duration::from_seconds(0);
         door.id = doorArray.markers.size();
-        door.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        door.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         door.mesh_use_embedded_materials = true;
         door.header.frame_id = frameBC;
         door.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
@@ -905,7 +863,7 @@ void publishDoors(std::vector<ORB_SLAM3::Door *> doors, rclcpp::Time msgTime)
         doorLabel.lifetime = rclcpp::Duration::from_seconds(0);
         doorLabel.text = doors[idx]->getName();
         doorLabel.id = doorArray.markers.size();
-        doorLabel.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        doorLabel.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         doorLabel.header.frame_id = frameBC;
         doorLabel.pose.position.x = door.pose.position.x;
         doorLabel.pose.position.z = door.pose.position.z;
@@ -925,7 +883,7 @@ void publishDoors(std::vector<ORB_SLAM3::Door *> doors, rclcpp::Time msgTime)
         doorLines.action = doorLines.ADD;
         doorLines.lifetime = rclcpp::Duration::from_seconds(0);
         doorLines.id = doorArray.markers.size();
-        doorLines.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        doorLines.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         doorLines.header.frame_id = frameBC;
         doorLines.type = visualization_msgs::msg::Marker::LINE_LIST;
 
@@ -953,16 +911,16 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
     int numPlanes = planes.size();
     if (numPlanes == 0)
         return;
-    
+
     // TODO: proper inicialization of lastPlanePublishTime
-    if ( lastPlanePublishTime.seconds() == 0)
+    if (lastPlanePublishTime.seconds() == 0)
     {
         lastPlanePublishTime = msgTime;
     }
-    
+
     // Check if sufficient time has passed since the last plane publication
     // if ((msgTime - lastPlanePublishTime)rclcpp::Time::seconds() < 3)
-      
+
     // double delta_time = (msgTime - lastPlanePublishTime).seconds();
     // if (delta_time < 3)
     // if (rclcpp::Duration(msgTime - lastPlanePublishTime).seconds() < 3.0)
@@ -1141,7 +1099,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         room.mesh_resource = roomMesh;
         room.lifetime = rclcpp::Duration::from_seconds(0);
         room.id = roomArray.markers.size();
-        room.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        room.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         room.mesh_use_embedded_materials = true;
         room.header.frame_id = frameSE;
         room.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
@@ -1167,7 +1125,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomLabel.action = roomLabel.ADD;
         roomLabel.lifetime = rclcpp::Duration::from_seconds(0);
         roomLabel.id = roomArray.markers.size();
-        roomLabel.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        roomLabel.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomLabel.pose.position.x = roomCenter.x();
         roomLabel.pose.position.z = roomCenter.z();
         roomLabel.pose.position.y = roomCenter.y() - 0.7;
@@ -1187,7 +1145,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomWallLine.action = roomWallLine.ADD;
         roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomWallLine.id = roomArray.markers.size();
-        roomWallLine.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        roomWallLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomWallLine.header.frame_id = world_frame_id;
         roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
@@ -1202,7 +1160,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomDoorLine.ns = "room_door_lines";
         roomDoorLine.action = roomDoorLine.ADD;
         roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
-        roomDoorLine.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        roomDoorLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomDoorLine.header.frame_id = world_frame_id;
         roomDoorLine.id = roomArray.markers.size() + 1;
         roomDoorLine.type = visualization_msgs::msg::Marker::LINE_LIST;
@@ -1218,12 +1176,12 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomMarkerLine.ns = "room_marker_lines";
         roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomMarkerLine.action = roomMarkerLine.ADD;
-        roomMarkerLine.header.stamp = rclcpp::Clock().now(); //rclcpp::Time().now();
+        roomMarkerLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomMarkerLine.header.frame_id = world_frame_id;
         roomMarkerLine.id = roomArray.markers.size() + 1;
         roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
-       // Get the room center in the world frame
+        // Get the room center in the world frame
         // tf::Stamped<tf::Point> roomPoint, roomPointTransformed;
 
         // roomPoint.setX(roomCenter.x());
@@ -1240,14 +1198,17 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomPoint.point.y = roomCenter.y();
         roomPoint.point.z = roomCenter.z();
 
-        try {
+        try
+        {
             // Use tfBuffer_ for the transform, with timeout 100ms
             // auto tf_stamped = tfBuffer_->lookupTransform(
             //     world_frame_id, frameSE, tf2::TimePointZero, rclcpp::Duration::from_seconds(0.1));
             auto tf_stamped = tfBuffer_->lookupTransform(
                 world_frame_id, frameSE, rclcpp::Time(0), rclcpp::Duration::from_seconds(0.1));
             tf2::doTransform(roomPoint, roomPointTransformed, tf_stamped);
-        } catch (tf2::TransformException &ex) {
+        }
+        catch (tf2::TransformException &ex)
+        {
             RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform room center: %s", ex.what());
             roomPointTransformed = roomPoint; // fallback: use original point
         }
@@ -1269,11 +1230,14 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             wallPoint.point.y = wall->getCentroid().y();
             wallPoint.point.z = wall->getCentroid().z();
 
-            try {
+            try
+            {
                 auto tf_stamped = tfBuffer_->lookupTransform(
                     world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(wallPoint, wallPointTransformed, tf_stamped);
-            } catch (tf2::TransformException &ex) {
+            }
+            catch (tf2::TransformException &ex)
+            {
                 RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform wall centroid: %s", ex.what());
                 wallPointTransformed = wallPoint;
             }
@@ -1324,11 +1288,14 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             doorPoint.point.y = door->getGlobalPose().translation()(1);
             doorPoint.point.z = door->getGlobalPose().translation()(2);
 
-            try {
+            try
+            {
                 auto tf_stamped = tfBuffer_->lookupTransform(
                     world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(doorPoint, doorPointTransformed, tf_stamped);
-            } catch (tf2::TransformException &ex) {
+            }
+            catch (tf2::TransformException &ex)
+            {
                 RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform door centroid: %s", ex.what());
                 doorPointTransformed = doorPoint;
             }
@@ -1381,7 +1348,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         // roomMarkerLine.points.push_back(pointRoom);
 
         // In free space-based room candidate detection, the metaMarker is not available
-                if (metaMarker != nullptr)
+        if (metaMarker != nullptr)
         {
             geometry_msgs::msg::PointStamped pointMarkerInit, pointMarkerTransform;
             pointMarkerInit.header.frame_id = frameBC;
@@ -1390,11 +1357,14 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             pointMarkerInit.point.y = metaMarker->getGlobalPose().translation()(1);
             pointMarkerInit.point.z = metaMarker->getGlobalPose().translation()(2);
 
-            try {
+            try
+            {
                 auto tf_stamped = tfBuffer_->lookupTransform(
                     world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(pointMarkerInit, pointMarkerTransform, tf_stamped);
-            } catch (tf2::TransformException &ex) {
+            }
+            catch (tf2::TransformException &ex)
+            {
                 RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform marker centroid: %s", ex.what());
                 pointMarkerTransform = pointMarkerInit;
             }
@@ -1428,7 +1398,6 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
 
     pubRoom->publish(roomArray);
 }
-
 
 sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime)
 {
@@ -1469,8 +1438,7 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
             float dataArray[numChannels] = {
                 static_cast<float>(P3Dw.x()),
                 static_cast<float>(P3Dw.y()),
-                static_cast<float>(P3Dw.z())
-            };
+                static_cast<float>(P3Dw.z())};
             memcpy(cloudDataPtr + (idx * cloud.point_step), dataArray, numChannels * sizeof(float));
         }
     }
@@ -1640,11 +1608,14 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
                     pointIn.header.stamp = rclcpp::Time(0);
                     pointIn.point = point;
                     // transformListener->transformPoint(world_frame_id, pointIn, pointOut);
-                    try {
+                    try
+                    {
                         auto tf_stamped = tfBuffer_->lookupTransform(
                             world_frame_id, pointIn.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.1));
                         tf2::doTransform(pointIn, pointOut, tf_stamped);
-                    } catch (tf2::TransformException &ex) {
+                    }
+                    catch (tf2::TransformException &ex)
+                    {
                         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform skeleton cluster point: %s", ex.what());
                         pointOut = pointIn; // fallback: use original point
                     }
@@ -1664,7 +1635,8 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
     pSLAM->setSkeletonCluster(skeletonClusterPoints);
 }
 
-void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms) {
+void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms)
+{
     // Reset the buffer
     gnnRoomCandidates.clear();
 

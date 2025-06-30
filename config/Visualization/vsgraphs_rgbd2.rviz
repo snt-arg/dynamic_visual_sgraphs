@@ -4,8 +4,9 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Path1
-      Splitter Ratio: 0.6352941393852234
+        - /Raw Frames1
+        - /Trajectory1
+      Splitter Ratio: 0.5970588326454163
     Tree Height: 621
   - Class: rviz_common/Selection
     Name: Selection
@@ -74,7 +75,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /camera/color/image_raw
+        Value: /camera/camera/color/image_raw
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
@@ -216,7 +217,7 @@ Visualization Manager:
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
       Color: 255; 255; 255
-      Color Transformer: ""
+      Color Transformer: RGB8
       Decay Time: 0
       Enabled: true
       Invert Rainbow: false
@@ -225,7 +226,7 @@ Visualization Manager:
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: Camera Mesh
-      Position Transformer: ""
+      Position Transformer: XYZ
       Selectable: true
       Size (Pixels): 3
       Size (m): 0.009999999776482582
@@ -327,7 +328,7 @@ Visualization Manager:
       Length: 0.30000001192092896
       Line Style: Lines
       Line Width: 0.029999999329447746
-      Name: Path
+      Name: Trajectory
       Offset:
         X: 0
         Y: 0

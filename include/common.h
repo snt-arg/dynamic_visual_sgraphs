@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include <iostream>
 #include <algorithm>
@@ -43,7 +43,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <tf2/transform_datatypes.h>
-#include <tf2/time.h>  // for tf2::durationFromSec
+#include <tf2/time.h> // for tf2::durationFromSec
 
 #include <tf2_ros/buffer.h>
 #include <geometry_msgs/msg/point.hpp>
@@ -62,11 +62,11 @@
 // #include <pcl/PCLPointCloud2.hpp>
 // #include <pcl/common/distances.hpp>
 // #include <pcl/filters/voxel_grid.hpp>
-//Tranfororm previos pcl headers for ros2
-#include <pcl_ros/transforms.hpp>      // From your pcl_ros/ folder
+// Tranfororm previos pcl headers for ros2
+#include <pcl_ros/transforms.hpp> // From your pcl_ros/ folder
 // #include <pcl_ros/point_cloud.hpp>    // From your pcl_ros/ folder (if needed)
 #include <pcl_conversions/pcl_conversions.h>
-#include <pcl_ros/pcl_node.hpp>       // From your pcl_ros/ folder (if needed)
+#include <pcl_ros/pcl_node.hpp> // From your pcl_ros/ folder (if needed)
 
 // #include <sensor_msgs/PointCloud2.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
@@ -92,7 +92,6 @@
 #include <pcl_ros/transforms.hpp>
 #include <tf2/transform_datatypes.h>
 #include <tf2_ros/static_transform_broadcaster.h>
-
 
 // ORB-SLAM3-specific libraries
 #include "System.h"
@@ -122,6 +121,10 @@ extern double roll, pitch, yaw;
 extern bool pubStaticTransform, pubPointClouds;
 extern std::string world_frame_id, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
 
+// TF broadcasters
+extern std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
+extern std::shared_ptr<tf2_ros::StaticTransformBroadcaster> staticTfBroadcaster;
+
 // List of visited Fiducial Markers in different timestamps
 extern std::vector<std::vector<ORB_SLAM3::Marker *>> markersBuffer;
 
@@ -143,14 +146,13 @@ extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAll
 extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Time lastPlanePublishTime;
 
-extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
-extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
-extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
-extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
+extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
+extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
+extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
-
 
 // struct MapPointStruct
 // {
@@ -159,17 +161,17 @@ extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedP
 
 //     MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
 // };
-class MapPointStruct {
-    int clusterId;
-    Eigen::Vector3f coordinates;
-    MapPointStruct(Eigen::Vector3f coords) : clusterId(-1), coordinates(coords) {}
+class MapPointStruct
+{
+  int clusterId;
+  Eigen::Vector3f coordinates;
+  MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
 };
 
 // void setupServices(ros::NodeHandle &, std::string);
-void setupServices(std::shared_ptr<rclcpp::Node>, const std::string&);
+void setupServices(std::shared_ptr<rclcpp::Node>, const std::string &);
 void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
-// void setupPublishers(ros::NodeHandle &, image_transport::ImageTransport &, std::string);
-//void setupPublishers(std::shared_ptr<rclcpp::Node>, image_transport::ImageTransport&, const std::string&);
+
 void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name);
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
@@ -197,16 +199,16 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *>, rclcpp::Time);
 void clearKFClsClouds(std::vector<ORB_SLAM3::KeyFrame *>);
 
 void saveMapService(
-  std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
-  std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
+    std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
+    std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
 
 void saveTrajectoryService(
-  std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
-  std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
+    std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
+    std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
 
 void saveMapPointsAsPCDService(
-  std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
-  std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
+    std::shared_ptr<vs_graphs::srv::SaveMap::Request> request,
+    std::shared_ptr<vs_graphs::srv::SaveMap::Response> response);
 
 /**
  * @brief Converts a SE3f to a cv::Mat

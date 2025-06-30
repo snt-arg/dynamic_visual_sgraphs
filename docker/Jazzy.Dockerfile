@@ -51,7 +51,7 @@ RUN ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastruc
 
 # Install dev tools and ROS
 RUN apt update && apt upgrade -y && \
-    apt install -y ros-dev-tools ros-${ROS_DISTRO}-desktop
+    apt install -y ros-dev-tools ros-${ROS_DISTRO}-desktop ros-${ROS_DISTRO}-rqt-rf-tree
 
 # Source ROS setup globally
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /etc/bash.bashrc
@@ -134,7 +134,7 @@ RUN mkdir -p -m 0600 ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts
 #     make -j && \
 #     make install
 
-# Pangolin - Use a more recent version that works with modern compilers
+
 RUN apt-get update && apt-get install -y \
     libepoxy-dev \
     libgl1-mesa-dev \
@@ -165,14 +165,12 @@ RUN ./bootstrap
 RUN make -j8
 RUN make install
 
-# # ROS packages: visual sgraphs, semantic segmenter, aruco ros
 RUN mkdir -p /workspace/src
 WORKDIR /workspace/src/
 
 # Mount the SSH keys for cloning private repositories
 RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/visual_sgraphs.git
 RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segment_ros.git
-# RUN --mount=type=ssh git clone -b noetic-devel git@github.com:pal-robotics/aruco_ros.git
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
 # Other libraries
@@ -207,10 +205,7 @@ RUN apt-get update && \
 
 # Build the workspace
 WORKDIR /workspace/
-# RUN /bin/bash -c "source /opt/ros/noetic/setup.bash && catkin build -j12 -DCMAKE_BUILD_TYPE=Release && rosclean purge -y"
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
-# RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --no-warn-unused-cli && rosdep update"
-
 
 ##### Miscalleanous #####
 RUN ldconfig
