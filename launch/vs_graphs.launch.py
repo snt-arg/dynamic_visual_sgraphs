@@ -118,8 +118,8 @@ def generate_launch_description():
             ),
             # # Trajectory Path Server (if available in ROS 2)
             # Node(
-            #     package="hector_trajectory_server",
-            #     executable="hector_trajectory_server",
+            #     package="mogi_trajectory_server",
+            #     executable="mogi_trajectory_server",
             #     name="trajectory_server_vs_graphs",
             #     namespace="vs_graphs",
             #     output="screen",
@@ -139,15 +139,8 @@ def generate_launch_description():
                 arguments=[
                     "-d",
                     [
-                        # LaunchConfiguration(
-                        #     "find_package_share", default="vs_graphs"
-                        # ),
                         get_package_share_directory("vs_graphs"),
                         "/config/Visualization/vsgraphs_rgbd2.rviz",
-                        # get_package_share_directory("vs_graphs"),
-                        # "/config/Visualization/",
-                        # LaunchConfiguration("vsgraphs_rgbd"),
-                        # ".rviz",
                     ],
                 ],
                 output="screen",

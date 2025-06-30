@@ -32,10 +32,10 @@ services:
       # SSH
       - $SSH_AUTH_SOCK:$SSH_AUTH_SOCK
       # TMUX
-      - ~/.tmux:/home/user/.tmux:ro
-      - ~/.tmux.conf:/home/user/.tmux.conf:ro
+      - ~/.tmux:/home/$USERNAME/.tmux:ro
+      - ~/.tmux.conf:/home/$USERNAME/.tmux.conf:ro
       # Git
-      - ~/.gitconfig:/home/user/.gitconfig_local
+      - ~/.gitconfig:/home/$USERNAME/.gitconfig_local
       # Dev
       - /dev:/dev:rw
       # persistent bash history and config from local to container
@@ -46,7 +46,7 @@ services:
       # Working Directories (** MODIFY **)
       - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
       # Data Directories (** MODIFY **)
-      - "[DATASET_PATH]:/home/user/datasets:rw"
+      - "[DATASET_PATH]:/home/$USERNAME/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null

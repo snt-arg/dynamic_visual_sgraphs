@@ -953,10 +953,6 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
     int numPlanes = planes.size();
     if (numPlanes == 0)
         return;
-
-    
-    std::cout << "msgTime: " << msgTime.seconds() << " seconds" << std::endl;
-    std::cout << "lastPlanePublishTime: " << lastPlanePublishTime.seconds() << " seconds" << std::endl;
     
     // TODO: proper inicialization of lastPlanePublishTime
     if ( lastPlanePublishTime.seconds() == 0)

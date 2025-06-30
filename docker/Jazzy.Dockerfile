@@ -217,19 +217,19 @@ RUN ldconfig
 RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/$USERNAME/.bashrc
 
 ##### Clean up #####
-# remove the apt list files
+# Remove the apt list files
 RUN rm -rf /var/lib/apt/lists/*
 
-# remove packages no longer needed
+# Remove packages no longer needed
 RUN apt-get clean && apt-get autoremove -y
 
-# remove the ssh keys
+# Remove the ssh keys
 RUN rm -rf /root/.ssh/
 
 ##### Build entrypoint #####
 RUN echo "#!/bin/bash" >> /entrypoint.sh \
     && echo "echo \"source /opt/ros/$ROS_DISTRO/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
-    && echo "echo \"source /home/$USERNAME/ros2_ws/install/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
+    && echo "echo \"source /workspace/install/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
     && echo 'exec "$@"' >> /entrypoint.sh \
     && chmod a+x /entrypoint.sh
 
