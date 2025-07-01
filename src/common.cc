@@ -947,12 +947,12 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         room.color.r = color[0];
         room.color.g = color[1];
         room.color.b = color[2];
+        room.header.stamp = msgTime;
         room.mesh_resource = roomMesh;
-        room.lifetime = rclcpp::Duration::from_seconds(0);
-        room.id = roomArray.markers.size();
-        room.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
-        room.mesh_use_embedded_materials = true;
         room.header.frame_id = frameSE;
+        room.id = roomArray.markers.size();
+        room.mesh_use_embedded_materials = true;
+        room.lifetime = rclcpp::Duration::from_seconds(0);
         room.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
 
         // Rotation and displacement of the room for better visualization
@@ -974,13 +974,13 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomLabel.text = roomName;
         roomLabel.ns = "roomLabel";
         roomLabel.action = roomLabel.ADD;
-        roomLabel.lifetime = rclcpp::Duration::from_seconds(0);
+        roomLabel.header.stamp = msgTime;
+        roomLabel.header.frame_id = frameSE;
         roomLabel.id = roomArray.markers.size();
-        roomLabel.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomLabel.pose.position.x = roomCenter.x();
         roomLabel.pose.position.z = roomCenter.z();
         roomLabel.pose.position.y = roomCenter.y() - 0.7;
-        roomLabel.header.frame_id = frameSE;
+        roomLabel.lifetime = rclcpp::Duration::from_seconds(0);
         roomLabel.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
         roomArray.markers.push_back(roomLabel);
 
@@ -993,11 +993,11 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomWallLine.scale.y = 0.04;
         roomWallLine.scale.z = 0.04;
         roomWallLine.ns = "room_wall_lines";
+        roomWallLine.header.stamp = msgTime;
         roomWallLine.action = roomWallLine.ADD;
-        roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
-        roomWallLine.id = roomArray.markers.size();
-        roomWallLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomWallLine.header.frame_id = frameWorld;
+        roomWallLine.id = roomArray.markers.size();
+        roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
         // Room to Door connection line
@@ -1009,11 +1009,11 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomDoorLine.scale.y = 0.005;
         roomDoorLine.scale.z = 0.005;
         roomDoorLine.ns = "room_door_lines";
+        roomDoorLine.header.stamp = msgTime;
         roomDoorLine.action = roomDoorLine.ADD;
-        roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
-        roomDoorLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomDoorLine.header.frame_id = frameWorld;
         roomDoorLine.id = roomArray.markers.size() + 1;
+        roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomDoorLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
         // Room to Marker connection line
@@ -1024,12 +1024,12 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomMarkerLine.scale.x = 0.005;
         roomMarkerLine.scale.y = 0.005;
         roomMarkerLine.scale.z = 0.005;
+        roomMarkerLine.header.stamp = msgTime;
         roomMarkerLine.ns = "room_marker_lines";
-        roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomMarkerLine.action = roomMarkerLine.ADD;
-        roomMarkerLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
         roomMarkerLine.header.frame_id = frameWorld;
         roomMarkerLine.id = roomArray.markers.size() + 1;
+        roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
         // Get the room center in the world frame
@@ -1043,11 +1043,11 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         //                                   frameSE, roomPointTransformed);
 
         geometry_msgs::msg::PointStamped roomPoint, roomPointTransformed;
-        roomPoint.header.frame_id = frameSE;
-        roomPoint.header.stamp = rclcpp::Time(0);
+        roomPoint.header.stamp = msgTime;
         roomPoint.point.x = roomCenter.x();
         roomPoint.point.y = roomCenter.y();
         roomPoint.point.z = roomCenter.z();
+        roomPoint.header.frame_id = frameSE;
 
         try
         {
@@ -1055,7 +1055,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             // auto tf_stamped = tfBuffer_->lookupTransform(
             //     frameWorld, frameSE, tf2::TimePointZero, rclcpp::Duration::from_seconds(0.1));
             auto tf_stamped = tfBuffer_->lookupTransform(
-                frameWorld, frameSE, rclcpp::Time(0), rclcpp::Duration::from_seconds(0.1));
+                frameWorld, frameSE, msgTime, rclcpp::Duration::from_seconds(0.1));
             tf2::doTransform(roomPoint, roomPointTransformed, tf_stamped);
         }
         catch (tf2::TransformException &ex)
@@ -1075,8 +1075,8 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             pointRoom.z = roomPointTransformed.point.z;
             roomWallLine.points.push_back(pointRoom);
 
+            wallPoint.header.stamp = msgTime;
             wallPoint.header.frame_id = frameBC;
-            wallPoint.header.stamp = rclcpp::Time(0);
             wallPoint.point.x = wall->getCentroid().x();
             wallPoint.point.y = wall->getCentroid().y();
             wallPoint.point.z = wall->getCentroid().z();
@@ -1098,30 +1098,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             pointWall.z = wallPointTransformed.point.z;
             roomWallLine.points.push_back(pointWall);
         }
-        // for (const auto wall : rooms[idx]->getWalls())
-        // {
-        //     geometry_msgs::Point pointRoom, pointWall;
-        //     tf::Stamped<tf::Point> pointWallInit, pointWallTransform;
 
-        //     pointRoom.x = roomPointTransformed.x();
-        //     pointRoom.y = roomPointTransformed.y();
-        //     pointRoom.z = roomPointTransformed.z();
-        //     roomWallLine.points.push_back(pointRoom);
-
-        //     pointWallInit.frame_id_ = frameBC;
-        //     pointWallInit.setX(wall->getCentroid().x());
-        //     pointWallInit.setY(wall->getCentroid().y());
-        //     pointWallInit.setZ(wall->getCentroid().z());
-        //     transformListener->transformPoint(frameWorld, ros::Time(0), pointWallInit,
-        //                                       frameBC, pointWallTransform);
-
-        //     pointWall.x = pointWallTransform.x();
-        //     pointWall.y = pointWallTransform.y();
-        //     pointWall.z = pointWallTransform.z();
-        //     roomWallLine.points.push_back(pointWall);
-        // }
-
-        // Room to Door connection line
         // Room to Door connection line
         for (const auto door : rooms[idx]->getDoors())
         {
@@ -1133,8 +1110,8 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             pointRoom.z = roomPointTransformed.point.z;
             roomDoorLine.points.push_back(pointRoom);
 
+            doorPoint.header.stamp = msgTime;
             doorPoint.header.frame_id = frameBC;
-            doorPoint.header.stamp = rclcpp::Time(0);
             doorPoint.point.x = door->getGlobalPose().translation()(0);
             doorPoint.point.y = door->getGlobalPose().translation()(1);
             doorPoint.point.z = door->getGlobalPose().translation()(2);
@@ -1202,8 +1179,8 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         if (metaMarker != nullptr)
         {
             geometry_msgs::msg::PointStamped pointMarkerInit, pointMarkerTransform;
+            pointMarkerInit.header.stamp = msgTime;
             pointMarkerInit.header.frame_id = frameBC;
-            pointMarkerInit.header.stamp = rclcpp::Time(0);
             pointMarkerInit.point.x = metaMarker->getGlobalPose().translation()(0);
             pointMarkerInit.point.y = metaMarker->getGlobalPose().translation()(1);
             pointMarkerInit.point.z = metaMarker->getGlobalPose().translation()(2);
