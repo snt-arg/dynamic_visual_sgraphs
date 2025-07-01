@@ -61,7 +61,7 @@ int main(int argc, char **argv)
     node->declare_parameter<bool>("colored_pointcloud", true);
     node->declare_parameter<bool>("publish_pointclouds", true);
     node->declare_parameter<std::string>("cam_frame_id", "camera");
-    node->declare_parameter<std::string>("world_frame_id", "world");
+    node->declare_parameter<std::string>("frame_world", "world");
     node->declare_parameter<std::string>("voc_file", "file_not_set");
     node->declare_parameter<std::string>("settings_file", "file_not_set");
     node->declare_parameter<std::string>("sys_params_file", "file_not_set");
@@ -91,7 +91,7 @@ int main(int argc, char **argv)
     pitch = node->get_parameter("pitch").as_double();
     frameMap = node->get_parameter("frame_map").as_string();
     cam_frame_id = node->get_parameter("cam_frame_id").as_string();
-    world_frame_id = node->get_parameter("world_frame_id").as_string();
+    frameWorld = node->get_parameter("frame_world").as_string();
     colorPointcloud = node->get_parameter("colored_pointcloud").as_bool();
     pubPointClouds = node->get_parameter("publish_pointclouds").as_bool();
     frameBC = node->get_parameter("frame_building_component").as_string();

@@ -119,7 +119,7 @@ extern ORB_SLAM3::System::eSensor sensorType;
 extern bool colorPointcloud;
 extern double roll, pitch, yaw;
 extern bool pubStaticTransform, pubPointClouds;
-extern std::string world_frame_id, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
+extern std::string frameWorld, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
 
 // TF broadcasters
 extern std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
@@ -154,21 +154,13 @@ extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCam
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 
-// struct MapPointStruct
-// {
-//     int clusterId;
-//     Eigen::Vector3f coordinates;
-
-//     MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
-// };
 class MapPointStruct
 {
-  int clusterId;
-  Eigen::Vector3f coordinates;
-  MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
+    int clusterId;
+    Eigen::Vector3f coordinates;
+    MapPointStruct(Eigen::Vector3f coords) : coordinates(coords), clusterId(-1) {}
 };
 
-// void setupServices(ros::NodeHandle &, std::string);
 void setupServices(std::shared_ptr<rclcpp::Node>, const std::string &);
 void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
 
@@ -230,7 +222,6 @@ tf2::Transform SE3fToTFTransform(Sophus::SE3f data);
  * @param mapPoints The vector of MapPoints to be converted
  * @param msgTime The timestamp for the PointCloud2 message
  */
-// sensor_msgs::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime);
 sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime);
 
 /**
@@ -267,12 +258,10 @@ std::pair<double, std::vector<ORB_SLAM3::Marker *>> findNearestMarker(double fra
  * @brief Gets skeleton voxels from `voxblox_skeleton` to be processed
  * @param skeletonArray The array of skeleton voxels received
  */
-// void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skeletonArray);
 void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skeletonArray);
 
 /**
  * @brief Gets the set of room candidates detected by the GNN-based room detection module
  * @param msgGNNRooms The message containing the detected room candidates
  */
-// void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
 void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);

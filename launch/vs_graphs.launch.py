@@ -74,7 +74,7 @@ def generate_launch_description():
                     {"pitch": -1.5697},
                     {"frame_map": "map"},
                     {"cam_frame_id": "camera"},
-                    {"world_frame_id": "world"},
+                    {"frame_world": "world"},
                     {"enable_pangolin": False},
                     {"publish_pointclouds": True},
                     {"colored_pointcloud": LaunchConfiguration(

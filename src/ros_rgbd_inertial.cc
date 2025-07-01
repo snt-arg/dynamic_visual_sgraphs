@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "common.h"
 
@@ -109,7 +109,7 @@ public:
 //     nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
 //     nodeHandler.param<std::string>(node_name + "/imu_frame_id", imu_frame_id, "imu");
 //     nodeHandler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
-//     nodeHandler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "world");
+//     nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
 //     nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
 //     nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "plane");
 //     nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "room");
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
     node->declare_parameter<std::string>("frame_map", "map");
     node->declare_parameter<std::string>("imu_frame_id", "imu");
     node->declare_parameter<std::string>("cam_frame_id", "camera");
-    node->declare_parameter<std::string>("world_frame_id", "world");
+    node->declare_parameter<std::string>("frame_world", "world");
     node->declare_parameter<bool>("static_transform", false);
     node->declare_parameter<std::string>("frame_building_component", "plane");
     node->declare_parameter<std::string>("frame_structural_element", "room");
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     frameMap = node->get_parameter("frame_map").as_string();
     imu_frame_id = node->get_parameter("imu_frame_id").as_string();
     cam_frame_id = node->get_parameter("cam_frame_id").as_string();
-    world_frame_id = node->get_parameter("world_frame_id").as_string();
+    frameWorld = node->get_parameter("frame_world").as_string();
     pubStaticTransform = node->get_parameter("static_transform").as_bool();
     frameBC = node->get_parameter("frame_building_component").as_string();
     frameSE = node->get_parameter("frame_structural_element").as_string();
@@ -225,17 +225,18 @@ int main(int argc, char **argv)
     pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sys_params_file, sensorType, enable_pangolin);
 
     // --- ROS2 Subscribers ---
+    using message_filters::Subscriber;
+    using message_filters::Synchronizer;
+    using message_filters::sync_policies::ApproximateTime;
     using sensor_msgs::msg::Image;
     using sensor_msgs::msg::Imu;
     using sensor_msgs::msg::PointCloud2;
-    using message_filters::Subscriber;
-    using message_filters::sync_policies::ApproximateTime;
-    using message_filters::Synchronizer;
 
     // IMU
     auto sub_imu = node->create_subscription<Imu>(
         "/imu", 1000,
-        [&imugb](const Imu::SharedPtr msg) { imugb.GrabImu(msg); });
+        [&imugb](const Imu::SharedPtr msg)
+        { imugb.GrabImu(msg); });
 
     // Images and pointcloud (message_filters)
     auto subImgRGB = std::make_shared<Subscriber<Image>>(node.get(), "/camera/rgb/image_raw");
@@ -248,17 +249,18 @@ int main(int argc, char **argv)
         [&igb](const Image::ConstSharedPtr msgRGB, const Image::ConstSharedPtr msgD, const PointCloud2::ConstSharedPtr msgPC)
         {
             igb.GrabRGBD(msgRGB, msgD, msgPC);
-        }
-    );
+        });
 
     // Segmentation and Voxblox
     auto sub_segmented_img = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
         "/camera/color/image_segment", 50,
-        [&igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg) { igb.GrabSegmentation(*msg); });
+        [&igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
+        { igb.GrabSegmentation(*msg); });
 
     auto voxblox_skeleton_mesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
         "/voxblox_skeletonizer/sparse_graph", 1,
-        [&igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg) { igb.GrabVoxbloxSkeletonGraph(*msg); });
+        [&igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+        { igb.GrabVoxbloxSkeletonGraph(*msg); });
 
     // TODO: setupPublishers and setupServices for ROS2 if needed
 

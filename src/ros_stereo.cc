@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "common.h"
 
@@ -78,7 +78,7 @@ int main(int argc, char **argv)
 
     nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
     nodeHandler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
-    nodeHandler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "world");
+    nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
     nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
     nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "plane");
     nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "room");

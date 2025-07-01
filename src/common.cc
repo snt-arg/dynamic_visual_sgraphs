@@ -42,7 +42,7 @@ std::vector<std::vector<ORB_SLAM3::Marker *>> markersBuffer;
 std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
 std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 std::shared_ptr<tf2_ros::StaticTransformBroadcaster> staticTfBroadcaster;
-std::string world_frame_id, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
+std::string frameWorld, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
 
 rclcpp::Time lastPlanePublishTime = rclcpp::Time(0);
 
@@ -176,22 +176,22 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
 
     // Common topics
     publishCameraPose(Twc, msgTime);
-    publishTFTransform(Twc, world_frame_id, cam_frame_id, msgTime);
+    publishTFTransform(Twc, frameWorld, cam_frame_id, msgTime);
 
     // Set a static transform between the world and map frame
     if (pubStaticTransform)
-        publishStaticTFTransform(world_frame_id, frameMap, msgTime);
+        publishStaticTFTransform(frameWorld, frameMap, msgTime);
 
     // Get KeyFrames
     std::vector<ORB_SLAM3::KeyFrame *> keyframes = pSLAM->GetAllKeyFrames();
 
     // Setup publishers
+    publishKeyFrameImages(keyframes, msgTime);
+    publishKeyFrameMarkers(keyframes, msgTime);
     publishDoors(pSLAM->GetAllDoors(), msgTime);
     publishRooms(pSLAM->GetAllRooms(), msgTime);
     publishFiducialMarkers(pSLAM->GetAllMarkers(), msgTime);
     publishTrackingImage(pSLAM->GetCurrentFrame(), msgTime);
-    publishKeyFrameImages(keyframes, msgTime);
-    publishKeyFrameMarkers(keyframes, msgTime);
 
     // Publish all mapped walls for GNN-based room detection
     publishAllMappedWalls(pSLAM->GetAllPlanes(), msgTime);
@@ -199,9 +199,9 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     // Publish pointclouds
     if (pubPointClouds)
     {
-        publishAllPoints(pSLAM->GetAllMapPoints(), msgTime);
         publishSegmentedCloud(keyframes, msgTime);
         publishPlanes(pSLAM->GetAllPlanes(), msgTime);
+        publishAllPoints(pSLAM->GetAllMapPoints(), msgTime);
         publishTrackedPoints(pSLAM->GetTrackedMapPoints(), msgTime);
         publishFreeSpaceClusters(pSLAM->getSkeletonCluster(), msgTime);
     }
@@ -220,43 +220,16 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
         Sophus::Matrix3f Rwb = Twb.rotationMatrix();
         Eigen::Vector3f Wwb = Rwb * Wbb;
 
-        publishTFTransform(Twb, world_frame_id, imu_frame_id, msgTime);
+        publishTFTransform(Twb, frameWorld, imu_frame_id, msgTime);
         publishBodyOdometry(Twb, Vwb, Wwb, msgTime);
     }
 }
-
-// void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::Vector3f ang_vel_body, rclcpp::Time msgTime)
-// {
-//      nav_msgs::msg::Odometry odom_msg;
-//     odom_msg.child_frame_id = imu_frame_id;
-//     odom_msg.header.frame_id = world_frame_id;
-//     odom_msg.header.stamp = msgTime;
-
-//     odom_msg.pose.pose.position.x = Twb_SE3f.translation().x();
-//     odom_msg.pose.pose.position.y = Twb_SE3f.translation().y();
-//     odom_msg.pose.pose.position.z = Twb_SE3f.translation().z();
-
-//     odom_msg.pose.pose.orientation.w = Twb_SE3f.unit_quaternion().coeffs().w();
-//     odom_msg.pose.pose.orientation.x = Twb_SE3f.unit_quaternion().coeffs().x();
-//     odom_msg.pose.pose.orientation.y = Twb_SE3f.unit_quaternion().coeffs().y();
-//     odom_msg.pose.pose.orientation.z = Twb_SE3f.unit_quaternion().coeffs().z();
-
-//     odom_msg.twist.twist.linear.x = Vwb_E3f.x();
-//     odom_msg.twist.twist.linear.y = Vwb_E3f.y();
-//     odom_msg.twist.twist.linear.z = Vwb_E3f.z();
-
-//     odom_msg.twist.twist.angular.x = ang_vel_body.x();
-//     odom_msg.twist.twist.angular.y = ang_vel_body.y();
-//     odom_msg.twist.twist.angular.z = ang_vel_body.z();
-
-//     pubOdometry.publish(odom_msg);
-// }
 
 void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::Vector3f ang_vel_body, rclcpp::Time msgTime)
 {
     nav_msgs::msg::Odometry odom_msg;
     odom_msg.child_frame_id = imu_frame_id;
-    odom_msg.header.frame_id = world_frame_id;
+    odom_msg.header.frame_id = frameWorld;
     odom_msg.header.stamp = msgTime;
 
     odom_msg.pose.pose.position.x = Twb_SE3f.translation().x();
@@ -309,7 +282,7 @@ void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::
 //     cameraVisual.header.stamp = msgTime;
 //     cameraVisual.action = cameraVisual.ADD;
 //     cameraVisual.lifetime = rclcpp::Duration::from_seconds(0);
-//     cameraVisual.header.frame_id = world_frame_id;
+//     cameraVisual.header.frame_id = frameWorld;
 //     cameraVisual.mesh_use_embedded_materials = true;
 //     cameraVisual.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
 //     cameraVisual.mesh_resource =
@@ -358,7 +331,7 @@ void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
     cameraVisual.header.stamp = msgTime;
     cameraVisual.action = cameraVisual.ADD;
     cameraVisual.lifetime = rclcpp::Duration::from_seconds(0);
-    cameraVisual.header.frame_id = world_frame_id;
+    cameraVisual.header.frame_id = frameWorld;
     cameraVisual.mesh_use_embedded_materials = true;
     cameraVisual.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
     cameraVisual.mesh_resource =
@@ -478,7 +451,7 @@ void publishFreeSpaceClusters(std::vector<std::vector<Eigen::Vector3d>> clusterP
 
     // Set message header
     cloudMsg.header.stamp = msgTime;
-    cloudMsg.header.frame_id = world_frame_id;
+    cloudMsg.header.frame_id = frameWorld;
 
     // Publish the point cloud
     pubFreespaceCluster->publish(cloudMsg);
@@ -496,7 +469,7 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
         segmenter_ros::msg::VSGraphDataMsg vsGraphPublisher = segmenter_ros::msg::VSGraphDataMsg();
         std_msgs::msg::Header header;
         header.stamp = msgTime;
-        header.frame_id = world_frame_id;
+        header.frame_id = frameWorld;
         std_msgs::msg::UInt64 kfId;
         kfId.data = keyframe->mnId;
         const sensor_msgs::msg::Image::SharedPtr rendered_image_msg =
@@ -517,7 +490,7 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, rclcpp::Time m
     vs_graphs::msg::VSGraphsAllWallsData wallDataMsg;
     // Fill the data message with wall information
     wallDataMsg.header.stamp = msgTime;
-    wallDataMsg.header.frame_id = world_frame_id;
+    wallDataMsg.header.frame_id = frameWorld;
 
     // Fill in the walls data
     for (const auto &wall : walls)
@@ -623,7 +596,7 @@ void publishTrackingImage(cv::Mat image, rclcpp::Time msgTime)
 {
     std_msgs::msg::Header header;
     header.stamp = msgTime;
-    header.frame_id = world_frame_id;
+    header.frame_id = frameWorld;
     const sensor_msgs::msg::Image::SharedPtr rendered_image_msg = cv_bridge::CvImage(header, "bgr8", image).toImageMsg();
     pubTrackingImage->publish(rendered_image_msg);
 }
@@ -649,7 +622,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
     visualization_msgs::msg::MarkerArray markerArray;
 
     visualization_msgs::msg::Marker kf_markers;
-    kf_markers.header.frame_id = world_frame_id;
+    kf_markers.header.frame_id = frameWorld;
     kf_markers.ns = "kf_markers";
     kf_markers.type = visualization_msgs::msg::Marker::SPHERE_LIST;
     kf_markers.action = visualization_msgs::msg::Marker::ADD;
@@ -675,12 +648,12 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
     kf_lines.lifetime = rclcpp::Duration::from_seconds(0);
     kf_lines.id = 1;
     kf_lines.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
-    kf_lines.header.frame_id = world_frame_id;
+    kf_lines.header.frame_id = frameWorld;
     kf_lines.type = visualization_msgs::msg::Marker::LINE_LIST;
 
     // nav_msgs::Path kf_list;
     nav_msgs::msg::Path kf_list;
-    kf_list.header.frame_id = world_frame_id;
+    kf_list.header.frame_id = frameWorld;
     kf_list.header.stamp = msgTime;
 
     for (auto &keyframe : keyframe_vec)
@@ -696,7 +669,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
         // populate the keyframe list
         geometry_msgs::msg::PoseStamped pose;
         pose.header.stamp = rclcpp::Time(keyframe->mTimeStamp);
-        pose.header.frame_id = world_frame_id;
+        pose.header.frame_id = frameWorld;
         pose.pose.position.x = kf_pose.translation().x();
         pose.pose.position.y = kf_pose.translation().y();
         pose.pose.position.z = kf_pose.translation().z();
@@ -747,7 +720,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
         //     planePoint.frame_id_ = frameBC;
 
         //     tf::Stamped<tf::Point> planePointTransformed;
-        //     transform_listener->transformPoint(world_frame_id, rclcpp::Time(0), planePoint,
+        //     transform_listener->transformPoint(frameWorld, rclcpp::Time(0), planePoint,
         //                                        frameBC, planePointTransformed);
 
         //     geometry_msgs::Point point1;
@@ -1146,7 +1119,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomWallLine.id = roomArray.markers.size();
         roomWallLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
-        roomWallLine.header.frame_id = world_frame_id;
+        roomWallLine.header.frame_id = frameWorld;
         roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
         // Room to Door connection line
@@ -1161,7 +1134,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomDoorLine.action = roomDoorLine.ADD;
         roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomDoorLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
-        roomDoorLine.header.frame_id = world_frame_id;
+        roomDoorLine.header.frame_id = frameWorld;
         roomDoorLine.id = roomArray.markers.size() + 1;
         roomDoorLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
@@ -1177,7 +1150,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
         roomMarkerLine.action = roomMarkerLine.ADD;
         roomMarkerLine.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
-        roomMarkerLine.header.frame_id = world_frame_id;
+        roomMarkerLine.header.frame_id = frameWorld;
         roomMarkerLine.id = roomArray.markers.size() + 1;
         roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
@@ -1188,7 +1161,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         // roomPoint.setY(roomCenter.y());
         // roomPoint.setZ(roomCenter.z());
         // roomPoint.frame_id_ = frameSE;
-        // transformListener->transformPoint(world_frame_id, ros::Time(0), roomPoint,
+        // transformListener->transformPoint(frameWorld, ros::Time(0), roomPoint,
         //                                   frameSE, roomPointTransformed);
 
         geometry_msgs::msg::PointStamped roomPoint, roomPointTransformed;
@@ -1202,9 +1175,9 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         {
             // Use tfBuffer_ for the transform, with timeout 100ms
             // auto tf_stamped = tfBuffer_->lookupTransform(
-            //     world_frame_id, frameSE, tf2::TimePointZero, rclcpp::Duration::from_seconds(0.1));
+            //     frameWorld, frameSE, tf2::TimePointZero, rclcpp::Duration::from_seconds(0.1));
             auto tf_stamped = tfBuffer_->lookupTransform(
-                world_frame_id, frameSE, rclcpp::Time(0), rclcpp::Duration::from_seconds(0.1));
+                frameWorld, frameSE, rclcpp::Time(0), rclcpp::Duration::from_seconds(0.1));
             tf2::doTransform(roomPoint, roomPointTransformed, tf_stamped);
         }
         catch (tf2::TransformException &ex)
@@ -1233,7 +1206,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             try
             {
                 auto tf_stamped = tfBuffer_->lookupTransform(
-                    world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
+                    frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(wallPoint, wallPointTransformed, tf_stamped);
             }
             catch (tf2::TransformException &ex)
@@ -1261,7 +1234,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         //     pointWallInit.setX(wall->getCentroid().x());
         //     pointWallInit.setY(wall->getCentroid().y());
         //     pointWallInit.setZ(wall->getCentroid().z());
-        //     transformListener->transformPoint(world_frame_id, ros::Time(0), pointWallInit,
+        //     transformListener->transformPoint(frameWorld, ros::Time(0), pointWallInit,
         //                                       frameBC, pointWallTransform);
 
         //     pointWall.x = pointWallTransform.x();
@@ -1291,7 +1264,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             try
             {
                 auto tf_stamped = tfBuffer_->lookupTransform(
-                    world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
+                    frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(doorPoint, doorPointTransformed, tf_stamped);
             }
             catch (tf2::TransformException &ex)
@@ -1328,7 +1301,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         //     pointDoorInit.setX(door->getGlobalPose().translation()(0));
         //     pointDoorInit.setY(door->getGlobalPose().translation()(1));
         //     pointDoorInit.setZ(door->getGlobalPose().translation()(2));
-        //     transformListener->transformPoint(world_frame_id, ros::Time(0), pointDoorInit,
+        //     transformListener->transformPoint(frameWorld, ros::Time(0), pointDoorInit,
         //                                       frameBC, pointDoorTransform);
 
         //     pointDoor.x = pointDoorTransform.x();
@@ -1360,7 +1333,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
             try
             {
                 auto tf_stamped = tfBuffer_->lookupTransform(
-                    world_frame_id, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
+                    frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
                 tf2::doTransform(pointMarkerInit, pointMarkerTransform, tf_stamped);
             }
             catch (tf2::TransformException &ex)
@@ -1381,7 +1354,7 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
         //     pointMarkerInit.setX(metaMarker->getGlobalPose().translation()(0));
         //     pointMarkerInit.setY(metaMarker->getGlobalPose().translation()(1));
         //     pointMarkerInit.setZ(metaMarker->getGlobalPose().translation()(2));
-        //     transformListener->transformPoint(world_frame_id, ros::Time(0), pointMarkerInit,
+        //     transformListener->transformPoint(frameWorld, ros::Time(0), pointMarkerInit,
         //                                       frameBC, pointMarkerTransform);
 
         //     pointMarker.x = pointMarkerTransform.x();
@@ -1407,7 +1380,7 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
 
     // Set the attributes of the point cloud
     cloud.header.stamp = msgTime;
-    cloud.header.frame_id = world_frame_id;
+    cloud.header.frame_id = frameWorld;
     cloud.height = 1;
     cloud.width = mapPoints.size();
     cloud.is_bigendian = false;
@@ -1455,7 +1428,7 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
 
 //     // Set the attributes of the point cloud
 //     cloud.header.stamp = msgTime;
-//     cloud.header.frame_id = world_frame_id;
+//     cloud.header.frame_id = frameWorld;
 //     cloud.height = 1;
 //     cloud.width = mapPoints.size();
 //     cloud.is_bigendian = false;
@@ -1607,11 +1580,11 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
                     pointIn.header.frame_id = frameMap;
                     pointIn.header.stamp = rclcpp::Time(0);
                     pointIn.point = point;
-                    // transformListener->transformPoint(world_frame_id, pointIn, pointOut);
+                    // transformListener->transformPoint(frameWorld, pointIn, pointOut);
                     try
                     {
                         auto tf_stamped = tfBuffer_->lookupTransform(
-                            world_frame_id, pointIn.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.1));
+                            frameWorld, pointIn.header.frame_id, tf2::TimePointZero, tf2::durationFromSec(0.1));
                         tf2::doTransform(pointIn, pointOut, tf_stamped);
                     }
                     catch (tf2::TransformException &ex)
