@@ -119,7 +119,7 @@ extern ORB_SLAM3::System::eSensor sensorType;
 extern bool colorPointcloud;
 extern double roll, pitch, yaw;
 extern bool pubStaticTransform, pubPointClouds;
-extern std::string frameWorld, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
+extern std::string frameCamera, frameImu, frameWorld, frameMap, frameBC, frameSE;
 
 // TF broadcasters
 extern std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
@@ -134,25 +134,17 @@ extern std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 // List of GNN-based room candidates
 extern std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
 
-// extern ros::Publisher pubKFImage;
-// extern ros::Publisher pubAllWalls;
-// extern rclcpp::Time lastPlanePublishTime;
-// extern image_transport::Publisher pubTrackingImage;
-// extern ros::Publisher pubCameraPose, pubCameraPoseVis, pubOdometry, pubKeyFrameMarker;
-// extern ros::Publisher pubTrackedMappoints, pubAllMappoints, pubSegmentedPointcloud;
-extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
-extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
-
-extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Time lastPlanePublishTime;
-
+extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
+extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
 extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
+extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
-extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 
 class MapPointStruct
 {

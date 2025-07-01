@@ -107,12 +107,12 @@ public:
 //     nodeHandler.param<double>(node_name + "/pitch", pitch, 0.0);
 
 //     nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
-//     nodeHandler.param<std::string>(node_name + "/imu_frame_id", imu_frame_id, "imu");
-//     nodeHandler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
+//     nodeHandler.param<std::string>(node_name + "/frame_imu", frameImu, "imu");
+//     nodeHandler.param<std::string>(node_name + "/frame_camera", frameCamera, "camera");
 //     nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
 //     nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
-//     nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "plane");
-//     nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "room");
+//     nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "build_comp");
+//     nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "struc_elem");
 
 //     // Create SLAM system. It initializes all system threads and gets ready to process frames.
 //     ImuGrabber imugb;
@@ -181,12 +181,12 @@ int main(int argc, char **argv)
     node->declare_parameter<double>("roll", 0.0);
     node->declare_parameter<double>("pitch", 0.0);
     node->declare_parameter<std::string>("frame_map", "map");
-    node->declare_parameter<std::string>("imu_frame_id", "imu");
-    node->declare_parameter<std::string>("cam_frame_id", "camera");
+    node->declare_parameter<std::string>("frame_imu", "imu");
+    node->declare_parameter<std::string>("frame_camera", "camera");
     node->declare_parameter<std::string>("frame_world", "world");
     node->declare_parameter<bool>("static_transform", false);
-    node->declare_parameter<std::string>("frame_building_component", "plane");
-    node->declare_parameter<std::string>("frame_structural_element", "room");
+    node->declare_parameter<std::string>("frame_building_component", "build_comp");
+    node->declare_parameter<std::string>("frame_structural_element", "struc_elem");
 
     std::string sys_params_file = node->get_parameter("sys_params_file").as_string();
     std::string voc_file = node->get_parameter("voc_file").as_string();
@@ -210,8 +210,8 @@ int main(int argc, char **argv)
     roll = node->get_parameter("roll").as_double();
     pitch = node->get_parameter("pitch").as_double();
     frameMap = node->get_parameter("frame_map").as_string();
-    imu_frame_id = node->get_parameter("imu_frame_id").as_string();
-    cam_frame_id = node->get_parameter("cam_frame_id").as_string();
+    frameImu = node->get_parameter("frame_imu").as_string();
+    frameCamera = node->get_parameter("frame_camera").as_string();
     frameWorld = node->get_parameter("frame_world").as_string();
     pubStaticTransform = node->get_parameter("static_transform").as_bool();
     frameBC = node->get_parameter("frame_building_component").as_string();

@@ -42,10 +42,9 @@ std::vector<std::vector<ORB_SLAM3::Marker *>> markersBuffer;
 std::shared_ptr<tf2_ros::TransformBroadcaster> tfBroadcaster;
 std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 std::shared_ptr<tf2_ros::StaticTransformBroadcaster> staticTfBroadcaster;
-std::string frameWorld, cam_frame_id, imu_frame_id, frameMap, frameBC, frameSE;
+std::string frameWorld, frameCamera, frameImu, frameMap, frameBC, frameSE;
 
-rclcpp::Time lastPlanePublishTime = rclcpp::Time(0);
-
+rclcpp::Time lastPlanePublishTime(0, 0, RCL_ROS_TIME);
 rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubKeyFrameList;
 rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubDoor;
@@ -176,7 +175,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
 
     // Common topics
     publishCameraPose(Twc, msgTime);
-    publishTFTransform(Twc, frameWorld, cam_frame_id, msgTime);
+    publishTFTransform(Twc, frameWorld, frameCamera, msgTime);
 
     // Set a static transform between the world and map frame
     if (pubStaticTransform)
@@ -220,7 +219,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
         Sophus::Matrix3f Rwb = Twb.rotationMatrix();
         Eigen::Vector3f Wwb = Rwb * Wbb;
 
-        publishTFTransform(Twb, frameWorld, imu_frame_id, msgTime);
+        publishTFTransform(Twb, frameWorld, frameImu, msgTime);
         publishBodyOdometry(Twb, Vwb, Wwb, msgTime);
     }
 }
@@ -228,7 +227,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
 void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::Vector3f ang_vel_body, rclcpp::Time msgTime)
 {
     nav_msgs::msg::Odometry odom_msg;
-    odom_msg.child_frame_id = imu_frame_id;
+    odom_msg.child_frame_id = frameImu;
     odom_msg.header.frame_id = frameWorld;
     odom_msg.header.stamp = msgTime;
 
@@ -255,7 +254,7 @@ void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::
 void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
 {
     geometry_msgs::msg::PoseStamped poseMsg;
-    poseMsg.header.frame_id = cam_frame_id;
+    poseMsg.header.frame_id = frameCamera;
     poseMsg.header.stamp = msgTime;
 
     poseMsg.pose.position.x = Tcw_SE3f.translation().x();
@@ -539,7 +538,7 @@ void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
     pcl::toROSMsg(*aggregatedCloud, cloud_msg);
 
     // publish the pointcloud to be seen at the plane frame
-    cloud_msg.header.frame_id = cam_frame_id;
+    cloud_msg.header.frame_id = frameCamera;
     pubSegmentedPointcloud->publish(cloud_msg);
 }
 
@@ -782,22 +781,10 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
     if (numPlanes == 0)
         return;
 
-    // TODO: proper inicialization of lastPlanePublishTime
-    if (lastPlanePublishTime.seconds() == 0)
-    {
-        lastPlanePublishTime = msgTime;
-    }
-
     // Check if sufficient time has passed since the last plane publication
-    // if ((msgTime - lastPlanePublishTime)rclcpp::Time::seconds() < 3)
-
-    // double delta_time = (msgTime - lastPlanePublishTime).seconds();
-    // if (delta_time < 3)
-    // if (rclcpp::Duration(msgTime - lastPlanePublishTime).seconds() < 3.0)
-    // if ((msgTime - lastPlanePublishTime) < rclcpp::Duration::from_seconds(3.0))
-    // if ((msgTime - lastPlanePublishTime).nanoseconds() < 3000000000LL)
-    if ((msgTime - lastPlanePublishTime).seconds() < 3)
+    if ((msgTime - lastPlanePublishTime).seconds() < 3.0)
         return;
+
     lastPlanePublishTime = msgTime;
 
     // Variables
@@ -839,12 +826,6 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
             newPoint.g = point.g;
             newPoint.b = point.b;
 
-            // // Compute from plane equation - y for ground, z for wall
-            // if (planeType == ORB_SLAM3::Plane::planeVariant::GROUND)
-            //     newPoint.y = (-planeCoeffs(0) * point.x - planeCoeffs(2) * point.z - planeCoeffs(3)) / planeCoeffs(1);
-            // else if (planeType == ORB_SLAM3::Plane::planeVariant::WALL)
-            //     newPoint.z = (-planeCoeffs(0) * point.x - planeCoeffs(1) * point.y - planeCoeffs(3)) / planeCoeffs(2);
-
             // Override color according to type of plane
             if (colorPointcloud)
             {
@@ -865,14 +846,14 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
         planeLabel.text = planeLabelText;
         planeLabel.header.stamp = msgTime;
         planeLabel.action = planeLabel.ADD;
+        planeLabel.header.frame_id = frameBC;
         planeLabel.color.r = color[0] / 255.0;
         planeLabel.color.g = color[1] / 255.0;
         planeLabel.color.b = color[2] / 255.0;
-        planeLabel.lifetime = rclcpp::Duration::from_seconds(0);
         planeLabel.pose.position.x = centroid.x();
         planeLabel.pose.position.z = centroid.z();
         planeLabel.pose.position.y = centroid.y() - 1.5;
-        planeLabel.header.frame_id = frameBC;
+        planeLabel.lifetime = rclcpp::Duration::from_seconds(0);
         planeLabel.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
 
         // Create a marker for the plane normal (as an arrow)
@@ -882,12 +863,12 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
         planeNormal.scale.z = 0.05; // Arrowhead length
         planeNormal.ns = "planeNormal";
         planeNormal.header.stamp = msgTime;
-        planeNormal.lifetime = rclcpp::Duration::from_seconds(0);
+        planeNormal.header.frame_id = frameBC;
         planeNormal.color.r = color[0] / 255.0;
         planeNormal.color.g = color[1] / 255.0;
         planeNormal.color.b = color[2] / 255.0;
         planeNormal.id = plane->getId() + numPlanes;
-        planeNormal.header.frame_id = frameBC;
+        planeNormal.lifetime = rclcpp::Duration::from_seconds(0);
         planeNormal.type = visualization_msgs::msg::Marker::ARROW;
 
         // Clear previous points from planeNormal
@@ -912,16 +893,16 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
     if (aggregatedCloud->empty())
         return;
 
-    // convert the aggregated pointcloud to a pointcloud2 message
-    sensor_msgs::msg::PointCloud2 cloud_msg;
-    pcl::toROSMsg(*aggregatedCloud, cloud_msg);
+    // Convert the aggregated pointcloud to a pointcloud2 message
+    sensor_msgs::msg::PointCloud2 cloudMsg;
+    pcl::toROSMsg(*aggregatedCloud, cloudMsg);
 
     // Set message header
-    cloud_msg.header.stamp = msgTime;
-    cloud_msg.header.frame_id = frameBC;
+    cloudMsg.header.stamp = msgTime;
+    cloudMsg.header.frame_id = frameBC;
 
     // Publish the point cloud
-    pubPlanePointcloud->publish(cloud_msg);
+    pubPlanePointcloud->publish(cloudMsg);
     pubPlaneLabel->publish(planeLabelArray);
 }
 
