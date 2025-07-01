@@ -60,8 +60,8 @@ int main(int argc, char **argv)
     node->declare_parameter<std::string>("frame_map", "map");
     node->declare_parameter<bool>("colored_pointcloud", true);
     node->declare_parameter<bool>("publish_pointclouds", true);
-    node->declare_parameter<std::string>("cam_frame_id", "camera");
     node->declare_parameter<std::string>("frame_world", "world");
+    node->declare_parameter<std::string>("cam_frame_id", "camera");
     node->declare_parameter<std::string>("voc_file", "file_not_set");
     node->declare_parameter<std::string>("settings_file", "file_not_set");
     node->declare_parameter<std::string>("sys_params_file", "file_not_set");

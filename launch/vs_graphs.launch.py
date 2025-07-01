@@ -68,17 +68,16 @@ def generate_launch_description():
                             ],
                         )
                     },
-                    {"static_transform": True},
                     {"roll": 0.0},
                     {"yaw": 1.5697},
                     {"pitch": -1.5697},
                     {"frame_map": "map"},
-                    {"cam_frame_id": "camera"},
                     {"frame_world": "world"},
+                    {"cam_frame_id": "camera"},
                     {"enable_pangolin": False},
+                    {"static_transform": True},
+                    {"colored_pointcloud": True},
                     {"publish_pointclouds": True},
-                    {"colored_pointcloud": LaunchConfiguration(
-                        "colored_pointcloud")},
                 ],
                 remappings=[
                     ("/camera/rgb/image_raw", LaunchConfiguration("rgb_image_topic")),
@@ -123,7 +122,7 @@ def generate_launch_description():
                 ],
                 output="screen",
             ),
-            # Depth to Colored Point Cloud
+            # Nodelete
             ComposableNodeContainer(
                 name="depth_image_proc_container",
                 package="rclcpp_components",

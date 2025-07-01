@@ -252,55 +252,6 @@ void publishBodyOdometry(Sophus::SE3f Twb_SE3f, Eigen::Vector3f Vwb_E3f, Eigen::
     pubOdometry->publish(odom_msg);
 }
 
-// void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
-// {
-//     geometry_msgs::msg::PoseStamped poseMsg;
-//     poseMsg.header.frame_id = cam_frame_id;
-//     poseMsg.header.stamp = msgTime;
-
-//     poseMsg.pose.position.x = Tcw_SE3f.translation().x();
-//     poseMsg.pose.position.y = Tcw_SE3f.translation().y();
-//     poseMsg.pose.position.z = Tcw_SE3f.translation().z();
-
-//     poseMsg.pose.orientation.w = Tcw_SE3f.unit_quaternion().coeffs().w();
-//     poseMsg.pose.orientation.x = Tcw_SE3f.unit_quaternion().coeffs().x();
-//     poseMsg.pose.orientation.y = Tcw_SE3f.unit_quaternion().coeffs().y();
-//     poseMsg.pose.orientation.z = Tcw_SE3f.unit_quaternion().coeffs().z();
-
-//     pubCameraPose.publish(poseMsg);
-
-//     // Add a marker for visualization
-//     visualization_msgs::msg::Marker cameraVisual;
-//     visualization_msgs::msg::MarkerArray cameraVisualList;
-
-//     cameraVisual.id = 1;
-//     cameraVisual.color.a = 0.7;
-//     cameraVisual.scale.x = 0.5;
-//     cameraVisual.scale.y = 0.5;
-//     cameraVisual.scale.z = 0.5;
-//     cameraVisual.ns = "camera_pose";
-//     cameraVisual.header.stamp = msgTime;
-//     cameraVisual.action = cameraVisual.ADD;
-//     cameraVisual.lifetime = rclcpp::Duration::from_seconds(0);
-//     cameraVisual.header.frame_id = frameWorld;
-//     cameraVisual.mesh_use_embedded_materials = true;
-//     cameraVisual.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
-//     cameraVisual.mesh_resource =
-//         "package://vs_graphs/config/Assets/camera.dae";
-
-//     cameraVisual.pose.position.x = Tcw_SE3f.translation().x();
-//     cameraVisual.pose.position.y = Tcw_SE3f.translation().y();
-//     cameraVisual.pose.position.z = Tcw_SE3f.translation().z();
-//     cameraVisual.pose.orientation.x = Tcw_SE3f.unit_quaternion().x();
-//     cameraVisual.pose.orientation.y = Tcw_SE3f.unit_quaternion().y();
-//     cameraVisual.pose.orientation.z = Tcw_SE3f.unit_quaternion().z();
-//     cameraVisual.pose.orientation.w = Tcw_SE3f.unit_quaternion().w();
-
-//     cameraVisualList.markers.push_back(cameraVisual);
-
-//     pubCameraPoseVis.publish(cameraVisualList);
-// }
-
 void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
 {
     geometry_msgs::msg::PoseStamped poseMsg;
@@ -330,9 +281,9 @@ void publishCameraPose(Sophus::SE3f Tcw_SE3f, rclcpp::Time msgTime)
     cameraVisual.ns = "camera_pose";
     cameraVisual.header.stamp = msgTime;
     cameraVisual.action = cameraVisual.ADD;
-    cameraVisual.lifetime = rclcpp::Duration::from_seconds(0);
     cameraVisual.header.frame_id = frameWorld;
     cameraVisual.mesh_use_embedded_materials = true;
+    cameraVisual.lifetime = rclcpp::Duration::from_seconds(0);
     cameraVisual.type = visualization_msgs::msg::Marker::MESH_RESOURCE;
     cameraVisual.mesh_resource =
         "package://vs_graphs/config/Assets/camera.dae";
@@ -486,8 +437,8 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
 
 void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, rclcpp::Time msgTime)
 {
-    // vs_graphs::VSGraphsAllWallsData wallDataMsg;
     vs_graphs::msg::VSGraphsAllWallsData wallDataMsg;
+
     // Fill the data message with wall information
     wallDataMsg.header.stamp = msgTime;
     wallDataMsg.header.frame_id = frameWorld;
@@ -601,15 +552,15 @@ void publishTrackingImage(cv::Mat image, rclcpp::Time msgTime)
     pubTrackingImage->publish(rendered_image_msg);
 }
 
-void publishTrackedPoints(std::vector<ORB_SLAM3::MapPoint *> tracked_points, rclcpp::Time msgTime)
+void publishTrackedPoints(std::vector<ORB_SLAM3::MapPoint *> trackedMapPoints, rclcpp::Time msgTime)
 {
-    sensor_msgs::msg::PointCloud2 cloud = mapPointToPointcloud(tracked_points, msgTime);
+    sensor_msgs::msg::PointCloud2 cloud = mapPointToPointcloud(trackedMapPoints, msgTime);
     pubTrackedMappoints->publish(cloud);
 }
 
-void publishAllPoints(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime)
+void publishAllPoints(std::vector<ORB_SLAM3::MapPoint *> allMapPoints, rclcpp::Time msgTime)
 {
-    sensor_msgs::msg::PointCloud2 cloud = mapPointToPointcloud(mapPoints, msgTime);
+    sensor_msgs::msg::PointCloud2 cloud = mapPointToPointcloud(allMapPoints, msgTime);
     pubAllMappoints->publish(cloud);
 }
 
@@ -636,6 +587,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
     kf_markers.color.a = 1.0;
 
     visualization_msgs::msg::Marker kf_lines;
+    kf_lines.id = 1;
     kf_lines.color.a = 0.15;
     kf_lines.color.r = 0.0;
     kf_lines.color.g = 0.0;
@@ -646,12 +598,10 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
     kf_lines.action = kf_lines.ADD;
     kf_lines.ns = "kf_lines";
     kf_lines.lifetime = rclcpp::Duration::from_seconds(0);
-    kf_lines.id = 1;
-    kf_lines.header.stamp = rclcpp::Clock().now(); // rclcpp::Time().now();
+    kf_lines.header.stamp = rclcpp::Clock().now();
     kf_lines.header.frame_id = frameWorld;
     kf_lines.type = visualization_msgs::msg::Marker::LINE_LIST;
 
-    // nav_msgs::Path kf_list;
     nav_msgs::msg::Path kf_list;
     kf_list.header.frame_id = frameWorld;
     kf_list.header.stamp = msgTime;
@@ -666,7 +616,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
         kf_marker.z = kf_pose.translation().z();
         kf_markers.points.push_back(kf_marker);
 
-        // populate the keyframe list
+        // Populate the keyframe list
         geometry_msgs::msg::PoseStamped pose;
         pose.header.stamp = rclcpp::Time(keyframe->mTimeStamp);
         pose.header.frame_id = frameWorld;
@@ -678,62 +628,9 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
         pose.pose.orientation.y = kf_pose.unit_quaternion().y();
         pose.pose.orientation.z = kf_pose.unit_quaternion().z();
         kf_list.poses.push_back(pose);
-
-        // THIS IS COMMENTED IN ROS1 VS-GRAPHS
-
-        // // add lines to all keyframes in the covisibility graph
-        // std::vector<ORB_SLAM3::KeyFrame *> covisibility = keyframe->GetBestCovisibilityKeyFrames(75);
-        // // std::vector<ORB_SLAM3::KeyFrame *> covisibility = keyframe->GetVectorCovisibleKeyFrames();
-
-        // for (auto &covis : covisibility)
-        // {
-        //     geometry_msgs::Point covis_marker;
-        //     Sophus::SE3f covis_pose = pSLAM->GetKeyFramePose(covis);
-        //     covis_marker.x = covis_pose.translation().x();
-        //     covis_marker.y = covis_pose.translation().y();
-        //     covis_marker.z = covis_pose.translation().z();
-        //     kf_lines.points.push_back(kf_marker);
-        //     kf_lines.points.push_back(covis_marker);
-        // }
-
-        // // get all planes from the keyframe
-        // std::vector<ORB_SLAM3::Plane *> planes = keyframe->GetMapPlanes();
-
-        // // attach lines to centroids of planes
-        // for (auto &plane : planes)
-        // {
-        //     if (!plane)
-        //         continue;
-        //     // show only connections of planes with semantic types
-        //     if (plane->getPlaneType() == ORB_SLAM3::Plane::planeVariant::UNDEFINED)
-        //         continue;
-
-        //     // compute centroid of the plane from it's point cloud - point cloud already in world frame
-        //     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr planeCloud = plane->getMapClouds();
-        //     Eigen::Vector4f centroid;
-        //     pcl::compute3DCentroid(*planeCloud, centroid);
-
-        //     tf::Stamped<tf::Point> planePoint;
-        //     planePoint.setX(centroid[0]);
-        //     planePoint.setY(centroid[1]);
-        //     planePoint.setZ(centroid[2]);
-        //     planePoint.frame_id_ = frameBC;
-
-        //     tf::Stamped<tf::Point> planePointTransformed;
-        //     transform_listener->transformPoint(frameWorld, rclcpp::Time(0), planePoint,
-        //                                        frameBC, planePointTransformed);
-
-        //     geometry_msgs::Point point1;
-        //     point1.x = planePointTransformed.x();
-        //     point1.y = planePointTransformed.y();
-        //     point1.z = planePointTransformed.z();
-        //     kf_lines.points.push_back(point1);
-
-        //     kf_lines.points.push_back(kf_marker);
-        // }
     }
+
     markerArray.markers.push_back(kf_markers);
-    // markerArray.markers.push_back(kf_lines);
     pubKeyFrameMarker->publish(markerArray);
     pubKeyFrameList->publish(kf_list);
 }
@@ -1382,9 +1279,9 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
     cloud.header.stamp = msgTime;
     cloud.header.frame_id = frameWorld;
     cloud.height = 1;
-    cloud.width = mapPoints.size();
-    cloud.is_bigendian = false;
     cloud.is_dense = true;
+    cloud.is_bigendian = false;
+    cloud.width = mapPoints.size();
     cloud.point_step = numChannels * sizeof(float);
     cloud.row_step = cloud.point_step * cloud.width;
     cloud.fields.resize(numChannels);
@@ -1408,67 +1305,17 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
         if (mapPoints[idx] && !mapPoints[idx]->isBad())
         {
             Eigen::Vector3d P3Dw = mapPoints[idx]->GetWorldPos().cast<double>();
+            tf2::Vector3 pointTranslation(P3Dw.x(), P3Dw.y(), P3Dw.z());
             float dataArray[numChannels] = {
-                static_cast<float>(P3Dw.x()),
-                static_cast<float>(P3Dw.y()),
-                static_cast<float>(P3Dw.z())};
+                pointTranslation.x(),
+                pointTranslation.y(),
+                pointTranslation.z()};
             memcpy(cloudDataPtr + (idx * cloud.point_step), dataArray, numChannels * sizeof(float));
         }
     }
 
     return cloud;
 }
-
-// sensor_msgs::msg::mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime)
-// {
-//     // Variables
-//     const int numChannels = 3;
-//     sensor_msgs::msg::PointCloud2 cloud;
-//     std::string channelId[] = {"x", "y", "z"};
-
-//     // Set the attributes of the point cloud
-//     cloud.header.stamp = msgTime;
-//     cloud.header.frame_id = frameWorld;
-//     cloud.height = 1;
-//     cloud.width = mapPoints.size();
-//     cloud.is_bigendian = false;
-//     cloud.is_dense = true;
-//     cloud.point_step = numChannels * sizeof(float);
-//     cloud.row_step = cloud.point_step * cloud.width;
-//     cloud.fields.resize(numChannels);
-
-//     // Set the fields of the point cloud
-//     for (int idx = 0; idx < numChannels; idx++)
-//     {
-//         cloud.fields[idx].count = 1;
-//         cloud.fields[idx].name = channelId[idx];
-//         cloud.fields[idx].offset = idx * sizeof(float);
-//         cloud.fields[idx].datatype = sensor_msgs::PointField::FLOAT32;
-//     }
-
-//     // Set the data of the point cloud
-//     cloud.data.resize(cloud.row_step * cloud.height);
-//     unsigned char *cloudDataPtr = &(cloud.data[0]);
-
-//     // Populate the point cloud with the map points
-//     for (unsigned int idx = 0; idx < cloud.width; idx++)
-//         if (mapPoints[idx] && !mapPoints[idx]->isBad())
-//         {
-//             Eigen::Vector3d P3Dw = mapPoints[idx]->GetWorldPos().cast<double>();
-
-//             tf::Vector3 pointTranslation(P3Dw.x(), P3Dw.y(), P3Dw.z());
-
-//             float dataArray[numChannels] = {
-//                 pointTranslation.x(),
-//                 pointTranslation.y(),
-//                 pointTranslation.z()};
-
-//             memcpy(cloudDataPtr + (idx * cloud.point_step), dataArray, numChannels * sizeof(float));
-//         }
-
-//     // Return the point cloud
-//     return cloud;
-// }
 
 cv::Mat SE3fToCvMat(Sophus::SE3f data)
 {
