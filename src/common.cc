@@ -141,7 +141,7 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubDoor = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/doors", 1);
     pubPlaneLabel = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/plane_labels", 1);
     pubAllWalls = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
-    pubPlanePointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/plane_point_clouds", 1);
+    pubPlanePointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/building_components", 1);
     pubFiducialMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/fiducial_markers", 1);
     pubSegmentedPointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/segmented_point_clouds", 1);
 

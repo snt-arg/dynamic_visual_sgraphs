@@ -40,8 +40,7 @@ Visualization Manager:
       Show Arrows: false
       Show Axes: true
       Show Names: true
-      Tree:
-        {}
+      Tree: {}
       Update Interval: 0
       Value: false
     - Alpha: 0.5
@@ -225,8 +224,7 @@ Visualization Manager:
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Fiducial Markers
-      Namespaces:
-        {}
+      Namespaces: {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -267,7 +265,7 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
-    - Alpha: 0.800000011920929
+    - Alpha: 0.30000001192092896
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
         Max Value: -9999
@@ -276,7 +274,7 @@ Visualization Manager:
       Axis: X
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
-      Color: 255; 85; 127
+      Color: 0; 170; 255
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -329,15 +327,14 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /vs_graphs/plane_point_clouds
+        Value: /vs_graphs/building_components
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/MarkerArray
       Enabled: false
       Name: Structural Elements
-      Namespaces:
-        {}
+      Namespaces: {}
       Topic:
         Depth: 5
         Durability Policy: Volatile

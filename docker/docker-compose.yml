@@ -43,10 +43,12 @@ services:
       # - "/home/asier/.bash_history:/root/.bash_history"
       # - container_home_cache:/root/.cache  # Optional: persist cache
 
-      # Working Directories (** MODIFY **)
-      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
-      # Data Directories (** MODIFY **)
-      - "[DATASET_PATH]:/home/$USERNAME/datasets:rw"
+      # Working Directory - vS-Graphs (** MODIFY **)
+      - "[DIR_VS_GRAPHS]:/workspace/src/visual_sgraphs:rw"
+      # Working Directory - Scene Segmenter (** MODIFY **)
+      - "[DIR_SEGMENTER]:/workspace/src/scene_segment_ros:rw"
+      # Data Directory (** MODIFY **)
+      - "[DIR_DATASET]:/home/$USERNAME/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
@@ -57,7 +59,9 @@ services:
     image: busybox
     command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
     volumes:
-      # Working Directories (** MODIFY **)
-      - "[WORKING_DIRECTORY]:/workspace/src/visual_sgraphs:rw"
+      # Working Directory - vS-Graphs (** MODIFY **)
+      - "[DIR_VS_GRAPHS]:/workspace/src/visual_sgraphs:rw"
+      # Working Directory - Scene Segmenter (** MODIFY **)
+      - "[DIR_SEGMENTER]:/workspace/src/scene_segment_ros:rw"
     entrypoint: ""
     restart: "no"
