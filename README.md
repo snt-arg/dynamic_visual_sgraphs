@@ -71,7 +71,7 @@ To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation
 ## 📎 Related Repositories
 
 - 🔧 [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs)
-- 🎞️ Scene Segmentor ([ROS1](https://github.com/snt-arg/scene_segment_ros))
+- 🎞️ Scene Segmentor ([ROS2 Jazzy](https://github.com/snt-arg/scene_segment_ros))
 
 ## 🔑 License
 
