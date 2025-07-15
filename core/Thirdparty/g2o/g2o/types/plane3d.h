@@ -13,7 +13,7 @@ namespace g2o
     class G2O_TYPES_SLAM3D_ADDONS_API Plane3D
     {
     public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         friend Plane3D operator*(const Isometry3D &t, const Plane3D &plane);
 
@@ -23,7 +23,7 @@ namespace g2o
 
         inline Vector4D toVector() const { return _coeffs; }
 
-        inline Vector3D toVector3D() const 
+        inline Vector3D toVector3D() const
         {
             Vector3D normal = _coeffs.head<3>();
             Vector3D result;

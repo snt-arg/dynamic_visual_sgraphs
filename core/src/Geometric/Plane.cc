@@ -14,12 +14,17 @@
 */
 
 #include "Geometric/Plane.h"
+#include <boost/shared_ptr.hpp>
+#include <boost/make_shared.hpp>
+#include <pcl/octree/octree_search.h>
 
 namespace ORB_SLAM3
 {
     Plane::Plane()
     {
-        planeCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+        // planeCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+        planeCloud = std::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+
         octree = boost::make_shared<pcl::octree::OctreePointCloudSearch<pcl::PointXYZRGBA>>(SystemParams::GetParams()->refine_map_points.octree.resolution);
         centroid.setZero();
         excludedFromAssoc = false;

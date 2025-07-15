@@ -221,7 +221,8 @@ namespace ORB_SLAM3
         // Fix scale in the stereo/RGB-D case
         bool mbFixScale;
 
-        bool mnFullBAIdx;
+        // bool mnFullBAIdx;
+        unsigned int mnFullBAIdx;
 
         vector<double> vdPR_CurrentTime;
         vector<double> vdPR_MatchedTime;

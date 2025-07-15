@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5)
 project(vs_graphs)
 
 IF(NOT CMAKE_BUILD_TYPE)
@@ -9,26 +9,35 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
+
 # [Hint] We commented below lines as it got stuck in the normalize function of g2o::plane3d
 # set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
 # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
-# Check C++14 or C++0x support
-include(CheckCXXCompilerFlag)
-CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
-CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-
-if(COMPILER_SUPPORTS_CXX14)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-  add_definitions(-DCOMPILEDWITHC11)
-  message(STATUS "Using flag -std=c++14.")
-elseif(COMPILER_SUPPORTS_CXX0X)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-  add_definitions(-DCOMPILEDWITHC0X)
-  message(STATUS "Using flag -std=c++0x.")
-else()
-  message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# # Check C++14 or C++0x support
+# include(CheckCXXCompilerFlag)
+# CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
+# CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+
+# if(COMPILER_SUPPORTS_CXX14)
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+#   add_definitions(-DCOMPILEDWITHC11)
+#   message(STATUS "Using flag -std=c++14.")
+# elseif(COMPILER_SUPPORTS_CXX0X)
+#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+#   add_definitions(-DCOMPILEDWITHC0X)
+#   message(STATUS "Using flag -std=c++0x.")
+# else()
+#   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
+# endif()
+
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
@@ -40,57 +49,51 @@ endif()
 MESSAGE("OPENCV VERSION:")
 MESSAGE(${OpenCV_VERSION})
 
-## Find catkin macros and libraries
-## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
-## is used, also find other catkin packages
-find_package(catkin REQUIRED COMPONENTS
-  cv_bridge
-  image_transport
-  geometry_msgs
-  sensor_msgs
-  nav_msgs
-  std_msgs
-  message_filters
-  roscpp
-  rospy
-  tf
-  tf2
-  message_generation
-  aruco_ros
-  aruco_msgs
-  backward_ros
-  rviz_visual_tools
-  pcl_ros
-  segmenter_ros
-)
+## Find ament macros and libraries
+## Use 'find_package' for ROS 2 packages instead of 'catkin'
+## Find ament and ROS2 packages
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(rosidl_default_runtime REQUIRED)
+# find_package(aruco_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
+# find_package(aruco_msgs REQUIRED)  # Comment out - check if ROS2 equivalent exists
+find_package(backward_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
+find_package(rviz_visual_tools REQUIRED)
+find_package(pcl_ros REQUIRED)
+find_package(segmenter_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
+
 
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
+# find_package(PCL REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(GLEW REQUIRED)
+
 find_package(PCL REQUIRED)
+include_directories(${PCL_INCLUDE_DIRS})
+link_directories(${PCL_LIBRARY_DIRS})
+add_definitions(${PCL_DEFINITIONS})
 
-add_service_files(
-  FILES
-  SaveMap.srv
-)
 
-# Generate messages in the 'msg' folder
-add_message_files(
-  FILES
-  VSGraphsWallData.msg
-  VSGraphsRoomData.msg
-  VSGraphsAllWallsData.msg
-  VSGraphsAllDetectdetRooms.msg
-)
-
-generate_messages(
-  DEPENDENCIES
-  std_msgs
-  geometry_msgs
-)
-
-catkin_package (
-  CATKIN_DEPENDS roscpp rospy std_msgs geometry_msgs cv_bridge image_transport tf sensor_msgs dynamic_reconfigure message_runtime backward_ros rviz_visual_tools
-  LIBRARIES {PROJECT_NAME} libDBoW2
+# Generate services
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/SaveMap.srv"
+  "msg/VSGraphsWallData.msg"
+  "msg/VSGraphsRoomData.msg"
+  "msg/VSGraphsAllWallsData.msg"
+  "msg/VSGraphsAllDetectdetRooms.msg"
+  DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
 
 ## Specify additional locations of header files
@@ -105,18 +108,24 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/core/Thirdparty/Sophus
   ${EIGEN3_INCLUDE_DIR}
   ${Pangolin_INCLUDE_DIRS}
-  ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${segmenter_ros_INCLUDE_DIRS}
 )
+include_directories(${OPENGL_INCLUDE_DIRS})
 
+# ROS2 uses ament_target_dependencies instead of catkin_INCLUDE_DIRS
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
+# Include third-party CMakeLists
 include(${PROJECT_SOURCE_DIR}/core/Thirdparty/DBoW2/CMakeLists.txt)
 include(${PROJECT_SOURCE_DIR}/core/Thirdparty/g2o/CMakeLists.txt)
 
+# Set library output directory
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/core/lib)
-add_library(${PROJECT_NAME} SHARED
+
+# Create the main library
+add_library(${PROJECT_NAME}_lib SHARED
   core/src/System.cc
   core/src/Tracking.cc
   core/src/LocalMapping.cc
@@ -201,7 +210,7 @@ add_library(${PROJECT_NAME} SHARED
   core/include/SemanticsManager.h
 )
 
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(${PROJECT_NAME}_lib 
   ${OpenCV_LIBS}
   ${EIGEN3_LIBS}
   ${Pangolin_LIBRARIES}
@@ -213,62 +222,63 @@ target_link_libraries(${PROJECT_NAME}
   -lcrypto
 )
 
-## ROS node
-add_executable(ros_mono
-  src/ros_mono.cc
-  src/common.cc
-)
-target_link_libraries(ros_mono
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-)
-
-## ROS node
-add_executable(ros_mono_inertial 
-  src/ros_mono_inertial.cc
-  src/common.cc
-)
-target_link_libraries(ros_mono_inertial 
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
+# ROS2 specific: Use ament_target_dependencies for ROS2 packages
+ament_target_dependencies(${PROJECT_NAME}_lib 
+  rclcpp
+  std_msgs
+  cv_bridge
+  sensor_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  nav_msgs
+  message_filters
+  image_transport
+  pcl_ros
+  rviz_visual_tools
 )
 
-## ROS node
-add_executable(ros_stereo 
-  src/ros_stereo.cc
-  src/common.cc
-)
-target_link_libraries(ros_stereo
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-)
-
-## ROS node
-add_executable(ros_stereo_inertial
-  src/ros_stereo_inertial.cc
-  src/common.cc
-)
-target_link_libraries(ros_stereo_inertial 
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-)
-
-## ROS node
+# ROS2 node
 add_executable(ros_rgbd
   src/ros_rgbd.cc
   src/common.cc
 )
+
 target_link_libraries(ros_rgbd
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
+  ${PROJECT_NAME}_lib
 )
 
-## ROS node
-add_executable(ros_rgbd_inertial
-  src/ros_rgbd_inertial.cc
-  src/common.cc
+ament_target_dependencies(ros_rgbd
+  rclcpp
+  sensor_msgs
+  geometry_msgs
+  cv_bridge
+  std_msgs
+  nav_msgs
+  message_filters
+  tf2
+  tf2_ros
+  segmenter_ros
 )
-target_link_libraries(ros_rgbd_inertial
-  ${PROJECT_NAME}
-  ${catkin_LIBRARIES}
+
+# Make sure executables can use the custom messages
+rosidl_target_interfaces(ros_rgbd ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+install(
+  DIRECTORY launch config core/Vocabulary
+  DESTINATION share/${PROJECT_NAME}
 )
+
+# Install the library
+install(TARGETS ${PROJECT_NAME}_lib
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install executables
+install(TARGETS
+  ros_rgbd
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# Ament package configuration
+ament_package()

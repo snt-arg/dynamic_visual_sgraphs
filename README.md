@@ -21,33 +21,32 @@ For system requirements, dependencies, and setup instructions, refer to the [Ins
 
 ## 🔨 Configurations
 
-You can read about the SLAM-related configuration parameters (independent of the `ROS` wrapper) in [the config folder](/config/README.md). These configurations can be modified in the [system_params.yaml](/config/system_params.yaml) file. For more information on ROS-related configurations and usage, see the [ROS parameter documentation](/doc/ROS.md) page.
+You can read about the SLAM-related configuration parameters (independent of the `ROS2` wrapper) in [the config folder](/config/README.md). These configurations can be modified in the [system_params.yaml](/config/system_params.yaml) file. For more information on ROS-related configurations and usage, see the [ROS parameter documentation](/doc/ROS.md) page.
 
 ## 🚀 Getting Started
 
 Once you have installed the required dependencies and configured the parameters, you are ready to run **vS-Graphs**! Follow the steps below to get started:
 
-1. Start a core node using `roscore`
-2. Source vS-Graphs and run it by `roslaunch vs_graphs vsgraphs_rgbd.launch [2>/dev/null]`. It will automatically run the vS-Graphs core and the semantic segmentation module for **building component** (walls and ground surfaces) recognition.
-3. (Optional) If you intend to detect **structural elements** (rooms and corridors) too, run the cluster-based solution using `roslaunch voxblox_skeleton skeletonize_map_vsgraphs.launch 2>/dev/null`.
+1. Source vS-Graphs and run it by `ros2 launch vs_graphs vsgraphs_rgbd.launch.py`. It will automatically run the vS-Graphs core and the semantic segmentation module for **building component** (walls and ground surfaces) recognition.
+2. (Optional) If you intend to detect **structural elements** (rooms and corridors) too, run the cluster-based solution using `ros2 launch voxblox_skeleton skeletonize_map_vsgraphs.launch 2>/dev/null`.
 
    - In this case, you need to source `voxblox` with a `--extend` command, and then launch the framework:
 
    ```bash
-   source /opt/ros/noetic/setup.bash &&
-   source ~/[VSGRAPHS_PATH]/devel/setup.bash &&
-   source ~/[VOXBLOX_PATH]/devel/setup.bash --extend &&
-   roslaunch vs_graphs vsgraphs_rgbd.launch
+   source /opt/ros/jazzy/setup.bash &&
+   source ~/[VSGRAPHS_PATH]/install/setup.bash &&
+   source ~/[VOXBLOX_PATH]/install/setup.bash --extend &&
+   ros2 launch vs_graphs vsgraphs_rgbd.launch.py
    ```
 
-4. (Optional) If you have a database of ArUco markers representing room/corridor labels, do not forget to run `aruco_ros` using `roslaunch aruco_ros marker_publisher.launch`.
-5. Now, play a recorded `rosbag` file by running `rosbag play [sample].bag --clock`.
+3. (Optional) If you have a database of ArUco markers representing room/corridor labels, do not forget to run `aruco_ros` using `ros2 launch aruco_ros marker_publisher.launch`.
+4. Now, play a recorded `bag` file by running `ros2 bag play [sample].bag --clock`.
 
 ✨ For a complete list of configurable launch arguments, check the [Launch Parameters](/launch/README.md).
 
 ✨ For detailed description on how to use a RealSense D400 series camera for live feed and data collection, check [this page](/doc/RealSense/README.md).
 
-> 🛎️ Note: The current version of vS-Graphs supports **ROS Noetic** and is primarily tested on Ubuntu 20.04.
+> 🛎️ Note: The current version of vS-Graphs supports **ROS2 Jazzy** and is primarily tested on Ubuntu 24.04.2 LTS.
 
 ## 🐋 Docker
 
@@ -72,7 +71,7 @@ To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation
 ## 📎 Related Repositories
 
 - 🔧 [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs)
-- 🎞️ Scene Segmentor ([ROS1](https://github.com/snt-arg/scene_segment_ros))
+- 🎞️ Scene Segmentor ([ROS2 Jazzy](https://github.com/snt-arg/scene_segment_ros))
 
 ## 🔑 License
 

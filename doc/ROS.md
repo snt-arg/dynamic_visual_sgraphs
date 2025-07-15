@@ -34,7 +34,7 @@ vS-Graphs interfaces with several ROS topics to process sensor data, publish sem
 | `/vs_graphs/fiducial_markers`       | `visualization_msgs/MarkerArray` | Mapped fiducial (e.g., ArUco) markers in the world frame  |
 | `/vs_graphs/doors`                  | `visualization_msgs/MarkerArray` | Mapped doorways in the environment                        |
 | `/vs_graphs/plane_labels`           | `visualization_msgs/MarkerArray` | Semantic labels for building components (walls, ground)   |
-| `/vs_graphs/plane_point_clouds`     | `sensor_msgs/PointCloud2`        | Point clouds of detected building components              |
+| `/vs_graphs/building_components`    | `sensor_msgs/PointCloud2`        | Point clouds of detected building components              |
 | `/vs_graphs/segmented_point_clouds` | `sensor_msgs/PointCloud2`        | Point cloud after semantic segmentation                   |
 | `/vs_graphs/freespace_clusters`     | `sensor_msgs/PointCloud2`        | Clustered free-space regions used for structural analysis |
 | `/vs_graphs/all_mapped_walls`       | `vs_graphs/VSGraphsAllWallsData` | All wall segments identified (GNN-based room detection)   |

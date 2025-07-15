@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "common.h"
 
@@ -43,7 +43,7 @@ public:
     void SyncWithImu();
 
     void GrabImage(const sensor_msgs::ImageConstPtr &msg);
-    void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
+    // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
     void GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArray &msgSkeletonGraph);
@@ -98,12 +98,12 @@ int main(int argc, char **argv)
     nodeHandler.param<double>(node_name + "/pitch", pitch, 0.0);
 
     nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
-    nodeHandler.param<std::string>(node_name + "/imu_frame_id", imu_frame_id, "imu");
-    nodeHandler.param<std::string>(node_name + "/cam_frame_id", cam_frame_id, "camera");
-    nodeHandler.param<std::string>(node_name + "/world_frame_id", world_frame_id, "world");
+    nodeHandler.param<std::string>(node_name + "/frame_imu", frameImu, "imu");
+    nodeHandler.param<std::string>(node_name + "/frame_camera", frameCamera, "camera");
+    nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
     nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
-    nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "plane");
-    nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "room");
+    nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "build_comp");
+    nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "struc_elem");
 
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ImuGrabber imugb;
@@ -117,8 +117,8 @@ int main(int argc, char **argv)
     ros::Subscriber sub_img = nodeHandler.subscribe("/camera/image_raw", 500, &ImageGrabber::GrabImage, &igb);
 
     // Subscribe to the markers detected by `aruco_ros` library
-    ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
-                                                      &ImageGrabber::GrabArUcoMarker, &igb);
+    // ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
+    //                                                   &ImageGrabber::GrabArUcoMarker, &igb);
 
     // Subscriber for images obtained from the Semantic Segmentater
     ros::Subscriber sub_segmented_img = nodeHandler.subscribe("/camera/color/image_segment", 50,
@@ -197,7 +197,7 @@ void ImageGrabber::SyncWithImu()
 
             this->mBufMutex.lock();
             im = GetImage(img0Buf.front());
-            ros::Time msg_time = img0Buf.front()->header.stamp;
+            rclcpp::Time msg_time = img0Buf.front()->header.stamp;
             img0Buf.pop();
             this->mBufMutex.unlock();
 
@@ -247,11 +247,11 @@ void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
-void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
-{
-    // Pass the visited markers to a buffer to be processed later
-    addMarkersToBuffer(markerArray);
-}
+// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
+// {
+//     // Pass the visited markers to a buffer to be processed later
+//     // addMarkersToBuffer(markerArray);
+// }
 
 void ImageGrabber::GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage)
 {

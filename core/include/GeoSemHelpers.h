@@ -26,7 +26,7 @@ namespace ORB_SLAM3
     class GeoSemHelpers
     {
     public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
         /**
          * @brief Creates a new plane object to be added to the map

@@ -51,16 +51,6 @@ rosdep install --from-paths src --ignore-src -y
 
 > 🛎️ Note: The current version of vS-Graphs supports **ROS Noetic** and is primarily tested on Ubuntu 20.04.
 
-### Install `hector-trajectory-server` (Optional)
-
-Using this library you can visualize the real-time trajectory of camera of IMU.
-[`Hector-trajectory-server`](http://wiki.ros.org/hector_trajectory_server) is a ROS package that enables real-time trajectory visualization of a camera or IMU. It is useful for monitoring SLAM progress during runtime. You can install it via the below command:
-
-```bash
-# Check the ROS-DISTRO (ROS1 Noetic)
-sudo apt install ros-[DISTRO]-hector-trajectory-server
-```
-
 ### Install RealSense Library (Optional)
 
 To use an Intel RealSense camera for **live mode** or **data collection**, you will need to install the necessary drivers and libraries. Please follow the detailed setup guide available in [RealSense Setup Instructions](/doc/RealSense/README.md) page. This includes steps for:
