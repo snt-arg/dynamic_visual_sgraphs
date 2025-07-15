@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "Semantic/Floor.h"
 
@@ -50,43 +50,33 @@ namespace ORB_SLAM3
         opIdG = value;
     }
 
-    std::vector<Door *> Floor::getDoors() const
+    Eigen::Vector3d Floor::getCentroid() const
     {
-        return doors;
+        return centroid;
     }
 
-    void Floor::setDoors(Door *value)
+    void Floor::setCentroid(Eigen::Vector3d value)
     {
-        doors.push_back(value);
+        centroid = value;
     }
 
-    std::vector<Room *> Floor::getRooms() const
+    std::vector<ORB_SLAM3::Room *> Floor::getRooms() const
     {
         return rooms;
     }
 
-    void Floor::setRooms(Room *value)
+    void Floor::setRooms(ORB_SLAM3::Room *value)
     {
         rooms.push_back(value);
     }
 
-    std::vector<Plane *> Floor::getWalls() const
-    {
-        return walls;
-    }
-
-    void Floor::setWalls(Plane *value)
-    {
-        walls.push_back(value);
-    }
-
-    Map *Floor::getMap()
+    ORB_SLAM3::Map *Floor::getMap()
     {
         unique_lock<mutex> lock(mMutexMap);
         return mpMap;
     }
 
-    void Floor::setMap(Map *pMap)
+    void Floor::setMap(ORB_SLAM3::Map *pMap)
     {
         unique_lock<mutex> lock(mMutexMap);
         mpMap = pMap;

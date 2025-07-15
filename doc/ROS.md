@@ -38,5 +38,5 @@ vS-Graphs interfaces with several ROS topics to process sensor data, publish sem
 | `/vs_graphs/segmented_point_clouds` | `sensor_msgs/PointCloud2`        | Point cloud after semantic segmentation                   |
 | `/vs_graphs/freespace_clusters`     | `sensor_msgs/PointCloud2`        | Clustered free-space regions used for structural analysis |
 | `/vs_graphs/all_mapped_walls`       | `vs_graphs/VSGraphsAllWallsData` | All wall segments identified (GNN-based room detection)   |
-| `/vs_graphs/rooms`                  | `visualization_msgs/MarkerArray` | Detected structural elements (rooms and corridors)        |
+| `/vs_graphs/structural_elements`    | `visualization_msgs/MarkerArray` | Detected structural elements (rooms and corridors)        |
 | `/vs_graphs/camera_pose_vis`        | `visualization_msgs/MarkerArray` | Visualization markers for current camera pose             |

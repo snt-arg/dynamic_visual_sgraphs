@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "SemanticsManager.h"
 
@@ -57,12 +57,8 @@ namespace ORB_SLAM3
             else if (sysParams->room_seg.method == SystemParams::room_seg::Method::GNN)
                 detectMapRoomCandidateGNN();
 
-            // // count non-bad map points
-            // int numMapPoints = 0;
-            // for (const auto &mp: mpAtlas->GetAllMapPoints())
-            //     if (mp && !mp->isBad())
-            //         numMapPoints++;
-            // std::cout << "[Semantics Manager] Number of non-bad map points: " << numMapPoints << std::endl;
+            // Check detected floors
+            getUpdatedFloors();
 
             // wait until its intervalTime to run the next iteration
             auto end = std::chrono::high_resolution_clock::now();
@@ -427,6 +423,11 @@ namespace ORB_SLAM3
     void SemanticsManager::detectMapRoomCandidateGNN()
     {
         // [TODO] Needs to be implemented
+    }
+
+    void SemanticsManager::getUpdatedFloors()
+    {
+        std::cout << "************[FLOOR]***********" << std::endl;
     }
 
     ORB_SLAM3::Room *SemanticsManager::roomAssociation(const ORB_SLAM3::Room *givenRoom,

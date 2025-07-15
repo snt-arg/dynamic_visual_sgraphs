@@ -49,6 +49,7 @@ rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubKeyFrameList;
 rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubDoor;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubRoom;
+rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubFloor;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
@@ -146,7 +147,8 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubSegmentedPointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/segmented_point_clouds", 1);
 
     // Structural Elements
-    pubRoom = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/rooms", 1);
+    pubFloor = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/floors", 1);
+    pubRoom = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/structural_elements", 1);
 
     // Get body odometry if IMU data is also available
     if (sensorType == ORB_SLAM3::System::IMU_MONOCULAR || sensorType == ORB_SLAM3::System::IMU_STEREO ||
@@ -189,6 +191,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     publishKeyFrameMarkers(keyframes, msgTime);
     publishDoors(pSLAM->GetAllDoors(), msgTime);
     publishRooms(pSLAM->GetAllRooms(), msgTime);
+    publishFloors(pSLAM->GetAllFloors(), msgTime);
     publishFiducialMarkers(pSLAM->GetAllMarkers(), msgTime);
     publishTrackingImage(pSLAM->GetCurrentFrame(), msgTime);
 
@@ -1225,6 +1228,13 @@ void publishRooms(std::vector<ORB_SLAM3::Room *> rooms, rclcpp::Time msgTime)
     }
 
     pubRoom->publish(roomArray);
+}
+
+void publishFloors(std::vector<ORB_SLAM3::Floor *> floors, rclcpp::Time msgTime)
+{
+    // Publish a single floor to hold structural elements
+    if (floors.size() == 0)
+        return;
 }
 
 sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoint *> mapPoints, rclcpp::Time msgTime)
