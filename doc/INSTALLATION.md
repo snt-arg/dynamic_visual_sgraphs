@@ -30,7 +30,7 @@ sudo apt install libeigen3-dev
 
 ```bash
 # Clone
-git clone --branch v0.8 --depth 1 https://github.com/stevenlovegrove/Pangolin.git
+git clone --branch v0.9.1 --depth 1 https://github.com/stevenlovegrove/Pangolin.git
 
 # Install using CMake
 cd Pangolin
@@ -45,11 +45,12 @@ sudo make install
 Ensure that all necessary `ROS` dependencies are installed:
 
 ```bash
-# Installs `ros-noetic-backward-ros` & `ros-noetic-rviz-visual-tools`
-rosdep install --from-paths src --ignore-src -y
+sudo apt-get update
+sudo apt-get install -y ros-jazzy-rviz-visual-tools ros-jazzy-depth-image-proc ros-jazzy-backward-ros
+sudo apt install ros-jazzy-pcl-ros
 ```
 
-> 🛎️ Note: The current version of vS-Graphs supports **ROS Noetic** and is primarily tested on Ubuntu 20.04.
+> 🛎️ Note: The current version of vS-Graphs supports **ROS2 Jazzy** and is primarily tested on Ubuntu 24.04.
 
 ### Install RealSense Library (Optional)
 
@@ -67,7 +68,7 @@ If you would like to use marker-driven data augmentation to the generated scene 
 
 ```bash
 # Clone (ROS1 Noetic)
-git clone -b noetic-devel git@github.com:pal-robotics/aruco_ros.git
+git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 ```
 
 > 🛎️ Note: Use the sample modified version of the marker detector launch file available [here](doc/template_aruco_ros.launch). This setup ensures proper marker detection and integration with vS-Graphs.
@@ -83,7 +84,7 @@ Clone the repository and set it ready for integration:
 
 ```bash
 # Clone (ROS1 Noetic)
-git clone --recurse-submodules git@github.com:snt-arg/scene_segment_ros.git
+git clone -b ros2-jazzy git@github.com:snt-arg/scene_segment_ros.git
 
 # Install Python packages
 pip install -r src/requirements.txt
@@ -110,25 +111,13 @@ After installing all the required dependencies and modules listed above, clone t
 ```bash
 # Create and initialize a new Catkin workspace (ROS1 Noetic)
 mkdir -p ~/vs_graphs_ws/src
-cd ~/vs_graphs_ws
-catkin init
+cd ~/vs_graphs_ws/src
 
 # Clone the vS-Graphs repository into the src folder
-cd src
 git clone git@github.com:snt-arg/visual_sgraphs.git
 
-# Install any missing dependencies (optional but recommended)
-cd ..
-rosdep install --from-paths src --ignore-src -r -y
-
 # Build the workspace
-source ~/vs_graphs_ws/devel/setup.bash
-catkin build
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+rosdep update
 ```
-
-> 🛎️ Note: You can define some alias inside the `.bashrc` file to simplify sourcing packages:
->
-> - Source ROS `alias sourceros='source /opt/ros/noetic/setup.bash'`
-> - Source Voxblox Skeleton `alias sourcevox="source ~/voxblox_skeleton_ws/devel/setup.bash"`
-> - Source RealSense `alias sourcers='source ~/rs_ros_ws/devel/setup.bash'`
-> - Source vS-Graphs `alias sourcevsgraphs='source ~/vs_graphs_ws/devel/setup.bash`
