@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "Utils.h"
 
@@ -148,7 +148,7 @@ namespace ORB_SLAM3
         return g2o::Plane3D(v2);
     }
 
-    Eigen::Vector3d Utils::getClusterCenteroid(const std::vector<Eigen::Vector3d> &points)
+    Eigen::Vector3d Utils::computeCentroidFromPoints(const std::vector<Eigen::Vector3d> &points)
     {
         // Check if there are points in the vector
         if (points.empty())

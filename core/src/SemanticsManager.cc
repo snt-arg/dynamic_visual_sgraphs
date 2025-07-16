@@ -394,7 +394,7 @@ namespace ORB_SLAM3
                 std::vector<ORB_SLAM3::Plane *> walls = {facingWalls[0].first, facingWalls[0].second};
                 // Create a corridor
                 newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, true, walls,
-                                                                                       Utils::getClusterCenteroid(cluster));
+                                                                                       Utils::computeCentroidFromPoints(cluster));
             }
 
             // Check if the room has not been created before
@@ -434,6 +434,24 @@ namespace ORB_SLAM3
         else
         {
             // Update the existing floor object to cotain all rooms
+            std::vector<ORB_SLAM3::Room *> allRooms = mpAtlas->GetAllRooms();
+
+            // Get the centroid of each room
+            std::vector<Eigen::Vector3d> roomCentroids;
+            for (auto &room : allRooms)
+                // Add the centroid to the vector
+                roomCentroids.push_back(room->getRoomCenter());
+
+            // Set all the detected rooms to the floor (assuming single floor)
+            for (auto &floor : mpAtlas->GetAllFloors())
+            {
+                // Connect all rooms to the floor
+                floor->setRooms(allRooms);
+
+                // Update the centroid of the floor
+                Eigen::Vector3d floorCentroid = Utils::computeCentroidFromPoints(roomCentroids);
+                floor->setCentroid(floorCentroid);
+            }
         }
     }
 

@@ -65,9 +65,14 @@ namespace ORB_SLAM3
         return rooms;
     }
 
-    void Floor::setRooms(ORB_SLAM3::Room *value)
+    void Floor::addRoom(ORB_SLAM3::Room *value)
     {
         rooms.push_back(value);
+    }
+
+    void Floor::setRooms(const std::vector<ORB_SLAM3::Room *> &value)
+    {
+        rooms = value;
     }
 
     ORB_SLAM3::Map *Floor::getMap()

@@ -50,8 +50,9 @@ namespace ORB_SLAM3
         Eigen::Vector3d getCentroid() const;
         void setCentroid(Eigen::Vector3d value);
 
-        void setRooms(ORB_SLAM3::Room *value);
+        void addRoom(ORB_SLAM3::Room *value);
         std::vector<ORB_SLAM3::Room *> getRooms() const;
+        void setRooms(const std::vector<ORB_SLAM3::Room *> &value);
 
         ORB_SLAM3::Map *getMap();
         void setMap(ORB_SLAM3::Map *pMap);
