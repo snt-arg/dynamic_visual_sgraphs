@@ -427,7 +427,14 @@ namespace ORB_SLAM3
 
     void SemanticsManager::getUpdatedFloors()
     {
-        std::cout << "************[FLOOR]***********" << std::endl;
+        // [TODO] The current version supports singe floor only.
+        if (mpAtlas->GetAllFloors().size() < 1)
+            // Create a new floor object
+            GeoSemHelpers::createMapFloor(mpAtlas);
+        else
+        {
+            // Update the existing floor object to cotain all rooms
+        }
     }
 
     ORB_SLAM3::Room *SemanticsManager::roomAssociation(const ORB_SLAM3::Room *givenRoom,

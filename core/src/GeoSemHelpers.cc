@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "GeoSemHelpers.h"
 
@@ -514,4 +514,20 @@ namespace ORB_SLAM3
         return count;
     }
 
+    void GeoSemHelpers::createMapFloor(ORB_SLAM3::Atlas *mpAtlas)
+    {
+        // Create a new floor object
+        Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+        ORB_SLAM3::Floor *newMapFloor = new ORB_SLAM3::Floor();
+
+        // Set the ID and map
+        newMapFloor->setId(mpAtlas->GetAllFloors().size());
+        newMapFloor->setMap(mpAtlas->GetCurrentMap());
+        newMapFloor->setCentroid(centroid);
+
+        // Add the floor to the map
+        mpAtlas->AddMapFloor(newMapFloor);
+
+        std::cout << "[GeoSemHelper] Creating Floor#" << newMapFloor->getId() << " ..." << std::endl;
+    }
 }

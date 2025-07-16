@@ -28,6 +28,6 @@
       }
     }
   },
-  "workspaceFolder": "/home/asier/ros2_ws",
+  "workspaceFolder": "/home/${env.USERNAME}/ros2_ws",
   "dockerComposeFile": "../docker/docker-compose.yml"
 }
