@@ -145,6 +145,7 @@ extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMap
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
+extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubStructuralElements;
 
 class MapPointStruct
 {
@@ -160,7 +161,6 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
 void publishCameraPose(Sophus::SE3f, rclcpp::Time);
-void publishRooms(std::vector<ORB_SLAM3::Room *>, rclcpp::Time);
 void publishDoors(std::vector<ORB_SLAM3::Door *>, rclcpp::Time);
 void publishPlanes(std::vector<ORB_SLAM3::Plane *>, rclcpp::Time);
 void publishTFTransform(Sophus::SE3f, string, string, rclcpp::Time);
@@ -171,6 +171,7 @@ void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishBodyOdometry(Sophus::SE3f, Eigen::Vector3f, Eigen::Vector3f, rclcpp::Time);
+void publishStructuralElements(std::vector<ORB_SLAM3::Room *>, std::vector<ORB_SLAM3::Floor *>, rclcpp::Time);
 
 /**
  * @brief Publishes all mapped walls to detect possible rooms.

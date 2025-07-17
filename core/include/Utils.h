@@ -109,10 +109,10 @@ namespace ORB_SLAM3
         static g2o::Plane3D applyPoseToPlane(const Eigen::Matrix4d &kfPose, const g2o::Plane3D &plane);
 
         /**
-         * @brief Gets the centeroid of a cluster of points
+         * @brief Gets the centeroid of a set or cluster of points
          * @param points the given cluster of points
          */
-        static Eigen::Vector3d getClusterCenteroid(const std::vector<Eigen::Vector3d> &points);
+        static Eigen::Vector3d computeCentroidFromPoints(const std::vector<Eigen::Vector3d> &points);
 
         /**
          * @brief Gets the center points of a room with two walls

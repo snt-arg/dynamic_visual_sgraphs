@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "SemanticsManager.h"
 
@@ -57,12 +57,8 @@ namespace ORB_SLAM3
             else if (sysParams->room_seg.method == SystemParams::room_seg::Method::GNN)
                 detectMapRoomCandidateGNN();
 
-            // // count non-bad map points
-            // int numMapPoints = 0;
-            // for (const auto &mp: mpAtlas->GetAllMapPoints())
-            //     if (mp && !mp->isBad())
-            //         numMapPoints++;
-            // std::cout << "[Semantics Manager] Number of non-bad map points: " << numMapPoints << std::endl;
+            // Check detected floors
+            getUpdatedFloors();
 
             // wait until its intervalTime to run the next iteration
             auto end = std::chrono::high_resolution_clock::now();
@@ -398,7 +394,7 @@ namespace ORB_SLAM3
                 std::vector<ORB_SLAM3::Plane *> walls = {facingWalls[0].first, facingWalls[0].second};
                 // Create a corridor
                 newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, true, walls,
-                                                                                       Utils::getClusterCenteroid(cluster));
+                                                                                       Utils::computeCentroidFromPoints(cluster));
             }
 
             // Check if the room has not been created before
@@ -427,6 +423,36 @@ namespace ORB_SLAM3
     void SemanticsManager::detectMapRoomCandidateGNN()
     {
         // [TODO] Needs to be implemented
+    }
+
+    void SemanticsManager::getUpdatedFloors()
+    {
+        // [TODO] The current version supports singe floor only.
+        if (mpAtlas->GetAllFloors().size() < 1)
+            // Create a new floor object
+            GeoSemHelpers::createMapFloor(mpAtlas);
+        else
+        {
+            // Update the existing floor object to cotain all rooms
+            std::vector<ORB_SLAM3::Room *> allRooms = mpAtlas->GetAllRooms();
+
+            // Get the centroid of each room
+            std::vector<Eigen::Vector3d> roomCentroids;
+            for (auto &room : allRooms)
+                // Add the centroid to the vector
+                roomCentroids.push_back(room->getRoomCenter());
+
+            // Set all the detected rooms to the floor (assuming single floor)
+            for (auto &floor : mpAtlas->GetAllFloors())
+            {
+                // Connect all rooms to the floor
+                floor->setRooms(allRooms);
+
+                // Update the centroid of the floor
+                Eigen::Vector3d floorCentroid = Utils::computeCentroidFromPoints(roomCentroids);
+                floor->setCentroid(floorCentroid);
+            }
+        }
     }
 
     ORB_SLAM3::Room *SemanticsManager::roomAssociation(const ORB_SLAM3::Room *givenRoom,

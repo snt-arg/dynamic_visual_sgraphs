@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "GeometricSegmentation.h"
 
@@ -84,18 +84,18 @@ namespace ORB_SLAM3
 
             // Convert the given plane to global coordinates
             g2o::Plane3D globalEquation = Utils::applyPoseToPlane(pKF->GetPoseInverse().matrix().cast<double>(),
-                                                                         detectedPlane);
+                                                                  detectedPlane);
 
             // convert planeCloud to global coordinates
             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr emptyPlaneCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-            
+
             // temp global plane cloud
             pcl::PointCloud<pcl::PointXYZRGBA>::Ptr globalPlaneCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
             pcl::copyPointCloud(*planePoint.first, *globalPlaneCloud);
             pcl::transformPointCloud(*globalPlaneCloud, *globalPlaneCloud, pKF->GetPoseInverse().matrix().cast<float>());
 
             // Check if we need to add the wall to the map or not
-            int matchedPlaneId = Utils::associatePlanes(mpAtlas->GetAllPlanes(), 
+            int matchedPlaneId = Utils::associatePlanes(mpAtlas->GetAllPlanes(),
                                                         detectedPlane,
                                                         globalPlaneCloud,
                                                         pKF->GetPose().matrix().cast<double>(),

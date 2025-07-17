@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef MAP_H
 #define MAP_H
@@ -84,16 +84,15 @@ namespace ORB_SLAM3
         ~Map();
 
         void AddMapDoor(Door *pDoor);
-        void AddMapFloor(Floor *pFloor);
         void AddKeyFrame(KeyFrame *pKF);
         void AddMapPoint(MapPoint *pMP);
         void AddMapPlane(Plane *pPlane);
         void AddMapMarker(Marker *pMarker);
         void AddDetectedMapRoom(Room *room);
         void AddMarkerBasedMapRoom(Room *room);
+        void AddMapFloor(ORB_SLAM3::Floor *pFloor);
 
         void EraseMapDoor(Door *pDoor);
-        void EraseMapFloor(Floor *pFloor);
         void EraseMapPoint(MapPoint *pMP);
         void EraseKeyFrame(KeyFrame *pKF);
         void EraseMapPlane(Plane *pPlane);
@@ -107,12 +106,12 @@ namespace ORB_SLAM3
 
         std::vector<Door *> GetAllDoors();
         std::vector<Room *> GetAllRooms();
-        std::vector<Floor *> GetAllFloors();
         std::vector<Plane *> GetAllPlanes();
         std::vector<Marker *> GetAllMarkers();
         std::vector<KeyFrame *> GetAllKeyFrames();
         std::vector<MapPoint *> GetAllMapPoints();
         std::vector<Room *> GetAllDetectedMapRooms();
+        std::vector<ORB_SLAM3::Floor *> GetAllFloors();
         std::vector<Room *> GetAllMarkerBasedMapRooms();
         std::vector<MapPoint *> GetReferenceMapPoints();
 

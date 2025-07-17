@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #ifndef SEMANTICSMANAGER_H
 #define SEMANTICSMANAGER_H
@@ -121,6 +121,11 @@ namespace ORB_SLAM3
          * @brief Gets the rooms detected by the GNN module
          */
         void detectMapRoomCandidateGNN();
+
+        /**
+         * @brief Gets the updated floors containing rooms and corridors
+         */
+        void getUpdatedFloors();
 
         // Running the thread
         void Run();

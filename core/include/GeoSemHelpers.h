@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #ifndef GEOSEMHELPERS_H
 #define GEOSEMHELPERS_H
@@ -54,7 +54,7 @@ namespace ORB_SLAM3
          */
         static void updateMapPlane(Atlas *mpAtlas, ORB_SLAM3::KeyFrame *pKF, const g2o::Plane3D estimatedPlane,
                                    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr planeCloud, int planeId,
-                                   ORB_SLAM3::Plane::planeVariant semanticType = ORB_SLAM3::Plane::planeVariant::UNDEFINED, 
+                                   ORB_SLAM3::Plane::planeVariant semanticType = ORB_SLAM3::Plane::planeVariant::UNDEFINED,
                                    double confidence = 1.0);
 
         /**
@@ -128,7 +128,6 @@ namespace ORB_SLAM3
         static void augmentMapRoomCandidate(ORB_SLAM3::Room *markerBasedRoom, ORB_SLAM3::Room *clusterBasedRoom,
                                             bool isMarkerBasedMapped);
 
-
         /**
          * @brief Chooses a ground plane from the Atlas to be associated with the room
          * @param mpAtlas the current map in Atlas
@@ -142,6 +141,12 @@ namespace ORB_SLAM3
          * @param groundPlane the ground plane associated with the room
          */
         static size_t countGroundPlanePointsWithinWalls(std::vector<ORB_SLAM3::Plane *> &roomWalls, ORB_SLAM3::Plane *groundPlane);
+
+        /**
+         * @brief Creates a new floor object to be added to the map
+         * @param mpAtlas the current map in Atlas
+         */
+        static void createMapFloor(ORB_SLAM3::Atlas *mpAtlas);
     };
 }
 
