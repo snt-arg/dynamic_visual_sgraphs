@@ -165,8 +165,7 @@ namespace ORB_SLAM3
         SystemParams *sysParams = SystemParams::GetParams();
         sysParams->SetParams(strSysParamsFile);
 
-        // Parse the environment database
-        cout << "[Environment Markers JSON File]" << endl;
+        // Parse the environment database, if provided
         parseJsonDatabase(sysParams->general.env_database);
 
         // If the sensor is integrated with IMU, initialize the IMU first
@@ -249,7 +248,7 @@ namespace ORB_SLAM3
         // Skip the parsing
         if (jsonFilePath.empty())
         {
-            std::cout << "- No JSON file describing the environment is provided. Skipping ..." << std::endl;
+            std::cout << "[System] No JSON file describing the environment is provided. Skipping ..." << std::endl;
             return;
         }
         // Creating an object of the database loader
