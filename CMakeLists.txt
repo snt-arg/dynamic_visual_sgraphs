@@ -10,34 +10,12 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
 
-# [Hint] We commented below lines as it got stuck in the normalize function of g2o::plane3d
-# set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
-# set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
-
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
 endif()
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
-
-# # Check C++14 or C++0x support
-# include(CheckCXXCompilerFlag)
-# CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
-# CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
-
-# if(COMPILER_SUPPORTS_CXX14)
-#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-#   add_definitions(-DCOMPILEDWITHC11)
-#   message(STATUS "Using flag -std=c++14.")
-# elseif(COMPILER_SUPPORTS_CXX0X)
-#   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-#   add_definitions(-DCOMPILEDWITHC0X)
-#   message(STATUS "Using flag -std=c++0x.")
-# else()
-#   message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
-# endif()
-
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
 
@@ -49,42 +27,37 @@ endif()
 MESSAGE("OPENCV VERSION:")
 MESSAGE(${OpenCV_VERSION})
 
-## Find ament macros and libraries
-## Use 'find_package' for ROS 2 packages instead of 'catkin'
-## Find ament and ROS2 packages
-find_package(ament_cmake REQUIRED)
-find_package(rclcpp REQUIRED)
+# Find required packages
+find_package(PCL REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(GLEW REQUIRED)
 find_package(rclpy REQUIRED)
-find_package(cv_bridge REQUIRED)
-find_package(image_transport REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(sensor_msgs REQUIRED)
+find_package(OpenGL REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(pcl_ros REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(message_filters REQUIRED)
-find_package(tf2 REQUIRED)
-find_package(tf2_ros REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
-find_package(rosidl_default_runtime REQUIRED)
-# find_package(aruco_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
-# find_package(aruco_msgs REQUIRED)  # Comment out - check if ROS2 equivalent exists
-find_package(backward_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
-find_package(rviz_visual_tools REQUIRED)
-find_package(pcl_ros REQUIRED)
-find_package(segmenter_ros REQUIRED)  # Comment out - check if ROS2 equivalent exists
-
-
-find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
-# find_package(PCL REQUIRED)
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(ament_cmake REQUIRED)
+find_package(Eigen3 3.1.0 REQUIRED)
+find_package(backward_ros REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(segmenter_ros REQUIRED)
+find_package(image_transport REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(rviz_visual_tools REQUIRED)
+find_package(rosidl_default_runtime REQUIRED)
+find_package(situational_graphs_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+# find_package(aruco_ros REQUIRED)
+# find_package(aruco_msgs REQUIRED)
 
-find_package(PCL REQUIRED)
 include_directories(${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
-
 
 # Generate services
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -231,11 +204,12 @@ ament_target_dependencies(${PROJECT_NAME}_lib
   geometry_msgs
   tf2
   tf2_ros
+  pcl_ros
   nav_msgs
   message_filters
   image_transport
-  pcl_ros
   rviz_visual_tools
+  situational_graphs_msgs
 )
 
 # ROS2 node

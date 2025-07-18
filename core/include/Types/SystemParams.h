@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include <yaml-cpp/yaml.h>
 #include <iostream>
@@ -172,6 +172,8 @@ namespace ORB_SLAM3
             unsigned int min_cluster_vertices = 5;
             float marker_wall_distance_thresh = 3.0f;
             float cluster_point_wall_distance_thresh = 0.5f;
+
+            int gnn_version = 1;
         } room_seg;
 
     private:

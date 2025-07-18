@@ -52,15 +52,16 @@ rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubBuildingComponents;
-rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPlaneLabel;
+rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls_new;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubFiducialMarker;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubStructuralElements;
+rclcpp::Publisher<situational_graphs_msgs::msg::PlanesData>::SharedPtr pubAllWalls_legacy;
 
 void saveMapService(
     std::shared_ptr<vs_graphs::srv::SaveMap::Request> req,
@@ -143,9 +144,12 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
 
     // Building Components
     pubPlaneLabel = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/plane_labels", 1);
-    pubAllWalls = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 10);
     pubBuildingComponents = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/building_components", 1);
     pubSegmentedPointcloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/segmented_point_clouds", 1);
+
+    // All Walls
+    pubAllWalls_new = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 1);
+    pubAllWalls_legacy = node->create_publisher<situational_graphs_msgs::msg::PlanesData>(node_name + "/all_mapped_walls", 1);
 
     // Structural Elements
     pubStructuralElements = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/structural_elements", 1);
@@ -438,47 +442,87 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
 
 void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, rclcpp::Time msgTime)
 {
-    vs_graphs::msg::VSGraphsAllWallsData wallDataMsg;
+    // Check the proper version of the GNN-based room detection
+    bool isLegacy = ORB_SLAM3::SystemParams::GetParams()->room_seg.gnn_version == 1;
+    std::cout << "GNN version: " << isLegacy << std::endl;
 
-    // Fill the data message with wall information
-    wallDataMsg.header.stamp = msgTime;
-    wallDataMsg.header.frame_id = frameWorld;
-
-    // Fill in the walls data
-    for (const auto &wall : walls)
+    if (isLegacy)
     {
-        if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
-            continue;
+        // Variables
+        situational_graphs_msgs::msg::PlanesData wallDataMsg;
 
-        // Calculate the length of the wall
-        float length = 0.0f;
-        pcl::PointCloud<pcl::PointXYZRGBA>::Ptr wallCloud = wall->getMapClouds();
-        if (wallCloud && wallCloud->points.size() > 1)
+        // Fill the data message with wall information
+        wallDataMsg.header.stamp = msgTime;
+        wallDataMsg.header.frame_id = frameWorld;
+
+        // Fill in the walls data
+        for (const auto &wall : walls)
         {
-            // Calculate the length of the wall by finding the distance between the first and last points
-            Eigen::Vector3f startPoint(wallCloud->points.front().x, wallCloud->points.front().y, wallCloud->points.front().z);
-            Eigen::Vector3f endPoint(wallCloud->points.back().x, wallCloud->points.back().y, wallCloud->points.back().z);
-            length = (endPoint - startPoint).norm();
+            if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
+                continue;
+
+            // Fill the wall data
+            situational_graphs_msgs::msg::PlaneData wallData;
+
+            // wallData.length = length;
+            wallData.id = wall->getId();
+            wallData.d = wall->getGlobalEquation().d();
+            wallData.nx = wall->getGlobalEquation().normal().x();
+            wallData.ny = wall->getGlobalEquation().normal().y();
+            wallData.nz = wall->getGlobalEquation().normal().z();
+
+            // Add the wall to the message
+            wallDataMsg.walls.push_back(wallData);
         }
 
-        // Fill the wall data
-        vs_graphs::msg::VSGraphsWallData wallData;
-
-        wallData.length = length;
-        wallData.id = wall->getId();
-        wallData.centroid.x = wall->getCentroid().x();
-        wallData.centroid.y = wall->getCentroid().y();
-        wallData.centroid.z = wall->getCentroid().z();
-        wallData.normal.x = wall->getGlobalEquation().normal().x();
-        wallData.normal.y = wall->getGlobalEquation().normal().y();
-        wallData.normal.z = wall->getGlobalEquation().normal().z();
-
-        // Add the wall to the message
-        wallDataMsg.walls.push_back(wallData);
+        // Publish all mapped walls
+        pubAllWalls_legacy->publish(wallDataMsg);
     }
+    else
+    {
+        // Variables
+        vs_graphs::msg::VSGraphsAllWallsData wallDataMsg;
 
-    // Publish all mapped walls
-    pubAllWalls->publish(wallDataMsg);
+        // Fill the data message with wall information
+        wallDataMsg.header.stamp = msgTime;
+        wallDataMsg.header.frame_id = frameWorld;
+
+        // Fill in the walls data
+        for (const auto &wall : walls)
+        {
+            if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
+                continue;
+
+            // Calculate the length of the wall
+            float length = 0.0f;
+            pcl::PointCloud<pcl::PointXYZRGBA>::Ptr wallCloud = wall->getMapClouds();
+            if (wallCloud && wallCloud->points.size() > 1)
+            {
+                // Calculate the length of the wall by finding the distance between the first and last points
+                Eigen::Vector3f startPoint(wallCloud->points.front().x, wallCloud->points.front().y, wallCloud->points.front().z);
+                Eigen::Vector3f endPoint(wallCloud->points.back().x, wallCloud->points.back().y, wallCloud->points.back().z);
+                length = (endPoint - startPoint).norm();
+            }
+
+            // Fill the wall data
+            vs_graphs::msg::VSGraphsWallData wallData;
+
+            wallData.length = length;
+            wallData.id = wall->getId();
+            wallData.centroid.x = wall->getCentroid().x();
+            wallData.centroid.y = wall->getCentroid().y();
+            wallData.centroid.z = wall->getCentroid().z();
+            wallData.normal.x = wall->getGlobalEquation().normal().x();
+            wallData.normal.y = wall->getGlobalEquation().normal().y();
+            wallData.normal.z = wall->getGlobalEquation().normal().z();
+
+            // Add the wall to the message
+            wallDataMsg.walls.push_back(wallData);
+        }
+
+        // Publish all mapped walls
+        pubAllWalls_new->publish(wallDataMsg);
+    }
 }
 
 void clearKFClsClouds(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec)
@@ -1506,6 +1550,38 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
 
     // Set the cluster points to the active map
     pSLAM->setSkeletonCluster(skeletonClusterPoints);
+}
+
+void setGNNBasedRoomCandidates(const situational_graphs_msgs::msg::RoomsData &msgGNNRooms)
+{
+    // Reset the buffer
+    gnnRoomCandidates.clear();
+
+    // Loop through the received GNN rooms
+    for (const auto &room : msgGNNRooms.rooms)
+    {
+        // Create a new room object
+        ORB_SLAM3::Room *newRoom = new ORB_SLAM3::Room();
+
+        // Set the room properties
+        newRoom->setId(room.id);
+        newRoom->setHasKnownLabel(false);
+
+        // Check if corridor (if the length of room.wallIds is 2)
+        bool isCorridor = (room.wall_ids.size() == 2);
+        newRoom->setIsCorridor(isCorridor);
+
+        // [TODO] use room.wallIds to fill newRoom->setWalls
+        // [TODO] use room.centroid to fill newRoom->setRoomCenter
+
+        // Add the room to the GNN candidates buffer
+        gnnRoomCandidates.push_back(newRoom);
+
+        // [TODO] Add, update, and remove the room in the GNN-based room candidates
+    }
+
+    // [TODO] Define a 'setGNNRoomCandidates' in System.h
+    pSLAM->setGNNRoomCandidates(gnnRoomCandidates);
 }
 
 void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms)

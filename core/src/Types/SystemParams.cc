@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #include "Types/SystemParams.h"
 
@@ -112,6 +112,7 @@ namespace ORB_SLAM3
             sem_seg.reassociate.association_thresh = mConfig["sem_seg"]["reassociate"]["association_thresh"].as<float>();
 
             // Room Segmentation Parameters
+            room_seg.gnn_version = mConfig["room_seg"]["gnn_based"]["gnn_version"].as<int>();
             room_seg.method = static_cast<room_seg::Method>(mConfig["room_seg"]["method"].as<int>());
             room_seg.center_distance_thresh = mConfig["room_seg"]["center_distance_thresh"].as<float>();
             room_seg.plane_facing_dot_thresh = mConfig["room_seg"]["plane_facing_dot_thresh"].as<float>();
