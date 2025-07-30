@@ -11,7 +11,7 @@ from ament_index_python.packages import get_package_share_directory
 def generate_launch_description():
     return LaunchDescription(
         [
-            # Global arguments
+            # Global arguments declarations
             DeclareLaunchArgument("offline", default_value="true"),
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
@@ -76,7 +76,7 @@ def generate_launch_description():
                     {"frame_camera": "camera"},
                     {"enable_pangolin": False},
                     {"static_transform": True},
-                    {"colored_pointcloud": True},
+                    {"colored_pointcloud": False},
                     {"publish_pointclouds": True},
                 ],
                 remappings=[

@@ -115,15 +115,25 @@ RUN make install
 RUN mkdir -p /workspace/src
 WORKDIR /workspace/src/
 
-# Mount the SSH keys for cloning private repositories
+# Mount the SSH keys and clone the vS-Graphs repositories
 RUN --mount=type=ssh git clone git@github.com:snt-arg/visual_sgraphs.git
 RUN --mount=type=ssh git clone git@github.com:snt-arg/situational_graphs_msgs.git
 RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segment_ros.git
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
-# Other libraries
+# Repositories for GNN-based room detection and reasoning
+RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_wrapper.git
+RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_datasets.git
+RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_reasoning.git
+RUN --mount=type=ssh git clone -b main git@github.com:snt-arg/situational_graphs_reasoning_msgs.git
+
+# Install the vS-Graphs dependencies
 WORKDIR /workspace/src/visual_sgraphs/docker
 RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
+
+# [Hint] Temp. fix for installing ROS2 Humble repositories (GNN-based room detection) in Jazzy
+# (Read more: https://github.com/ros2/ros2/issues/1702)
+RUN pip3 install --break-system-packages setuptools==79.0.1
 
 WORKDIR /workspace/src/
 
