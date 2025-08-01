@@ -1,3 +1,4 @@
+import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
@@ -15,17 +16,16 @@ def generate_launch_description():
             DeclareLaunchArgument("offline", default_value="true"),
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
-            DeclareLaunchArgument(
-                "visualize_segmented_scene", default_value="true"),
+            DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
-            DeclareLaunchArgument(
-                "sensor_config", default_value="RealSense_D435i"),
+            DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
             DeclareLaunchArgument(
                 "rgb_image_topic", default_value="/camera/camera/color/image_raw"
             ),
             DeclareLaunchArgument(
-                "rgb_camera_info_topic", default_value="/camera/camera/color/camera_info"
+                "rgb_camera_info_topic",
+                default_value="/camera/camera/color/camera_info",
             ),
             DeclareLaunchArgument(
                 "depth_image_topic",
@@ -92,22 +92,28 @@ def generate_launch_description():
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="bc_to_se",
-                arguments=["0", "-3", "0", "0",
-                           "0", "0", "build_comp", "struc_elem"],
+                arguments=["0", "-3", "0", "0", "0", "0", "build_comp", "struc_elem"],
             ),
             Node(
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="world_to_bc",
-                arguments=["0", "-5", "0", "0", "0",
-                           "0", "world", "build_comp"],
+                arguments=["0", "-5", "0", "0", "0", "0", "world", "build_comp"],
             ),
             Node(
                 package="tf2_ros",
                 executable="static_transform_publisher",
                 name="camera_to_camera_optical",
-                arguments=["0", "0", "0", "0", "0", "0",
-                           "camera", "camera_color_optical_frame"],
+                arguments=[
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "0",
+                    "camera",
+                    "camera_color_optical_frame",
+                ],
             ),
             # RViz
             Node(
@@ -160,8 +166,7 @@ def generate_launch_description():
                 executable="segmenter_yoso.py",
                 output="screen",
                 parameters=[
-                    {"visualize": LaunchConfiguration(
-                        "visualize_segmented_scene")}
+                    {"visualize": LaunchConfiguration("visualize_segmented_scene")}
                 ],
                 arguments=[
                     "--ros-args",
@@ -171,6 +176,26 @@ def generate_launch_description():
                         "/config/cfg_yoso.yaml",
                     ],
                 ],
+            ),
+            # GNN-based Room Detection Node
+            Node(
+                name="situational_graphs_reasoning",
+                package="situational_graphs_reasoning",
+                executable="situational_graphs_reasoning",
+                output="screen",
+                # parameters=[
+                #     os.path.join(
+                #         get_package_share_directory("situational_graphs_reasoning"),
+                #         "config",
+                #         "params.yaml",
+                #     )
+                # ],
+                # remappings=[
+                #     (
+                #         "situational_graphs_reasoning/graphs",
+                #         "/s_graphs/graph_structure",
+                #     ),
+                # ],
             ),
         ]
     )

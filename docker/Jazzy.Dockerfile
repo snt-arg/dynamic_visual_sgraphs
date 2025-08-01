@@ -135,6 +135,11 @@ RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
 # (Read more: https://github.com/ros2/ros2/issues/1702)
 RUN pip3 install --break-system-packages setuptools==79.0.1
 
+# Install reasoning dependencies
+RUN pip3 install --break-system-packages shapely==2.1.1 torch-geometric==2.6.1 transforms3d==0.4.2
+RUN mkdir -p /workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
+    && chown -R $USERNAME:$USERNAME /workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
+
 WORKDIR /workspace/src/
 
 # RUN --mount=type=ssh git clone git@github.com:snt-arg/mav_voxblox_planning.git
