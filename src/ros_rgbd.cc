@@ -139,7 +139,7 @@ int main(int argc, char **argv)
     auto subGNNRooms_legacy = node->create_subscription<situational_graphs_msgs::msg::RoomsData>(
         "/room_segmentation/room_data", 10,
         [igb](const situational_graphs_msgs::msg::RoomsData::SharedPtr msg)
-        { igb->GrabGNNRoomCandidates(*msg); });
+        { igb->GrabGNNRoomCandidates(msg); });
 
     // Subscriber to get room candidates from the GNN module (new version)
     auto subGNNRooms_new = node->create_subscription<vs_graphs::msg::VSGraphsAllDetectdetRooms>(
@@ -276,7 +276,7 @@ void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::Marke
 void ImageGrabber::GrabGNNRoomCandidates(const situational_graphs_msgs::msg::RoomsData::SharedPtr &msgGNNRooms)
 {
     // Set the GNN room candidates in the SLAM system
-    setGNNBasedRoomCandidates(msgGNNRooms);
+    // setGNNBasedRoomCandidates(msgGNNRooms);
 }
 
 /**

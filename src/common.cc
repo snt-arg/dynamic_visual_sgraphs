@@ -149,7 +149,7 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
 
     // All Walls
     pubAllWalls_new = node->create_publisher<vs_graphs::msg::VSGraphsAllWallsData>(node_name + "/all_mapped_walls", 1);
-    pubAllWalls_legacy = node->create_publisher<situational_graphs_msgs::msg::PlanesData>(node_name + "/all_mapped_walls", 1);
+    // pubAllWalls_legacy = node->create_publisher<situational_graphs_msgs::msg::PlanesData>(node_name + "/all_mapped_walls", 1);
 
     // Structural Elements
     pubStructuralElements = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/structural_elements", 1);
@@ -444,39 +444,38 @@ void publishAllMappedWalls(std::vector<ORB_SLAM3::Plane *> walls, rclcpp::Time m
 {
     // Check the proper version of the GNN-based room detection
     bool isLegacy = ORB_SLAM3::SystemParams::GetParams()->room_seg.gnn_version == 1;
-    std::cout << "GNN version: " << isLegacy << std::endl;
 
     if (isLegacy)
     {
         // Variables
-        situational_graphs_msgs::msg::PlanesData wallDataMsg;
+        // situational_graphs_msgs::msg::WallsData wallDataMsg;
 
-        // Fill the data message with wall information
-        wallDataMsg.header.stamp = msgTime;
-        wallDataMsg.header.frame_id = frameWorld;
+        // // Fill the data message with wall information
+        // wallDataMsg.header.stamp = msgTime;
+        // wallDataMsg.header.frame_id = frameWorld;
 
-        // Fill in the walls data
-        for (const auto &wall : walls)
-        {
-            if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
-                continue;
+        // // Fill in the walls data
+        // for (const auto &wall : walls)
+        // {
+        //     if (!wall || wall->getPlaneType() != ORB_SLAM3::Plane::planeVariant::WALL)
+        //         continue;
 
-            // Fill the wall data
-            situational_graphs_msgs::msg::PlaneData wallData;
+        //     // Fill the wall data
+        //     situational_graphs_msgs::msg::PlaneData wallData;
 
-            // wallData.length = length;
-            wallData.id = wall->getId();
-            wallData.d = wall->getGlobalEquation().d();
-            wallData.nx = wall->getGlobalEquation().normal().x();
-            wallData.ny = wall->getGlobalEquation().normal().y();
-            wallData.nz = wall->getGlobalEquation().normal().z();
+        //     // wallData.length = length;
+        //     wallData.id = wall->getId();
+        //     // wallData.d = wall->getGlobalEquation().d();
+        //     wallData.nx = wall->getGlobalEquation().normal().x();
+        //     wallData.ny = wall->getGlobalEquation().normal().y();
+        //     wallData.nz = wall->getGlobalEquation().normal().z();
 
-            // Add the wall to the message
-            wallDataMsg.walls.push_back(wallData);
-        }
+        //     // Add the wall to the message
+        //     wallDataMsg.walls.push_back(wallData);
+        // }
 
-        // Publish all mapped walls
-        pubAllWalls_legacy->publish(wallDataMsg);
+        // // Publish all mapped walls
+        // pubAllWalls_legacy->publish(wallDataMsg);
     }
     else
     {
@@ -663,7 +662,6 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
 
         // Populate the keyframe list
         geometry_msgs::msg::PoseStamped pose;
-        pose.header.stamp = rclcpp::Time(keyframe->mTimeStamp);
         pose.header.frame_id = frameWorld;
         pose.pose.position.x = kf_pose.translation().x();
         pose.pose.position.y = kf_pose.translation().y();
@@ -672,6 +670,7 @@ void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rcl
         pose.pose.orientation.x = kf_pose.unit_quaternion().x();
         pose.pose.orientation.y = kf_pose.unit_quaternion().y();
         pose.pose.orientation.z = kf_pose.unit_quaternion().z();
+        pose.header.stamp = rclcpp::Time(keyframe->mTimeStamp * 1e9);
         kf_list.poses.push_back(pose);
     }
 
@@ -1558,27 +1557,27 @@ void setGNNBasedRoomCandidates(const situational_graphs_msgs::msg::RoomsData &ms
     gnnRoomCandidates.clear();
 
     // Loop through the received GNN rooms
-    for (const auto &room : msgGNNRooms.rooms)
-    {
-        // Create a new room object
-        ORB_SLAM3::Room *newRoom = new ORB_SLAM3::Room();
+    // for (const auto &room : msgGNNRooms.rooms)
+    // {
+    //     // Create a new room object
+    //     ORB_SLAM3::Room *newRoom = new ORB_SLAM3::Room();
 
-        // Set the room properties
-        newRoom->setId(room.id);
-        newRoom->setHasKnownLabel(false);
+    //     // Set the room properties
+    //     newRoom->setId(room.id);
+    //     newRoom->setHasKnownLabel(false);
 
-        // Check if corridor (if the length of room.wallIds is 2)
-        bool isCorridor = (room.wall_ids.size() == 2);
-        newRoom->setIsCorridor(isCorridor);
+    //     // Check if corridor (if the length of room.wallIds is 2)
+    //     bool isCorridor = (room.wall_ids.size() == 2);
+    //     newRoom->setIsCorridor(isCorridor);
 
-        // [TODO] use room.wallIds to fill newRoom->setWalls
-        // [TODO] use room.centroid to fill newRoom->setRoomCenter
+    //     // [TODO] use room.wallIds to fill newRoom->setWalls
+    //     // [TODO] use room.centroid to fill newRoom->setRoomCenter
 
-        // Add the room to the GNN candidates buffer
-        gnnRoomCandidates.push_back(newRoom);
+    //     // Add the room to the GNN candidates buffer
+    //     gnnRoomCandidates.push_back(newRoom);
 
-        // [TODO] Add, update, and remove the room in the GNN-based room candidates
-    }
+    //     // [TODO] Add, update, and remove the room in the GNN-based room candidates
+    // }
 
     // [TODO] Define a 'setGNNRoomCandidates' in System.h
     pSLAM->setGNNRoomCandidates(gnnRoomCandidates);
