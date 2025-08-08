@@ -1,12 +1,11 @@
-import os
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
 from launch.actions import DeclareLaunchArgument
 from launch_ros.descriptions import ComposableNode
-from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import ComposableNodeContainer
 from ament_index_python.packages import get_package_share_directory
+from launch.substitutions import LaunchConfiguration, EqualsSubstitution
 
 
 def generate_launch_description():
@@ -17,6 +16,18 @@ def generate_launch_description():
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
+            DeclareLaunchArgument(
+                "semantic_scene_segmenter",
+                default_value="yoso",
+                description="The method to segment the semantic scene",
+                choices=["yoso", "pfcn"],
+            ),
+            DeclareLaunchArgument(
+                "structural_element_detector",
+                default_value="none",
+                description="The method to detect structural elements",
+                choices=["none", "freespace", "gnn_legacy", "gnn_new"],
+            ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
             DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
@@ -159,8 +170,13 @@ def generate_launch_description():
                     ),
                 ],
             ),
-            # Semantic Scene Segmenter Node
+            # Semantic Scene Segmenter Node (based on semantic_scene_segmenter argument)
             Node(
+                condition=IfCondition(
+                    EqualsSubstitution(
+                        LaunchConfiguration("semantic_scene_segmenter"), "yoso"
+                    )
+                ),
                 name="segmenter_ros",
                 package="segmenter_ros",
                 executable="segmenter_yoso.py",
@@ -177,7 +193,53 @@ def generate_launch_description():
                     ],
                 ],
             ),
-            # GNN-based Room Detection Node
+            Node(
+                condition=IfCondition(
+                    EqualsSubstitution(
+                        LaunchConfiguration("semantic_scene_segmenter"), "pfcn"
+                    )
+                ),
+                name="segmenter_ros",
+                package="segmenter_ros",
+                executable="segmenter_pFCN.py",
+                output="screen",
+                parameters=[
+                    {"visualize": LaunchConfiguration("visualize_segmented_scene")}
+                ],
+                arguments=[
+                    "--ros-args",
+                    "--params-file",
+                    [
+                        get_package_share_directory("segmenter_ros"),
+                        "/config/cfg_pFCN.yaml",
+                    ],
+                ],
+            ),
+            # Structural Element Detectors (based on structural_element_detector argument)
+            # -- Method 1: Free-Space Clustering
+            Node(
+                condition=IfCondition(
+                    EqualsSubstitution(
+                        LaunchConfiguration("structural_element_detector"), "freespace"
+                    )
+                ),
+                name="voxblox_skeleton",
+                package="voxblox_skeleton",
+                executable="situational_graphs_reasoning",
+                output="screen",
+            ),
+            # -- Method 2: GNN-based Segmentation (legacy)
+            Node(
+                condition=IfCondition(
+                    EqualsSubstitution(
+                        LaunchConfiguration("structural_element_detector"), "gnn_legacy"
+                    )
+                ),
+                name="situational_graphs_reasoning",
+                package="situational_graphs_reasoning",
+                executable="situational_graphs_reasoning",
+                output="screen",
+            ),
             # Node(
             #     name="situational_graphs_reasoning",
             #     package="situational_graphs_reasoning",
