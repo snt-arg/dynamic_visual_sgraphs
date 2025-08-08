@@ -1,8 +1,8 @@
 # the path to the directory where the results will be saved
-results_dir: "/home/ali"
+results_dir: "/home/alitourani/datasets/eval_res"
 
 # Such as orb3, vsgraphs, uco, suco (semantic UcoSLAM)
-slam_method: "vsgraphs"
+vslam_method: "vsgraphs"
 
 # the sequence number/name of the dataset
 dataset_seq: "seq01"
