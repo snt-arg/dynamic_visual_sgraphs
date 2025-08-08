@@ -15,34 +15,41 @@
 * See the GNU General Public License for more details: https://www.gnu.org/licenses/
 """
 
+import os
 import sys
-import rospy
-from nav_msgs.msg import Path
 import yaml
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Path
 
 # Load the configurations
-config_file = open("config.yaml", "r")
-config = yaml.load(config_file, Loader=yaml.FullLoader)
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(script_dir, "config.yaml")
+with open(config_path, "r") as config_file:
+    config = yaml.load(config_file, Loader=yaml.FullLoader)
 
 files_path = config["results_dir"]
-slam_method = config["slam_method"]
 dataset_seq = config["dataset_seq"]
+vslam_method = config["vslam_method"]
 slam_pose_topic = config["ros_topics"]["keyframe_list"]
 
 if len(sys.argv) > 1:
     # use that as identifier
     dataset_seq += sys.argv[1]
 
+# Create directory if it doesn't exist
+os.makedirs(files_path, exist_ok=True)
+
 # Creating a txt file that will contain poses
-print("Creating txt file for adding SLAM poses ...")
-slam_pose_file_path = f"{files_path}/slam_pose_{slam_method}_{dataset_seq}.txt"
+print("Creating txt file for adding VSLAM poses ...")
+slam_pose_file_path = f"{files_path}/vslam_pose_{vslam_method}_{dataset_seq}.txt"
 
 
 def write_pose_file(file_path, poses):
     with open(file_path, "w") as pose_file:
         pose_file.write("#timestamp tx ty tz qx qy qz qw\n")
         for pose in poses:
-            time = pose.header.stamp.to_sec()
+            time = pose.header.stamp.sec + pose.header.stamp.nanosec * 1e-9
             tx = pose.pose.position.x
             ty = pose.pose.position.y
             tz = pose.pose.position.z
@@ -50,20 +57,37 @@ def write_pose_file(file_path, poses):
             ry = pose.pose.orientation.y
             rz = pose.pose.orientation.z
             rw = pose.pose.orientation.w
-            pose_file.write(f"{time} {tx} {ty} {tz} {rx} {ry} {rz} {rw}\n")
+            # Updated to match pose_recorder.py formatting
+            pose_file.write(
+                f"{time:.9f} {tx:.9f} {ty:.9f} {tz:.9f} {rx:.9f} {ry:.9f} {rz:.9f} {rw:.9f}\n"
+            )
 
 
-def slamPoseCallback(slam_path_msg):
-    poses = slam_path_msg.poses
-    write_pose_file(slam_pose_file_path, poses)
+class TextFileGenerator(Node):
+    def __init__(self):
+        super().__init__("text_file_generator")
+        # Subscriber to the Visual SLAM topic
+        self.subscription = self.create_subscription(
+            Path, slam_pose_topic, self.slamPoseCallback, 10
+        )
+
+    def slamPoseCallback(self, slam_path_msg):
+        poses = slam_path_msg.poses
+        write_pose_file(slam_pose_file_path, poses)
 
 
-def subscribers():
-    rospy.init_node("text_file_generator", anonymous=True)
-    # Subscriber to the SLAM topic
-    rospy.Subscriber(slam_pose_topic, Path, slamPoseCallback)
-    rospy.spin()
+def main():
+    rclpy.init()
+    node = TextFileGenerator()
+
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":
-    subscribers()
+    main()

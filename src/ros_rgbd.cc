@@ -35,8 +35,9 @@ public:
 
     // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
     void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage);
-    void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
     void GrabGNNRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);
+    void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
+    void GrabGNNRoomCandidates(const situational_graphs_msgs::msg::RoomsData::SharedPtr &msgGNNRooms);
     void GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB, const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
                   const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC);
 };
@@ -122,18 +123,26 @@ int main(int argc, char **argv)
         std::bind(&ImageGrabber::GrabRGBD, igb.get(),
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 
-    // Subscribers for other topics
+    // Subscriber to get segmentation results from the SemanticSegmenter module
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
         "/camera/color/image_segment", 50,
         [igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
         { igb->GrabSegmentation(*msg); });
 
+    // Subsriber to get skeletonized graph from the `voxblox` module
     auto subVoxbloxSkeletonMesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
         "/voxblox_skeletonizer/sparse_graph", 1,
         [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
         { igb->GrabVoxbloxSkeletonGraph(*msg); });
 
-    auto subGNNRooms = node->create_subscription<vs_graphs::msg::VSGraphsAllDetectdetRooms>(
+    // Subscriber to get room candidates from the GNN module (legacy)
+    auto subGNNRooms_legacy = node->create_subscription<situational_graphs_msgs::msg::RoomsData>(
+        "/room_segmentation/room_data", 10,
+        [igb](const situational_graphs_msgs::msg::RoomsData::SharedPtr msg)
+        { igb->GrabGNNRoomCandidates(msg); });
+
+    // Subscriber to get room candidates from the GNN module (new version)
+    auto subGNNRooms_new = node->create_subscription<vs_graphs::msg::VSGraphsAllDetectdetRooms>(
         "/gnn_room_detector", 1,
         [igb](const vs_graphs::msg::VSGraphsAllDetectdetRooms::SharedPtr msg)
         { igb->GrabGNNRoomCandidates(*msg); });
@@ -260,7 +269,18 @@ void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::Marke
 }
 
 /**
- * @brief Callback function to get the room candidates detected by the GNN module
+ * @brief Callback function to get the room candidates detected by the GNN room detector module (legacy version)
+ *
+ * @param msgGNNRooms The room candidates detected by the GNN module
+ */
+void ImageGrabber::GrabGNNRoomCandidates(const situational_graphs_msgs::msg::RoomsData::SharedPtr &msgGNNRooms)
+{
+    // Set the GNN room candidates in the SLAM system
+    // setGNNBasedRoomCandidates(msgGNNRooms);
+}
+
+/**
+ * @brief Callback function to get the room candidates detected by the GNN room detector module (new version)
  *
  * @param msgGNNRooms The room candidates detected by the GNN module
  */

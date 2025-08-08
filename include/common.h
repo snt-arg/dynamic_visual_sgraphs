@@ -106,7 +106,11 @@
 #include "Semantic/Room.h"
 #include "Semantic/Marker.h"
 
-// Custom Messages
+// Situational Graphs Messages
+#include <situational_graphs_msgs/msg/rooms_data.hpp>
+#include <situational_graphs_msgs/msg/planes_data.hpp>
+
+// vS-Graphs Custom Messages
 #include <vs_graphs/msg/vs_graphs_all_walls_data.hpp>
 #include <vs_graphs/msg/vs_graphs_all_detectdet_rooms.hpp>
 
@@ -134,13 +138,16 @@ extern std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 // List of GNN-based room candidates
 extern std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
 
+// List of wall publishers for GNN-based room detection variants
+extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls_new;
+extern rclcpp::Publisher<situational_graphs_msgs::msg::PlanesData>::SharedPtr pubAllWalls_legacy;
+
 extern rclcpp::Time lastPlanePublishTime;
 extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
 extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
-extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
@@ -174,7 +181,7 @@ void publishBodyOdometry(Sophus::SE3f, Eigen::Vector3f, Eigen::Vector3f, rclcpp:
 void publishStructuralElements(std::vector<ORB_SLAM3::Room *>, std::vector<ORB_SLAM3::Floor *>, rclcpp::Time);
 
 /**
- * @brief Publishes all mapped walls to detect possible rooms.
+ * @brief Publishes all mapped walls to detect possible rooms (mainly used in GNN-based room detector).
  *
  * @param walls The vector of mapped walls to be published.
  * @param time The timestamp for the message.
@@ -255,6 +262,14 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
 
 /**
  * @brief Gets the set of room candidates detected by the GNN-based room detection module
+ * Mainly designed for the legacy version of the GNN-based room detector
+ * @param msgGNNRooms The message containing the detected room candidates
+ */
+void setGNNBasedRoomCandidates(const situational_graphs_msgs::msg::RoomsData &msgGNNRooms);
+
+/**
+ * @brief Gets the set of room candidates detected by the GNN-based room detection module
+ * Mainly designed for the new version of the GNN-based room detector
  * @param msgGNNRooms The message containing the detected room candidates
  */
 void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &msgGNNRooms);

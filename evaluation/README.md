@@ -4,23 +4,24 @@
 
 To evaluate vS-Graphs against other Visual SLAM systems (e.g., ORB-SLAM3), follow the steps below:
 
-### 🔧 1. Generate Pose Files
+### 🔧 1. Run Pose Storage Script
 
-Prepare the `.txt` files containing estimated robot poses using the provided script:
+Run [`generate_kf_pose_txt_files.py`](../evaluation/generate_kf_pose_txt_files.py) to store estimated robot poses (based on the KeyFrames). Make sure that you set proper configuration parameters beforehand in the [`config.yaml`](../evaluation/config.yaml) file. The script will create a `.txt` file and populate it with pose data:
 
-- Run `generate_pose_txt_files.py` (from [here](../evaluation/generate_pose_txt_files.py)). Make sure that you set proper configuration parameters in [the config file](../evaluation/config.yaml). The script will create a `.txt` file and populate it with pose data.
+```python
+python [workspace]/src/visual_sgraphs/evaluation/generate_kf_pose_txt_files.py
+```
 
-### ▶️ 2. Run the SLAM Systems
+### ▶️ 2. Run vS-Graphs
 
-Launch the system and play the `rosbag` file. Pose data will be recorded automatically during execution.
+Launch vS-Graphs and play the `ros2 bag` file. Pose data will be recorded automatically into the generated `.txt` file during execution.
 
 ### 📈 3. Run Evaluation
 
-Once both ground-truth and estimated poses are ready, use [`evo`](https://github.com/MichaelGrupp/evo) to compute Absolute Pose Error (APE):
+Once both ground-truth (such as LiDAR S-Graphs) and estimated poses (the generated `.txt` file) are ready, use [`evo`](https://github.com/MichaelGrupp/evo) to compute Absolute Pose Error (APE):
 
 ```bash
-evo_ape tum baseline_pose.txt slam_pose.txt -va > results.txt --plot --plot_mode xy
-# Sample evo_ape tum s_graphs_pose_seq05.txt slam_pose_semuco_seq05.txt -va > results.txt --plot --plot_mode xy
+evo_ape tum [gt_pose].txt [vs_graphs_pose].txt -va > results.txt --plot --plot_mode xy
 ```
 
 ## 🗺️ Working with Maps

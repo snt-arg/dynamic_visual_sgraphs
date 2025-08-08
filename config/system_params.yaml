@@ -129,7 +129,8 @@ room_seg:
   # The method to use for room segmentation
   # 0: Segment geometrically based on closest walls
   # 1: Segment based on free-space clustering (skeleton voxblox)
-  # 2: Segment based on GNN
+  # 2: Segment based on GNN (legacy)
+  # 3: Segment based on GNN (new)
   method: 1
 
   # The minimum space between two given walls of a corridor/room (in meters) to be valid
@@ -155,3 +156,8 @@ room_seg:
     min_cluster_vertices: 5
     # The maximum distance from a point of a cluster to a wall to be considered part of the room
     cluster_point_wall_distance_thresh: 0.666
+
+  # Parameters for GNN-based room segmentation
+  gnn_based:
+    # Version of the GNN-based room segmentation to use
+    gnn_version: 1 # 1: Older version used in S-Graphs, 2: Newer version used in VS-Graphs

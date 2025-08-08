@@ -4,17 +4,17 @@ This file documents the available _launch-time arguments_ that can be passed whe
 
 ## 📦 Default Launch Arguments
 
-| Argument                    | Default Value                              | Description                                                           |
-| --------------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
-| `offline`                   | `true`                                     | Choose between **offline** (rosbag-based) and **live** sensor modes.  |
-| `launch_rviz`               | `true`                                     | Launch `RViz` automatically with configured visual settings.          |
-| `colored_pointcloud`        | `true`                                     | Apply artificial color for point clouds or use their real RGB values. |
-| `visualize_segmented_scene` | `true`                                     | Toggle the visualization of segmented scenes in RViz.                 |
-| `sensor_config`             | `RealSense_D435i`                          | Choose a predefined sensor configuration                              |
-| `camera_frame`              | `camera`                                   | Set the reference `frame` name for the `camera`.                      |
-| `rgb_image_topic`           | `/camera/color/image_raw`                  | Topic name for the RGB image stream.                                  |
-| `rgb_camera_info_topic`     | `/camera/color/camera_info`                | Topic name for RGB camera intrinsics.                                 |
-| `depth_image_topic`         | `/camera/aligned_depth_to_color/image_raw` | Topic name for the aligned depth image.                               |
+| Argument                    | Default Value                                        | Description                                                           |
+| --------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------- |
+| `offline`                   | `true`                                               | Choose between **offline** (rosbag-based) and **live** sensor modes.  |
+| `launch_rviz`               | `true`                                               | Launch `RViz` automatically with configured visual settings.          |
+| `colored_pointcloud`        | `true`                                               | Apply artificial color for point clouds or use their real RGB values. |
+| `visualize_segmented_scene` | `true`                                               | Toggle the visualization of segmented scenes in RViz.                 |
+| `sensor_config`             | `RealSense_D435i`                                    | Choose a predefined sensor configuration                              |
+| `camera_frame`              | `camera`                                             | Set the reference `frame` name for the `camera`.                      |
+| `rgb_image_topic`           | `/camera/realsense/color/image_raw`                  | Topic name for the RGB image stream.                                  |
+| `rgb_camera_info_topic`     | `/camera/realsense/color/camera_info`                | Topic name for RGB camera intrinsics.                                 |
+| `depth_image_topic`         | `/camera/realsense/aligned_depth_to_color/image_raw` | Topic name for the aligned depth image.                               |
 
 To launch the system with default parameters, use the following command:
 

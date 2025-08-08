@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /Raw Frames1
       Splitter Ratio: 0.5382353067398071
     Tree Height: 621
   - Class: rviz_common/Selection
@@ -74,7 +75,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /camera/camera/color/image_raw
+        Value: /camera/realsense/color/image_raw
       Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
@@ -334,7 +335,7 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
+      Enabled: false
       Name: Structural Elements
       Namespaces:
         {}
@@ -344,7 +345,7 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /vs_graphs/structural_elements
-      Value: true
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255

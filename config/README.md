@@ -111,3 +111,4 @@ These parameters belong to the `room_seg` category and configure the detection a
 | `room_seg` | `geo_based`      | `marker_wall_distance_thresh`        | Max distance from marker to wall to consider marker part of the room (geometric method)                         |
 | `room_seg` | `skeleton_based` | `min_cluster_vertices`               | Minimum number of points to form a cluster (voxblox free-space room segmentation)                               |
 | `room_seg` | `skeleton_based` | `cluster_point_wall_distance_thresh` | Max distance from a cluster point to a wall to be considered part of the room (voxblox free-space segmentation) |
+| `room_seg` | `gnn_based`      | `gnn_version`                        | The version of GNN-based room detector (1: the legacy used in S-Graphs, 2: the newer version)                   |
