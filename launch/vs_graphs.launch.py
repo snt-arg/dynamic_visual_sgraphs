@@ -21,15 +21,15 @@ def generate_launch_description():
             DeclareLaunchArgument("camera_frame", default_value="camera"),
             DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
             DeclareLaunchArgument(
-                "rgb_image_topic", default_value="/camera/camera/color/image_raw"
+                "rgb_image_topic", default_value="/camera/realsense/color/image_raw"
             ),
             DeclareLaunchArgument(
                 "rgb_camera_info_topic",
-                default_value="/camera/camera/color/camera_info",
+                default_value="/camera/realsense/color/camera_info",
             ),
             DeclareLaunchArgument(
                 "depth_image_topic",
-                default_value="/camera/camera/aligned_depth_to_color/image_raw",
+                default_value="/camera/realsense/aligned_depth_to_color/image_raw",
             ),
             # VS-Graphs Node
             Node(
@@ -178,24 +178,24 @@ def generate_launch_description():
                 ],
             ),
             # GNN-based Room Detection Node
-            Node(
-                name="situational_graphs_reasoning",
-                package="situational_graphs_reasoning",
-                executable="situational_graphs_reasoning",
-                output="screen",
-                # parameters=[
-                #     os.path.join(
-                #         get_package_share_directory("situational_graphs_reasoning"),
-                #         "config",
-                #         "params.yaml",
-                #     )
-                # ],
-                # remappings=[
-                #     (
-                #         "situational_graphs_reasoning/graphs",
-                #         "/s_graphs/graph_structure",
-                #     ),
-                # ],
-            ),
+            # Node(
+            #     name="situational_graphs_reasoning",
+            #     package="situational_graphs_reasoning",
+            #     executable="situational_graphs_reasoning",
+            #     output="screen",
+            #     # parameters=[
+            #     #     os.path.join(
+            #     #         get_package_share_directory("situational_graphs_reasoning"),
+            #     #         "config",
+            #     #         "params.yaml",
+            #     #     )
+            #     # ],
+            #     # remappings=[
+            #     #     (
+            #     #         "situational_graphs_reasoning/graphs",
+            #     #         "/s_graphs/graph_structure",
+            #     #     ),
+            #     # ],
+            # ),
         ]
     )

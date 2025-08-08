@@ -112,8 +112,7 @@ RUN ./bootstrap
 RUN make -j8
 RUN make install
 
-RUN mkdir -p /workspace/src
-WORKDIR /workspace/src/
+WORKDIR /home/$USERNAME/workspace/src
 
 # Mount the SSH keys and clone the vS-Graphs repositories
 RUN --mount=type=ssh git clone git@github.com:snt-arg/visual_sgraphs.git
@@ -127,8 +126,11 @@ RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_gra
 RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_reasoning.git
 RUN --mount=type=ssh git clone -b main git@github.com:snt-arg/situational_graphs_reasoning_msgs.git
 
+# USER $USERNAME
+# RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
+
 # Install the vS-Graphs dependencies
-WORKDIR /workspace/src/visual_sgraphs/docker
+WORKDIR /home/$USERNAME/workspace/src/visual_sgraphs/docker
 RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
 
 # [Hint] Temp. fix for installing ROS2 Humble repositories (GNN-based room detection) in Jazzy
@@ -137,10 +139,10 @@ RUN pip3 install --break-system-packages setuptools==79.0.1
 
 # Install reasoning dependencies
 RUN pip3 install --break-system-packages shapely==2.1.1 torch-geometric==2.6.1 transforms3d==0.4.2
-RUN mkdir -p /workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
-    && chown -R $USERNAME:$USERNAME /workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
+RUN mkdir -p /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
+    && chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
 
-WORKDIR /workspace/src/
+WORKDIR /home/$USERNAME/workspace/src/
 
 # RUN --mount=type=ssh git clone git@github.com:snt-arg/mav_voxblox_planning.git
 # RUN --mount=type=ssh wstool init . ./mav_voxblox_planning/install/install_ssh.rosinstall
@@ -148,8 +150,9 @@ WORKDIR /workspace/src/
 
 # Download the yoso checkpoint
 RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
-RUN mv yoso_res50_coco.pth /workspace/src/scene_segment_ros/include/
+RUN mv yoso_res50_coco.pth /home/$USERNAME/workspace/src/scene_segment_ros/include/
 
+# USER root
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y ros-jazzy-rviz-visual-tools
 RUN sudo apt install ros-jazzy-pcl-ros
@@ -158,7 +161,7 @@ RUN apt-get update && \
     apt-get install -y ros-jazzy-depth-image-proc ros-jazzy-backward-ros
 
 # Build the workspace
-WORKDIR /workspace/
+WORKDIR /home/$USERNAME/workspace/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
 
 # --- Miscalleanous ---
@@ -178,11 +181,13 @@ RUN rm -rf /root/.ssh/
 # --- Build entrypoint ---
 RUN echo "#!/bin/bash" >> /entrypoint.sh \
     && echo "echo \"source /opt/ros/$ROS_DISTRO/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
-    && echo "echo \"source /workspace/install/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
+    && echo "echo \"source /home/$USERNAME/workspace/install/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
     && echo 'exec "$@"' >> /entrypoint.sh \
     && chmod a+x /entrypoint.sh
 
-WORKDIR /workspace/
+USER $USERNAME
+RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
+WORKDIR /home/$USERNAME/workspace/
 
 ENTRYPOINT ["/entrypoint.sh"]
 USER $USERNAME

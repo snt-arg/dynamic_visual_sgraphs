@@ -233,6 +233,7 @@ ament_target_dependencies(ros_rgbd
   tf2
   tf2_ros
   segmenter_ros
+  situational_graphs_msgs
 )
 
 # Make sure executables can use the custom messages

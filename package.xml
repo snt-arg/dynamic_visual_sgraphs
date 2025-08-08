@@ -25,8 +25,9 @@
   <!-- <depend>aruco_ros</depend> -->
   <!-- <depend>aruco_msgs</depend> -->
   <depend>backward_ros</depend>
-  <depend>rviz_visual_tools</depend>
   <depend>segmenter_ros</depend>
+  <depend>rviz_visual_tools</depend>
+  <depend>situational_graphs_msgs</depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
