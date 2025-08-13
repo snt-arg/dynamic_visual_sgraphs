@@ -27,7 +27,8 @@ using namespace std;
 class ImuGrabber : public rclcpp::Node
 {
 public:
-    ImuGrabber() : rclcpp::Node("imu_grabber") {
+    ImuGrabber() : rclcpp::Node("imu_grabber")
+    {
         tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
         staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
     }
@@ -42,16 +43,18 @@ public:
 class ImageGrabber : public rclcpp::Node
 {
 public:
-    ImageGrabber() : rclcpp::Node("image_grabber")
+    ImageGrabber(std::shared_ptr<ImuGrabber> imuGrabber)
+        : Node("image_grabber"),
+          mpImuGb(std::move(imuGrabber))
     {
         tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
         staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
     }
 
     // Variables
-    ImuGrabber *mpImuGb;
     std::mutex mBufMutex;
     std::atomic<bool> mustStop{false};
+    std::shared_ptr<ImuGrabber> mpImuGb;
     std::queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> imgPCBuf;
     std::queue<sensor_msgs::msg::Image::ConstSharedPtr> imgRGBBuf, imgDBuf;
 
@@ -69,7 +72,6 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
     mBufMutex.lock();
     imuBuf.push(imu_msg);
     mBufMutex.unlock();
-    return;
 }
 
 cv::Mat ImageGrabber::GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg)
@@ -125,7 +127,8 @@ void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &
 
 void ImageGrabber::SyncWithImu()
 {
-    if (!mpImuGb) {
+    if (!mpImuGb)
+    {
         RCLCPP_ERROR(this->get_logger(), "[Error] IMU Grabber not initialized!");
         return;
     }
@@ -157,8 +160,15 @@ void ImageGrabber::SyncWithImu()
 
             // Get the first image from the buffer
             tIm = rclcpp::Time(imgRGBBuf.front()->header.stamp).seconds();
-            if (tIm > rclcpp::Time(mpImuGb->imuBuf.back()->header.stamp).seconds())
+            double latestImuTime = rclcpp::Time(mpImuGb->imuBuf.back()->header.stamp).seconds();
+
+            if (tIm > latestImuTime)
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "[Warning] Skipping frame ... RGB time (%.3f) is ahead of latest IMU time (%.3f)!",
+                            tIm, latestImuTime);
                 continue;
+            }
 
             // Get the RGB image, depth image, and pointcloud from the buffers
             this->mBufMutex.lock();
@@ -230,6 +240,7 @@ int main(int argc, char **argv)
     node->declare_parameter<double>("pitch", 0.0);
     node->declare_parameter<bool>("enable_pangolin", true);
     node->declare_parameter<bool>("static_transform", false);
+    node->declare_parameter<std::string>("frame_imu", "imu");
     node->declare_parameter<std::string>("frame_map", "map");
     node->declare_parameter<bool>("colored_pointcloud", true);
     node->declare_parameter<bool>("publish_pointclouds", true);
@@ -262,6 +273,7 @@ int main(int argc, char **argv)
     yaw = node->get_parameter("yaw").as_double();
     roll = node->get_parameter("roll").as_double();
     pitch = node->get_parameter("pitch").as_double();
+    frameImu = node->get_parameter("frame_imu").as_string();
     frameMap = node->get_parameter("frame_map").as_string();
     frameWorld = node->get_parameter("frame_world").as_string();
     frameCamera = node->get_parameter("frame_camera").as_string();
@@ -274,10 +286,7 @@ int main(int argc, char **argv)
 
     // Initializing system threads and getting ready to process frames
     auto imugb = std::make_shared<ImuGrabber>();
-    auto igb = std::make_shared<ImageGrabber>();
-
-    // Connect the IMU grabber to the image grabber
-    igb->mpImuGb = imugb.get();
+    auto igb = std::make_shared<ImageGrabber>(imugb);
 
     sensorType = ORB_SLAM3::System::IMU_RGBD;
     pSLAM = new ORB_SLAM3::System(vocFile, settingsFile, sysParamsFile, sensorType, enablePangolin);
@@ -290,6 +299,16 @@ int main(int argc, char **argv)
     using sensor_msgs::msg::Imu;
     using sensor_msgs::msg::PointCloud2;
 
+    // Subscriber to IMU data with reliable QoS
+    rclcpp::QoS imu_qos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
+    imu_qos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
+    imu_qos.durability(rclcpp::DurabilityPolicy::Volatile);
+
+    auto subImu = node->create_subscription<Imu>(
+        "/imu", imu_qos,
+        [imugb, node](const Imu::ConstSharedPtr msg)
+        { imugb->GrabImu(msg); });
+
     auto subImgRGB = std::make_shared<Subscriber<Image>>(node.get(), "/camera/rgb/image_raw");
     auto subPointcloud = std::make_shared<Subscriber<PointCloud2>>(node.get(), "/camera/depth/points");
     auto subImgDepth = std::make_shared<Subscriber<Image>>(node.get(), "/camera/depth_registered/image_raw");
@@ -299,12 +318,6 @@ int main(int argc, char **argv)
     sync->registerCallback(
         std::bind(&ImageGrabber::GrabRGBD, igb.get(),
                   std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-
-    // Subscriber to IMU data
-    auto subImu = node->create_subscription<Imu>(
-        "/imu", 500,
-        [imugb](const Imu::ConstSharedPtr msg)
-        { imugb->GrabImu(msg); });
 
     // Subscriber to get segmentation results from the SemanticSegmenter module
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
@@ -318,11 +331,11 @@ int main(int argc, char **argv)
         [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
         { igb->GrabVoxbloxSkeletonGraph(*msg); });
 
-    // Syncing images with IMU
-    std::thread sync_thread(&ImageGrabber::SyncWithImu, igb);
-
     static std::shared_ptr<image_transport::ImageTransport> image_transport = std::make_shared<image_transport::ImageTransport>(node);
     setupPublishers(node, image_transport, nodeName);
+
+    // Syncing images with IMU
+    std::thread sync_thread(&ImageGrabber::SyncWithImu, igb);
 
     rclcpp::spin(node);
 

@@ -87,6 +87,7 @@ def generate_launch_description():
                     {"yaw": 1.5697},
                     {"pitch": -1.5697},
                     {"frame_map": "map"},
+                    {"frame_imu": "imu"},
                     {"frame_world": "world"},
                     {"frame_camera": "camera"},
                     {"enable_pangolin": False},
