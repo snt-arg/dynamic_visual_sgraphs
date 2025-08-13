@@ -42,6 +42,10 @@ def generate_launch_description():
                 "depth_image_topic",
                 default_value="/camera/realsense/aligned_depth_to_color/image_raw",
             ),
+            DeclareLaunchArgument(
+                "imu_topic",
+                default_value="/camera/realsense/imu",
+            ),
             # VS-Graphs Node
             Node(
                 name="vs_graphs",
@@ -91,6 +95,7 @@ def generate_launch_description():
                     {"publish_pointclouds": True},
                 ],
                 remappings=[
+                    ("/imu", LaunchConfiguration("imu_topic")),
                     ("/camera/rgb/image_raw", LaunchConfiguration("rgb_image_topic")),
                     (
                         "/camera/depth_registered/image_raw",

@@ -24,311 +24,143 @@
 
 using namespace std;
 
+class ImuGrabber : public rclcpp::Node
+{
+public:
+    ImuGrabber() : rclcpp::Node("imu_grabber") {
+        tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    }
+
+    void GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
+
+    // Variables
+    std::mutex mBufMutex;
+    std::queue<sensor_msgs::msg::Imu::ConstSharedPtr> imuBuf;
+};
+
 class ImageGrabber : public rclcpp::Node
 {
 public:
-    ImageGrabber() : rclcpp::Node("image_grabber") {}
+    ImageGrabber() : rclcpp::Node("image_grabber")
+    {
+        tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    }
 
-    // void GrabImu(const sensor_msgs::ImuConstPtr &imu_msg);
-    void GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr imu_msg);
-
-    std::mutex mBufMutex;
-    // queue<sensor_msgs::ImuConstPtr> imuBuf;
-    queue<sensor_msgs::msg::Imu::ConstSharedPtr> imuBuf;
-};
-
-class ImageGrabber
-{
-public:
-    ImageGrabber(ImuGrabber *pImuGb) : mpImuGb(pImuGb) {}
-
-    void SyncWithImu();
-
-    // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
-    // cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
-    // void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsgg &msgSegImage);
-    // void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
-    // void GrabRGBD(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD,
-    //               const sensor_msgs::PointCloud2ConstPtr &msgPC);
-    cv::Mat GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg);
-    void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage);
-    void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
-    void GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB,
-                  const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
-                  const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC);
-
+    // Variables
     ImuGrabber *mpImuGb;
     std::mutex mBufMutex;
-    // queue<sensor_msgs::ImageConstPtr> imgRGBBuf, imgDBuf;
-    // queue<sensor_msgs::PointCloud2ConstPtr> imgPCBuf;
-    queue<sensor_msgs::msg::Image::ConstSharedPtr> imgRGBBuf, imgDBuf;
-    queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> imgPCBuf;
+    std::atomic<bool> mustStop{false};
+    std::queue<sensor_msgs::msg::PointCloud2::ConstSharedPtr> imgPCBuf;
+    std::queue<sensor_msgs::msg::Image::ConstSharedPtr> imgRGBBuf, imgDBuf;
+
+    void SyncWithImu();
+    // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
+    cv::Mat GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg);
+    void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage);
+    void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraphs);
+    void GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB, const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
+                  const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC);
 };
 
-// int main(int argc, char **argv)
-// {
-//     ros::init(argc, argv, "RGBD_Inertial");
-//     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
-
-//     if (argc > 1)
-//     {
-//         ROS_WARN("Arguments supplied via command line are ignored.");
-//     }
-
-//     std::string node_name = ros::this_node::getName();
-
-//     ros::NodeHandle nodeHandler;
-//     image_transport::ImageTransport image_transport(nodeHandler);
-
-//     std::string voc_file, settings_file, sys_params_file;
-//     nodeHandler.param<std::string>(node_name + "/sys_params_file", sys_params_file, "file_not_set");
-//     nodeHandler.param<std::string>(node_name + "/voc_file", voc_file, "file_not_set");
-//     nodeHandler.param<std::string>(node_name + "/settings_file", settings_file, "file_not_set");
-
-//     if (voc_file == "file_not_set" || settings_file == "file_not_set")
-//     {
-//         ROS_ERROR("Please provide voc_file and settings_file in the launch file");
-//         ros::shutdown();
-//         return 1;
-//     }
-
-//     if (sys_params_file == "file_not_set")
-//     {
-//         ROS_ERROR("Please provide the YAML file containing system parameters in the launch file!");
-//         ros::shutdown();
-//         return 1;
-//     }
-
-//     bool enable_pangolin;
-//     nodeHandler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
-
-//     nodeHandler.param<double>(node_name + "/yaw", yaw, 0.0);
-//     nodeHandler.param<double>(node_name + "/roll", roll, 0.0);
-//     nodeHandler.param<double>(node_name + "/pitch", pitch, 0.0);
-
-//     nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
-//     nodeHandler.param<std::string>(node_name + "/frame_imu", frameImu, "imu");
-//     nodeHandler.param<std::string>(node_name + "/frame_camera", frameCamera, "camera");
-//     nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
-//     nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
-//     nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "build_comp");
-//     nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "struc_elem");
-
-//     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-//     ImuGrabber imugb;
-//     ImageGrabber igb(&imugb);
-//     sensorType = ORB_SLAM3::System::IMU_RGBD;
-
-//     pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sys_params_file, sensorType, enable_pangolin);
-
-//     // Subscribe to get raw images and IMU data
-//     ros::Subscriber sub_imu = nodeHandler.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb);
-//     message_filters::Subscriber<sensor_msgs::Image> subImgRGB(nodeHandler, "/camera/rgb/image_raw", 500);
-//     message_filters::Subscriber<sensor_msgs::Image> subImgDepth(nodeHandler, "/camera/depth_registered/image_raw", 500);
-
-//     // Subscribe to get pointcloud from depth sensor
-//     message_filters::Subscriber<sensor_msgs::PointCloud2> subPointcloud(nodeHandler, "/camera/pointcloud", 500);
-
-//     // Synchronization of raw and depth images
-//     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::PointCloud2>
-//         syncPolicy;
-//     message_filters::Synchronizer<syncPolicy> sync(syncPolicy(500), subImgRGB, subImgDepth, subPointcloud);
-//     sync.registerCallback(boost::bind(&ImageGrabber::GrabRGBD, &igb, _1, _2, _3));
-
-//     // Subscribe to the markers detected by `aruco_ros` library
-//     // ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
-//     //                                                   &ImageGrabber::GrabArUcoMarker, &igb);
-
-//     // Subscriber for images obtained from the Semantic Segmentater
-//     ros::Subscriber sub_segmented_img = nodeHandler.subscribe("/camera/color/image_segment", 50,
-//                                                               &ImageGrabber::GrabSegmentation, &igb);
-
-//     // Subscriber to get the mesh from voxblox
-//     ros::Subscriber voxblox_skeleton_mesh = nodeHandler.subscribe("/voxblox_skeletonizer/sparse_graph", 1,
-//                                                                   &ImageGrabber::GrabVoxbloxSkeletonGraph, &igb);
-
-//     setupPublishers(nodeHandler, image_transport, node_name);
-//     setupServices(nodeHandler, node_name);
-
-//     // Syncing images with IMU
-//     std::thread sync_thread(&ImageGrabber::SyncWithImu, &igb);
-
-//     ros::spin();
-
-//     // Stop all threads
-//     pSLAM->Shutdown();
-//     ros::shutdown();
-
-//     return 0;
-// }
-
-int main(int argc, char **argv)
-{
-    rclcpp::init(argc, argv);
-    auto node = std::make_shared<rclcpp::Node>("RGBD_Inertial");
-
-    if (argc > 1)
-        RCLCPP_WARN(node->get_logger(), "Arguments supplied via command line are ignored.");
-
-    std::string node_name = node->get_name();
-
-    // Declare and get parameters
-    node->declare_parameter<std::string>("sys_params_file", "file_not_set");
-    node->declare_parameter<std::string>("voc_file", "file_not_set");
-    node->declare_parameter<std::string>("settings_file", "file_not_set");
-    node->declare_parameter<bool>("enable_pangolin", true);
-    node->declare_parameter<double>("yaw", 0.0);
-    node->declare_parameter<double>("roll", 0.0);
-    node->declare_parameter<double>("pitch", 0.0);
-    node->declare_parameter<std::string>("frame_map", "map");
-    node->declare_parameter<std::string>("frame_imu", "imu");
-    node->declare_parameter<std::string>("frame_camera", "camera");
-    node->declare_parameter<std::string>("frame_world", "world");
-    node->declare_parameter<bool>("static_transform", false);
-    node->declare_parameter<std::string>("frame_building_component", "build_comp");
-    node->declare_parameter<std::string>("frame_structural_element", "struc_elem");
-
-    std::string sys_params_file = node->get_parameter("sys_params_file").as_string();
-    std::string voc_file = node->get_parameter("voc_file").as_string();
-    std::string settings_file = node->get_parameter("settings_file").as_string();
-
-    if (voc_file == "file_not_set" || settings_file == "file_not_set")
-    {
-        RCLCPP_ERROR(node->get_logger(), "Please provide voc_file and settings_file in the launch file");
-        rclcpp::shutdown();
-        return 1;
-    }
-    if (sys_params_file == "file_not_set")
-    {
-        RCLCPP_ERROR(node->get_logger(), "Please provide the YAML file containing system parameters in the launch file!");
-        rclcpp::shutdown();
-        return 1;
-    }
-
-    bool enable_pangolin = node->get_parameter("enable_pangolin").as_bool();
-    yaw = node->get_parameter("yaw").as_double();
-    roll = node->get_parameter("roll").as_double();
-    pitch = node->get_parameter("pitch").as_double();
-    frameMap = node->get_parameter("frame_map").as_string();
-    frameImu = node->get_parameter("frame_imu").as_string();
-    frameCamera = node->get_parameter("frame_camera").as_string();
-    frameWorld = node->get_parameter("frame_world").as_string();
-    pubStaticTransform = node->get_parameter("static_transform").as_bool();
-    frameBC = node->get_parameter("frame_building_component").as_string();
-    frameSE = node->get_parameter("frame_structural_element").as_string();
-
-    // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ImuGrabber imugb;
-    ImageGrabber igb(&imugb);
-    sensorType = ORB_SLAM3::System::IMU_RGBD;
-
-    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sys_params_file, sensorType, enable_pangolin);
-
-    // --- ROS2 Subscribers ---
-    using message_filters::Subscriber;
-    using message_filters::Synchronizer;
-    using message_filters::sync_policies::ApproximateTime;
-    using sensor_msgs::msg::Image;
-    using sensor_msgs::msg::Imu;
-    using sensor_msgs::msg::PointCloud2;
-
-    // IMU
-    auto sub_imu = node->create_subscription<Imu>(
-        "/imu", 1000,
-        [&imugb](const Imu::SharedPtr msg)
-        { imugb.GrabImu(msg); });
-
-    // Images and pointcloud (message_filters)
-    auto subImgRGB = std::make_shared<Subscriber<Image>>(node.get(), "/camera/rgb/image_raw");
-    auto subImgDepth = std::make_shared<Subscriber<Image>>(node.get(), "/camera/depth_registered/image_raw");
-    auto subPointcloud = std::make_shared<Subscriber<PointCloud2>>(node.get(), "/camera/pointcloud");
-
-    typedef ApproximateTime<Image, Image, PointCloud2> syncPolicy;
-    auto sync = std::make_shared<Synchronizer<syncPolicy>>(syncPolicy(10), *subImgRGB, *subImgDepth, *subPointcloud);
-    sync->registerCallback(
-        [&igb](const Image::ConstSharedPtr msgRGB, const Image::ConstSharedPtr msgD, const PointCloud2::ConstSharedPtr msgPC)
-        {
-            igb.GrabRGBD(msgRGB, msgD, msgPC);
-        });
-
-    // Segmentation and Voxblox
-    auto sub_segmented_img = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
-        "/camera/color/image_segment", 50,
-        [&igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
-        { igb.GrabSegmentation(*msg); });
-
-    auto voxblox_skeleton_mesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
-        "/voxblox_skeletonizer/sparse_graph", 1,
-        [&igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
-        { igb.GrabVoxbloxSkeletonGraph(*msg); });
-
-    // TODO: setupPublishers and setupServices for ROS2 if needed
-
-    // Syncing images with IMU
-    std::thread sync_thread(&ImageGrabber::SyncWithImu, &igb);
-
-    rclcpp::spin(node);
-
-    // Stop all threads
-    pSLAM->Shutdown();
-    rclcpp::shutdown();
-
-    return 0;
-}
-
-// void ImageGrabber::GrabRGBD(const sensor_msgs::ImageConstPtr &msgRGB, const sensor_msgs::ImageConstPtr &msgD,
-//                             const sensor_msgs::PointCloud2ConstPtr &msgPC)
-void GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB,
-              const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
-              const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC)
+void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
 {
     mBufMutex.lock();
-
-    if (!imgRGBBuf.empty())
-        imgRGBBuf.pop();
-    imgRGBBuf.push(msgRGB);
-
-    if (!imgDBuf.empty())
-        imgDBuf.pop();
-    imgDBuf.push(msgD);
-
-    if (!imgPCBuf.empty())
-        imgPCBuf.pop();
-    imgPCBuf.push(msgPC);
-
+    imuBuf.push(imu_msg);
     mBufMutex.unlock();
+    return;
 }
 
 cv::Mat ImageGrabber::GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg)
 {
     // Copy the ros image message to cv::Mat.
     cv_bridge::CvImageConstPtr cv_ptr;
+
     try
     {
         cv_ptr = cv_bridge::toCvShare(img_msg);
     }
     catch (cv_bridge::Exception &e)
     {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "[Error] Problem occured while running `cv_bridge`: %s", e.what());
     }
 
     return cv_ptr->image.clone();
 }
 
+/**
+ * @brief Callback function to get scene segmentation results from the SemanticSegmenter module
+ *
+ * @param msgSegImage The segmentation results from the SemanticSegmenter
+ */
+void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage)
+{
+    // Fetch the segmentation results
+    cv_bridge::CvImageConstPtr cv_imgSeg;
+    uint64_t key_frame_id = msgSegImage.key_frame_id.data;
+
+    try
+    {
+        cv_imgSeg = cv_bridge::toCvCopy(std::make_shared<sensor_msgs::msg::Image>(msgSegImage.segmented_image),
+                                        sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception &e)
+    {
+        // ROS_ERROR("cv_bridge exception: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "[Error] `cv_bridge` exception: %s", e.what());
+        return;
+    }
+
+    // Convert to PCL PointCloud2 from `sensor_msgs` PointCloud2
+    pcl::PCLPointCloud2::Ptr pclPc2SegPrb(new pcl::PCLPointCloud2);
+    pcl_conversions::toPCL(msgSegImage.segmented_image_probability, *pclPc2SegPrb);
+
+    // Create the tuple to be appended to the segmentedImageBuffer
+    std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> tuple(key_frame_id, cv_imgSeg->image, pclPc2SegPrb);
+
+    // Add the segmented image to a buffer to be processed in the SemanticSegmentation thread
+    pSLAM->addSegmentedImage(&tuple);
+}
+
 void ImageGrabber::SyncWithImu()
 {
-    while (1)
+    if (!mpImuGb) {
+        RCLCPP_ERROR(this->get_logger(), "[Error] IMU Grabber not initialized!");
+        return;
+    }
+
+    while (!mustStop)
     {
+        // Make sure thread synchronization is properly handled
+        bool hasData = false;
+        {
+            std::lock_guard<std::mutex> lock(mBufMutex);
+            std::lock_guard<std::mutex> lock2(mpImuGb->mBufMutex);
+            hasData = !imgRGBBuf.empty() && !mpImuGb->imuBuf.empty();
+        }
+
+        if (!hasData)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
         if (!imgRGBBuf.empty() && !mpImuGb->imuBuf.empty())
         {
-            cv::Mat im, depth;
-            sensor_msgs::msg::PointCloud2::ConstSharedPtr msgPC;
+            // Variables
             double tIm = 0;
+            cv::Mat im, depth;
+            Eigen::Vector3f Wbb;
+            std::vector<ORB_SLAM3::IMU::Point> vImuMeas;
+            sensor_msgs::msg::PointCloud2::ConstSharedPtr msgPC;
 
-            tIm = imgRGBBuf.front()->header.stamprclcpp::Time::seconds();
-            if (tIm > mpImuGb->imuBuf.back()->header.stamprclcpp::Time::seconds())
+            // Get the first image from the buffer
+            tIm = rclcpp::Time(imgRGBBuf.front()->header.stamp).seconds();
+            if (tIm > rclcpp::Time(mpImuGb->imuBuf.back()->header.stamp).seconds())
                 continue;
 
+            // Get the RGB image, depth image, and pointcloud from the buffers
             this->mBufMutex.lock();
             rclcpp::Time msg_time = imgRGBBuf.front()->header.stamp;
             im = GetImage(imgRGBBuf.front());
@@ -337,19 +169,16 @@ void ImageGrabber::SyncWithImu()
             imgDBuf.pop();
             msgPC = imgPCBuf.front();
             imgPCBuf.pop();
-
             this->mBufMutex.unlock();
 
-            vector<ORB_SLAM3::IMU::Point> vImuMeas;
             vImuMeas.clear();
-            Eigen::Vector3f Wbb;
             mpImuGb->mBufMutex.lock();
             if (!mpImuGb->imuBuf.empty())
             {
                 // Load imu measurements from buffer
-                while (!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamprclcpp::Time::seconds() <= tIm)
+                while (!mpImuGb->imuBuf.empty() && rclcpp::Time(mpImuGb->imuBuf.front()->header.stamp).seconds() <= tIm)
                 {
-                    double t = mpImuGb->imuBuf.front()->header.stamprclcpp::Time::seconds();
+                    double t = rclcpp::Time(mpImuGb->imuBuf.front()->header.stamp).seconds();
                     cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
                     cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
                     vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc, gyr, t));
@@ -359,10 +188,8 @@ void ImageGrabber::SyncWithImu()
             }
             mpImuGb->mBufMutex.unlock();
 
-            // Pointcloud
-            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
-
             // Convert pointclouds from ros to pcl format
+            pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
             pcl::fromROSMsg(*msgPC, *cloud);
 
             // Find the marker with the minimum time difference compared to the current frame
@@ -387,48 +214,167 @@ void ImageGrabber::SyncWithImu()
     }
 }
 
-void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("vs_graphs");
+
+    if (argc > 1)
+        RCLCPP_WARN(node->get_logger(), "Arguments supplied via command line are ignored.");
+
+    std::string nodeName = node->get_name();
+
+    // Parameters
+    node->declare_parameter<double>("yaw", 0.0);
+    node->declare_parameter<double>("roll", 0.0);
+    node->declare_parameter<double>("pitch", 0.0);
+    node->declare_parameter<bool>("enable_pangolin", true);
+    node->declare_parameter<bool>("static_transform", false);
+    node->declare_parameter<std::string>("frame_map", "map");
+    node->declare_parameter<bool>("colored_pointcloud", true);
+    node->declare_parameter<bool>("publish_pointclouds", true);
+    node->declare_parameter<std::string>("frame_world", "world");
+    node->declare_parameter<std::string>("frame_camera", "camera");
+    node->declare_parameter<std::string>("voc_file", "file_not_set");
+    node->declare_parameter<std::string>("settings_file", "file_not_set");
+    node->declare_parameter<std::string>("sys_params_file", "file_not_set");
+    node->declare_parameter<std::string>("frame_structural_element", "struc_elem");
+    node->declare_parameter<std::string>("frame_building_component", "build_comp");
+
+    std::string vocFile = node->get_parameter("voc_file").as_string();
+    std::string settingsFile = node->get_parameter("settings_file").as_string();
+    std::string sysParamsFile = node->get_parameter("sys_params_file").as_string();
+
+    if (vocFile == "file_not_set" || settingsFile == "file_not_set")
+    {
+        RCLCPP_ERROR(node->get_logger(), "[Error] 'vocabulary' and 'settings' are not provided in the launch file! Exiting...");
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    if (sysParamsFile == "file_not_set")
+    {
+        RCLCPP_ERROR(node->get_logger(), "[Error] The `YAML` file containing system parameters is not provided in the launch file! Exiting...");
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    yaw = node->get_parameter("yaw").as_double();
+    roll = node->get_parameter("roll").as_double();
+    pitch = node->get_parameter("pitch").as_double();
+    frameMap = node->get_parameter("frame_map").as_string();
+    frameWorld = node->get_parameter("frame_world").as_string();
+    frameCamera = node->get_parameter("frame_camera").as_string();
+    colorPointcloud = node->get_parameter("colored_pointcloud").as_bool();
+    pubPointClouds = node->get_parameter("publish_pointclouds").as_bool();
+    frameBC = node->get_parameter("frame_building_component").as_string();
+    frameSE = node->get_parameter("frame_structural_element").as_string();
+    pubStaticTransform = node->get_parameter("static_transform").as_bool();
+    bool enablePangolin = node->get_parameter("enable_pangolin").as_bool();
+
+    // Initializing system threads and getting ready to process frames
+    auto imugb = std::make_shared<ImuGrabber>();
+    auto igb = std::make_shared<ImageGrabber>();
+
+    // Connect the IMU grabber to the image grabber
+    igb->mpImuGb = imugb.get();
+
+    sensorType = ORB_SLAM3::System::IMU_RGBD;
+    pSLAM = new ORB_SLAM3::System(vocFile, settingsFile, sysParamsFile, sensorType, enablePangolin);
+
+    // Subscribe to get raw images (message_filters in ROS2)
+    using message_filters::Subscriber;
+    using message_filters::Synchronizer;
+    using message_filters::sync_policies::ApproximateTime;
+    using sensor_msgs::msg::Image;
+    using sensor_msgs::msg::Imu;
+    using sensor_msgs::msg::PointCloud2;
+
+    auto subImgRGB = std::make_shared<Subscriber<Image>>(node.get(), "/camera/rgb/image_raw");
+    auto subPointcloud = std::make_shared<Subscriber<PointCloud2>>(node.get(), "/camera/depth/points");
+    auto subImgDepth = std::make_shared<Subscriber<Image>>(node.get(), "/camera/depth_registered/image_raw");
+
+    typedef ApproximateTime<Image, Image, PointCloud2> syncPolicy;
+    auto sync = std::make_shared<Synchronizer<syncPolicy>>(syncPolicy(10), *subImgRGB, *subImgDepth, *subPointcloud);
+    sync->registerCallback(
+        std::bind(&ImageGrabber::GrabRGBD, igb.get(),
+                  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+
+    // Subscriber to IMU data
+    auto subImu = node->create_subscription<Imu>(
+        "/imu", 500,
+        [imugb](const Imu::ConstSharedPtr msg)
+        { imugb->GrabImu(msg); });
+
+    // Subscriber to get segmentation results from the SemanticSegmenter module
+    auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
+        "/camera/color/image_segment", 50,
+        [igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
+        { igb->GrabSegmentation(*msg); });
+
+    // Subsriber to get skeletonized graph from the `voxblox` module
+    auto subVoxbloxSkeletonMesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
+        "/voxblox_skeletonizer/sparse_graph", 1,
+        [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+        { igb->GrabVoxbloxSkeletonGraph(*msg); });
+
+    // Syncing images with IMU
+    std::thread sync_thread(&ImageGrabber::SyncWithImu, igb);
+
+    static std::shared_ptr<image_transport::ImageTransport> image_transport = std::make_shared<image_transport::ImageTransport>(node);
+    setupPublishers(node, image_transport, nodeName);
+
+    rclcpp::spin(node);
+
+    // Stop all threads
+    pSLAM->Shutdown();
+
+    // Signal the sync thread to stop and wait for it
+    igb->mustStop = true;
+    sync_thread.join();
+
+    rclcpp::shutdown();
+
+    return 0;
+}
+
+void ImageGrabber::GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRGB,
+                            const sensor_msgs::msg::Image::ConstSharedPtr &msgD,
+                            const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPC)
 {
     mBufMutex.lock();
-    imuBuf.push(imu_msg);
-    mBufMutex.unlock();
 
-    return;
+    if (!imgRGBBuf.empty())
+        imgRGBBuf.pop();
+    imgRGBBuf.push(msgRGB);
+
+    if (!imgDBuf.empty())
+        imgDBuf.pop();
+    imgDBuf.push(msgD);
+
+    if (!imgPCBuf.empty())
+        imgPCBuf.pop();
+    imgPCBuf.push(msgPC);
+
+    mBufMutex.unlock();
 }
 
-// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
+/**
+ * @brief Callback function to get the markers detected by the `aruco_ros` library
+ *
+ * @param msgMarkerArray The markers detected by the `aruco_ros` library
+ */
+// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &msgMarkerArray)
 // {
 //     // Pass the visited markers to a buffer to be processed later
-//     // addMarkersToBuffer(markerArray);
+//     addMarkersToBuffer(msgMarkerArray);
 // }
 
-void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsgg &msgSegImage)
-{
-    // Fetch the segmentation results
-    cv_bridge::CvImageConstPtr cv_imgSeg;
-    uint64_t key_frame_id = msgSegImage.key_frame_id.data;
-
-    try
-    {
-        cv_imgSeg = cv_bridge::toCvCopy(msgSegImage.segmentedImage, sensor_msgs::image_encodings::BGR8);
-    }
-    catch (cv_bridge::Exception &e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return;
-    }
-
-    // convert to PCL PointCloud2 from sensor_msgs PointCloud2
-    pcl::PCLPointCloud2::Ptr pclPc2SegPrb(new pcl::PCLPointCloud2);
-    pcl_conversions::toPCL(msgSegImage.segmentedImageProbability, *pclPc2SegPrb);
-
-    // Create the tuple to be appended to the segmentedImageBuffer
-    std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> tuple(key_frame_id, cv_imgSeg->image, pclPc2SegPrb);
-
-    // Add the segmented image to a buffer to be processed in the SemanticSegmentation thread
-    pSLAM->addSegmentedImage(&tuple);
-}
-
+/**
+ * @brief Callback function to get the skeleton graph from the `voxblox` module
+ *
+ * @param msgSkeletonGraphs The skeleton graph from the `voxblox` module
+ */
 void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraphs)
 {
     // Pass the skeleton graph to a buffer to be processed by the SemanticSegmentation thread
