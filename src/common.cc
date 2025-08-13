@@ -31,11 +31,10 @@ ORB_SLAM3::System::eSensor sensorType = ORB_SLAM3::System::NOT_SET;
 bool colorPointcloud = true;
 double roll = 0, pitch = 0, yaw = 0;
 bool pubStaticTransform, pubPointClouds;
+std::shared_ptr<tf2_ros::Buffer> tfBuffer_;
 std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
 std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 // std::shared_ptr<tf2::TransformListener> transformListener;
-std::shared_ptr<rviz_visual_tools::RvizVisualTools> visualTools;
-std::shared_ptr<tf2_ros::Buffer> tfBuffer_;
 std::shared_ptr<tf2_ros::TransformListener> tfListener_{nullptr};
 
 std::vector<std::vector<ORB_SLAM3::Marker *>> markersBuffer;
@@ -158,14 +157,6 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     if (sensorType == ORB_SLAM3::System::IMU_MONOCULAR || sensorType == ORB_SLAM3::System::IMU_STEREO ||
         sensorType == ORB_SLAM3::System::IMU_RGBD)
         pubOdometry = node->create_publisher<nav_msgs::msg::Odometry>(node_name + "/body_odom", 1);
-
-    // Visualizing Planes
-    visualTools = std::make_shared<rviz_visual_tools::RvizVisualTools>(
-        frameBC, "/plane_visuals", node);
-    visualTools->setAlpha(0.5);
-    visualTools->loadMarkerPub();
-    visualTools->deleteAllMarkers();
-    visualTools->enableBatchPublishing();
 
     tfBuffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     tfListener_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);

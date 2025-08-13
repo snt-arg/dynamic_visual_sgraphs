@@ -68,7 +68,7 @@ def generate_launch_description():
                             "settings_file",
                             default=[
                                 get_package_share_directory("vs_graphs"),
-                                "/config/RGB-D/",
+                                "/config/RGB-D-Inertial/",
                                 LaunchConfiguration("sensor_config"),
                                 ".yaml",
                             ],
