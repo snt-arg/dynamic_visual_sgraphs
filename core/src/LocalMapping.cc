@@ -134,7 +134,7 @@ namespace ORB_SLAM3
                             {
                                 if ((mTinit < 10.f) && (dist < 0.02))
                                 {
-                                    cout << "Not enough motion for initializing. Reseting..." << endl;
+                                    std::cout << "[Mapping] Not enough motion for map initializing. Reseting..." << std::endl;
                                     unique_lock<mutex> lock(mMutexReset);
                                     mbResetRequestedActiveMap = true;
                                     mpMapToReset = mpCurrentKeyFrame->GetMap();
@@ -1104,7 +1104,7 @@ namespace ORB_SLAM3
             {
                 executed_reset = true;
 
-                cout << "Reseting Atlas in Local Mapping ..." << endl;
+                cout << "[Mapping] Reseting Atlas in 'LocalMapping' ..." << endl;
                 mlNewKeyFrames.clear();
                 mlpRecentAddedMapPoints.clear();
                 mbResetRequested = false;
@@ -1121,7 +1121,7 @@ namespace ORB_SLAM3
             if (mbResetRequestedActiveMap)
             {
                 executed_reset = true;
-                cout << "Reseting the Current Map in Local Mapping ..." << endl;
+                cout << "[Mapping] Reseting the Current Map in 'LocalMapping' ..." << endl;
 
                 mlNewKeyFrames.clear();
                 mlpRecentAddedMapPoints.clear();
@@ -1135,8 +1135,6 @@ namespace ORB_SLAM3
                 mbResetRequestedActiveMap = false;
             }
         }
-        if (executed_reset)
-            cout << "Reset free the mutex in Local Mapping" << endl;
     }
 
     void LocalMapping::RequestFinish()

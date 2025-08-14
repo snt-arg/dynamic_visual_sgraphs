@@ -2396,28 +2396,42 @@ namespace ORB_SLAM3
 #endif
     }
 
-    // Map initialization for stereo and RGB-D
+    // Map initialization for Stereo and RGB-D (with/without IMU) setups
     void Tracking::StereoInitialization()
     {
+        // Variables
+        const double kMinAccelerationThreshold = 0.5;
+
         if (mCurrentFrame.N > 500)
         {
             if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
             {
                 if (!mCurrentFrame.mpImuPreintegrated || !mLastFrame.mpImuPreintegrated)
                 {
-                    cout << "not IMU meas" << endl;
+                    std::cout << "[Tracking] IMU measurements are not available for the current frame!" << std::endl;
                     return;
                 }
 
-                if (!mFastInit && (mCurrentFrame.mpImuPreintegratedFrame->avgA - mLastFrame.mpImuPreintegratedFrame->avgA).norm() < 0.5)
+                // Check acceleration difference for fast initialization
+                if (!mFastInit)
                 {
-                    cout << "not enough acceleration" << endl;
-                    return;
+                    const double accelDiff = (mCurrentFrame.mpImuPreintegratedFrame->avgA -
+                                              mLastFrame.mpImuPreintegratedFrame->avgA)
+                                                 .norm();
+
+                    if (accelDiff < kMinAccelerationThreshold)
+                    {
+                        std::cout << "[Tracking] IMU acceleration change too small ("
+                                  << std::fixed << std::setprecision(2) << accelDiff << " < "
+                                  << kMinAccelerationThreshold << ")." << std::endl;
+                        return;
+                    }
                 }
 
                 if (mpImuPreintegratedFromLastKF)
                     delete mpImuPreintegratedFromLastKF;
 
+                // Reset IMU preintegration from last keyframe
                 mpImuPreintegratedFromLastKF = new IMU::Preintegrated(IMU::Bias(), *mpImuCalib);
                 mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
             }
@@ -2491,8 +2505,7 @@ namespace ORB_SLAM3
             // Add the current KeyFrame to the buffer in GeometrySegmentation
             AddKeyFrameToGeoSegKFBuffer(pKFini);
 
-            std::cout << "\n[Tracking]" << std::endl;
-            std::cout << "- New map created with #" + to_string(mpAtlas->MapPointsInMap()) + " points!"
+            std::cout << "\n[Tracking] New map created with #" + to_string(mpAtlas->MapPointsInMap()) + " points!"
                       << std::endl;
 
             mpLocalMapper->InsertKeyFrame(pKFini);
@@ -3978,7 +3991,7 @@ namespace ORB_SLAM3
             index++;
         }
 
-        cout << num_lost << " Frames set to lost" << endl;
+        std::cout << "[Tracking] " << num_lost << " frames are set to lost!" << endl;
 
         mlbLost = lbLost;
 

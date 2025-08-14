@@ -77,8 +77,7 @@ namespace ORB_SLAM3
         // Check if the KeyFrames are already in the map
         if (mspKeyFrames.empty())
         {
-            std::cout << "\n[Mapping]" << std::endl;
-            std::cout << "- Map initialized with initial KeyFrame #" << mnInitKFid << std::endl;
+            std::cout << "\n[Mapping] Map initialized with initial KeyFrame #" << mnInitKFid << "." << std::endl;
             mnInitKFid = pKF->mnId;
             mpKFinitial = pKF;
             mpKFlowerID = pKF;

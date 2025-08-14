@@ -314,7 +314,7 @@ namespace ORB_SLAM3
         UndistortKeyPoints();
     }
 
-    // RGB-D Frames Processing
+    // RGB-D and RGBD-Inertial Frames Processing
     Frame::Frame(const cv::Mat &imColor, const cv::Mat &imGray, const cv::Mat &imDepth,
                  const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &pointcloud, const double &timeStamp,
                  ORBextractor *extractor, ORBVocabulary *voc, cv::Mat &K, cv::Mat &distCoef,
@@ -395,14 +395,10 @@ namespace ORB_SLAM3
         mb = mbf / fx;
 
         if (pPrevF)
-        {
             if (pPrevF->HasVelocity())
                 SetVelocity(pPrevF->GetVelocity());
-        }
         else
-        {
             mVw.setZero();
-        }
 
         mpMutexImu = new std::mutex();
 
