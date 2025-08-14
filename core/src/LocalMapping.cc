@@ -194,6 +194,9 @@ namespace ORB_SLAM3
                     vdKFCulling_ms.push_back(timeKFCulling_ms);
 #endif
 
+                    // Staged IMU initialization
+                    // [Hint] For Visual-Inertial SLAM, the IMU biases and scale are initially unknown (the first 5secs). 
+                    // After 15 seconds, they are locked to avoid drift.
                     if ((mTinit < 50.0f) && mbInertial)
                     {
                         // Enter here everytime local-mapping is called
@@ -201,32 +204,34 @@ namespace ORB_SLAM3
                         {
                             if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA1())
                             {
+                                // First stage of IMU initialization (5 seconds after initialization)
                                 if (mTinit > 5.0f)
                                 {
-                                    cout << "start VIBA 1" << endl;
+                                    std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#1) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA1();
                                     if (mbMonocular)
                                         InitializeIMU(1.f, 1e5, true);
                                     else
                                         InitializeIMU(1.f, 1e5, true);
-                                    cout << "end VIBA 1" << endl;
+                                    std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#1) ..." << std::endl;
                                 }
                             }
                             else if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
+                                // Second stage of IMU initialization (15 seconds after initialization)
                                 if (mTinit > 15.0f)
                                 {
-                                    cout << "start VIBA 2" << endl;
+                                    std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#2) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA2();
                                     if (mbMonocular)
                                         InitializeIMU(0.f, 0.f, true);
                                     else
                                         InitializeIMU(0.f, 0.f, true);
-                                    cout << "end VIBA 2" << endl;
+                                    std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#2) ..." << std::endl;
                                 }
                             }
 
-                            // scale refinement
+                            // Scale refinement
                             if (((mpAtlas->KeyFramesInMap()) <= 200) &&
                                 ((mTinit > 25.0f && mTinit < 25.5f) ||
                                  (mTinit > 35.0f && mTinit < 35.5f) ||

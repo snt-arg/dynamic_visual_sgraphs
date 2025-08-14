@@ -83,9 +83,9 @@ def generate_launch_description():
                             ],
                         )
                     },
+                    {"yaw": 0.0},
                     {"roll": 0.0},
-                    {"yaw": 1.5697},
-                    {"pitch": -1.5697},
+                    {"pitch": 0.0},
                     {"frame_map": "map"},
                     {"frame_imu": "imu"},
                     {"frame_world": "world"},
@@ -106,21 +106,27 @@ def generate_launch_description():
             ),
             # Static Transforms
             Node(
+                name="bc_to_se",
                 package="tf2_ros",
                 executable="static_transform_publisher",
-                name="bc_to_se",
                 arguments=["0", "-3", "0", "0", "0", "0", "build_comp", "struc_elem"],
             ),
             Node(
                 package="tf2_ros",
-                executable="static_transform_publisher",
                 name="world_to_bc",
+                executable="static_transform_publisher",
                 arguments=["0", "-5", "0", "0", "0", "0", "world", "build_comp"],
             ),
             Node(
                 package="tf2_ros",
+                name="camera_to_imu",
                 executable="static_transform_publisher",
+                arguments=["0", "0", "0", "1.5708", "0", "1.5708", "camera", "imu"],
+            ),
+            Node(
+                package="tf2_ros",
                 name="camera_to_camera_optical",
+                executable="static_transform_publisher",
                 arguments=[
                     "0",
                     "0",
@@ -156,8 +162,9 @@ def generate_launch_description():
                 composable_node_descriptions=[
                     ComposableNode(
                         package="depth_image_proc",
-                        plugin="depth_image_proc::PointCloudXyzrgbNode",
                         name="point_cloud_xyzrgb_node",
+                        parameters=[{"target_frame": "map"}],
+                        plugin="depth_image_proc::PointCloudXyzrgbNode",
                         remappings=[
                             (
                                 "rgb/camera_info",

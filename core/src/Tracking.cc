@@ -1887,7 +1887,7 @@ namespace ORB_SLAM3
 
         if (mpLocalMapper->mbBadImu)
         {
-            cout << "Reseting map because the Local Mapper set the 'Bad IMU' flag ..." << endl;
+            cout << "[Tracking] Reseting map because the Local Mapper set the 'Bad IMU' flag ..." << endl;
             mpSystem->ResetActiveMap();
             return;
         }
@@ -2421,9 +2421,9 @@ namespace ORB_SLAM3
 
                     if (accelDiff < kMinAccelerationThreshold)
                     {
-                        std::cout << "[Tracking] IMU acceleration change too small ("
-                                  << std::fixed << std::setprecision(2) << accelDiff << " < "
-                                  << kMinAccelerationThreshold << ")." << std::endl;
+                        std::cout << "[Tracking] Low IMU acceleration changes: "
+                                  << std::fixed << std::setprecision(2) << accelDiff << " (threshold: "
+                                  << kMinAccelerationThreshold << ")! Skipping ..." << std::endl;
                         return;
                     }
                 }
@@ -3938,46 +3938,38 @@ namespace ORB_SLAM3
 
         if (!bLocMap)
         {
-            Verbose::PrintMess("Reseting Local Mapper...", Verbose::VERBOSITY_VERY_VERBOSE);
+            Verbose::PrintMess("[Tracking] Reseting 'LocalMapping' ...", Verbose::VERBOSITY_VERY_VERBOSE);
             mpLocalMapper->RequestResetActiveMap(pMap);
-            Verbose::PrintMess("done", Verbose::VERBOSITY_VERY_VERBOSE);
+            Verbose::PrintMess("[Tracking] Finished resetting 'LocalMapping'!", Verbose::VERBOSITY_VERY_VERBOSE);
         }
 
         // Reset Loop Closing
-        Verbose::PrintMess("Reseting Loop Closing...", Verbose::VERBOSITY_NORMAL);
+        Verbose::PrintMess("[Tracking] Reseting 'LoopClosing' ...", Verbose::VERBOSITY_NORMAL);
         mpLoopClosing->RequestResetActiveMap(pMap);
-        Verbose::PrintMess("done", Verbose::VERBOSITY_NORMAL);
+        Verbose::PrintMess("[Tracking] Finished resetting 'LocalMapping'!", Verbose::VERBOSITY_NORMAL);
 
         // Clear BoW Database
-        Verbose::PrintMess("Reseting Database", Verbose::VERBOSITY_NORMAL);
-        mpKeyFrameDB->clearMap(pMap); // Only clear the active map references
-        Verbose::PrintMess("done", Verbose::VERBOSITY_NORMAL);
+        Verbose::PrintMess("[Tracking] Reseting 'Database' ...", Verbose::VERBOSITY_NORMAL);
+        mpKeyFrameDB->clearMap(pMap);
+        Verbose::PrintMess("[Tracking] Finished resetting 'Database'!", Verbose::VERBOSITY_NORMAL);
 
         // Clear Map (this erase MapPoints and KeyFrames)
         mpAtlas->clearMap();
 
-        // KeyFrame::nNextId = mpAtlas->GetLastInitKFid();
-        // Frame::nNextId = mnLastInitFrameId;
         mnLastInitFrameId = Frame::nNextId;
-        // mnLastRelocFrameId = mnLastInitFrameId;
-        mState = NO_IMAGES_YET; // NOT_INITIALIZED;
+        mState = NO_IMAGES_YET;
 
         mbReadyToInitializate = false;
 
-        list<bool> lbLost;
-        // lbLost.reserve(mlbLost.size());
         unsigned int index = mnFirstFrameId;
         for (Map *pMap : mpAtlas->GetAllMaps())
-        {
             if (pMap->GetAllKeyFrames().size() > 0)
-            {
                 if (index > pMap->GetLowerKFID())
                     index = pMap->GetLowerKFID();
-            }
-        }
 
-        int num_lost = 0;
-
+        // Count lost frames
+        std::list<bool> lbLost;
+        int lostFrameCount = 0;
         for (list<bool>::iterator ilbL = mlbLost.begin(); ilbL != mlbLost.end(); ilbL++)
         {
             if (index < mnInitialFrameId)
@@ -3985,13 +3977,11 @@ namespace ORB_SLAM3
             else
             {
                 lbLost.push_back(true);
-                num_lost += 1;
+                lostFrameCount += 1;
             }
-
             index++;
         }
-
-        std::cout << "[Tracking] " << num_lost << " frames are set to lost!" << endl;
+        std::cout << "[Tracking] " << lostFrameCount << " frames were set to lost!" << endl;
 
         mlbLost = lbLost;
 
@@ -4008,8 +3998,6 @@ namespace ORB_SLAM3
 
         if (mpViewer)
             mpViewer->Release();
-
-        Verbose::PrintMess("   End reseting! ", Verbose::VERBOSITY_NORMAL);
     }
 
     vector<MapPoint *> Tracking::GetLocalMapMPS()

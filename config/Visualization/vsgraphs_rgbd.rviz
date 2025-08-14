@@ -6,7 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Raw Frames1
-        - /IMU1/Topic1
+        - /IMU1
         - /IMU1/Shape1
       Splitter Ratio: 0.5382353067398071
     Tree Height: 621
@@ -182,14 +182,14 @@ Visualization Manager:
       Position Tolerance: 0.10000000149011612
       Shape:
         Alpha: 0.4000000059604645
-        Axes Length: 0.15000000596046448
-        Axes Radius: 0.009999999776482582
+        Axes Length: 0.10000000149011612
+        Axes Radius: 0.014999999664723873
         Color: 0; 170; 0
         Head Length: 0.10000000149011612
         Head Radius: 0.05000000074505806
         Shaft Length: 0.10000000149011612
         Shaft Radius: 0.019999999552965164
-        Value: Arrow
+        Value: Axes
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -433,25 +433,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 11.514383316040039
+      Distance: 14.120436668395996
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.37125498056411743
-        Y: -0.05355975031852722
-        Z: 2.7543697357177734
+        X: -0.6906431913375854
+        Y: 0.4020080864429474
+        Z: 1.5684432983398438
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.23020219802856445
+      Pitch: 0.10520239174365997
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.545413970947266
+      Yaw: 4.445407867431641
     Saved: ~
 Window Geometry:
   Displays:
