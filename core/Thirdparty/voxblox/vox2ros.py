@@ -20,7 +20,7 @@ import rclpy
 import socket
 import argparse
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped
+from visualization_msgs.msg import MarkerArray
 
 # Variables
 PORT = 5000
@@ -33,7 +33,7 @@ FOXY_VOXBLOX_TOPIC = "/voxblox_skeletonizer/sparse_graph"
 class FoxyRelay(Node):
     def __init__(self, host="0.0.0.0"):
         super().__init__('voxblox_foxy_relay')
-        self.sub = self.create_subscription(PoseStamped, FOXY_VOXBLOX_TOPIC, self.callback, 10)
+        self.sub = self.create_subscription(MarkerArray, FOXY_VOXBLOX_TOPIC, self.callback, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, PORT))
         self.sock.listen(1)
@@ -41,7 +41,7 @@ class FoxyRelay(Node):
         self.conn, addr = self.sock.accept()
         self.get_logger().info(f"[Voxblox_Foxy] Connected to the client by {addr}!")
 
-    def callback(self, msg: PoseStamped):
+    def callback(self, msg: MarkerArray):
         data = {
             "header": {
                 "stamp": {"sec": msg.header.stamp.sec, "nanosec": msg.header.stamp.nanosec},
@@ -73,7 +73,7 @@ class FoxyRelay(Node):
 class JazzyRelay(Node):
     def __init__(self, foxy_host):
         super().__init__('vsgraphs_jazzy_relay')
-        self.pub = self.create_publisher(PoseStamped, PUBLISHER_TOPIC, 10)
+        self.pub = self.create_publisher(MarkerArray, PUBLISHER_TOPIC, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((foxy_host, PORT))
         self.sock.setblocking(False)
@@ -95,7 +95,7 @@ class JazzyRelay(Node):
                 continue
             try:
                 msg_dict = json.loads(line)
-                msg = PoseStamped()
+                msg = MarkerArray()
                 msg.header.stamp.sec = msg_dict["header"]["stamp"]["sec"]
                 msg.header.stamp.nanosec = msg_dict["header"]["stamp"]["nanosec"]
                 msg.header.frame_id = msg_dict["header"]["frame_id"]
