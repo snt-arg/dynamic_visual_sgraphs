@@ -24,20 +24,22 @@ from geometry_msgs.msg import PoseStamped
 
 # Variables
 PORT = 5000
+VSGRAPHS_TOPIC = "/jazzy_pose"
+VOXBLOX_TOPIC = "/voxblox_skeletonizer/sparse_graph"
 
 # ---------------------------
 # Foxy side (Voxblox): subscriber → TCP sender
 # ---------------------------
 class FoxyRelay(Node):
     def __init__(self, host="0.0.0.0"):
-        super().__init__('foxy_relay')
-        self.sub = self.create_subscription(PoseStamped, '/foxy_pose', self.callback, 10)
+        super().__init__('voxblox_foxy_relay')
+        self.sub = self.create_subscription(PoseStamped, VOXBLOX_TOPIC, self.callback, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, PORT))
         self.sock.listen(1)
-        self.get_logger().info(f"[Foxy] Waiting for Jazzy client on {host}:{PORT} ...")
+        self.get_logger().info(f"[Voxblox_Foxy] Waiting for Jazzy client (vS-Graphs) on {host}:{PORT} ...")
         self.conn, addr = self.sock.accept()
-        self.get_logger().info(f"[Foxy] Connected by {addr}")
+        self.get_logger().info(f"[Voxblox_Foxy] Connected by {addr}!")
 
     def callback(self, msg: PoseStamped):
         data = {
@@ -62,7 +64,7 @@ class FoxyRelay(Node):
         try:
             self.conn.sendall((json.dumps(data) + "\n").encode('utf-8'))
         except (BrokenPipeError, ConnectionResetError):
-            self.get_logger().warn("[Foxy] Lost connection to Jazzy client")
+            self.get_logger().warn("[Voxblox_Foxy] Lost connection to Jazzy (vS-Graphs) client!")
 
 
 # ---------------------------
@@ -70,13 +72,13 @@ class FoxyRelay(Node):
 # ---------------------------
 class JazzyRelay(Node):
     def __init__(self, foxy_host):
-        super().__init__('jazzy_relay')
-        self.pub = self.create_publisher(PoseStamped, '/jazzy_pose', 10)
+        super().__init__('vsgraphs_jazzy_relay')
+        self.pub = self.create_publisher(PoseStamped, VSGRAPHS_TOPIC, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((foxy_host, PORT))
         self.sock.setblocking(False)
         self.buffer = ""
-        self.get_logger().info(f"[Jazzy] Connected to Foxy relay at {foxy_host}:{PORT}")
+        self.get_logger().info(f"[vS-Graphs Jazzy] Connected to Foxy relay at {foxy_host}:{PORT}")
         self.create_timer(0.01, self.receive_loop)
 
     def receive_loop(self):
@@ -106,7 +108,7 @@ class JazzyRelay(Node):
                 msg.pose.orientation.w = msg_dict["pose"]["orientation"]["w"]
                 self.pub.publish(msg)
             except json.JSONDecodeError:
-                self.get_logger().warn("[Jazzy] Failed to decode JSON line")
+                self.get_logger().warn("[vS-Graphs Jazzy] Failed to decode JSON line")
 
 
 # ---------------------------
@@ -114,18 +116,20 @@ class JazzyRelay(Node):
 # ---------------------------
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["foxy", "jazzy"], required=True,
-                        help="Run as Foxy relay (server) or Jazzy relay (client)")
+    parser.add_argument("--mode", choices=["voxblox_foxy", "vsgraphs_jazzy"], required=True,
+                        help="Run as Voxblox Foxy relay (server) or vS-Graphs Jazzy relay (client)!")
     parser.add_argument("--foxy-host", default="127.0.0.1",
-                        help="IP address of Foxy container (for Jazzy mode)")
+                        help="IP address of Foxy container (for Jazzy mode)!")
     args = parser.parse_args()
 
     rclpy.init()
 
-    if args.mode == "foxy":
+    if args.mode == "voxblox_foxy":
         node = FoxyRelay()
-    else:
+    elif args.mode == "vsgraphs_jazzy":
         node = JazzyRelay(args.foxy_host)
+    else:
+        raise ValueError("Invalid mode! Use 'voxblox_foxy' or 'vsgraphs_jazzy'.")
 
     try:
         rclpy.spin(node)
