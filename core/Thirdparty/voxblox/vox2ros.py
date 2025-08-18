@@ -24,8 +24,8 @@ from geometry_msgs.msg import PoseStamped
 
 # Variables
 PORT = 5000
-VSGRAPHS_TOPIC = "/jazzy_pose"
-VOXBLOX_TOPIC = "/voxblox_skeletonizer/sparse_graph"
+PUBLISHER_TOPIC = "/vox2ros/sparse_graph"
+FOXY_VOXBLOX_TOPIC = "/voxblox_skeletonizer/sparse_graph"
 
 # ---------------------------
 # Foxy side (Voxblox): subscriber → TCP sender
@@ -33,13 +33,13 @@ VOXBLOX_TOPIC = "/voxblox_skeletonizer/sparse_graph"
 class FoxyRelay(Node):
     def __init__(self, host="0.0.0.0"):
         super().__init__('voxblox_foxy_relay')
-        self.sub = self.create_subscription(PoseStamped, VOXBLOX_TOPIC, self.callback, 10)
+        self.sub = self.create_subscription(PoseStamped, FOXY_VOXBLOX_TOPIC, self.callback, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, PORT))
         self.sock.listen(1)
         self.get_logger().info(f"[Voxblox_Foxy] Waiting for Jazzy client (vS-Graphs) on {host}:{PORT} ...")
         self.conn, addr = self.sock.accept()
-        self.get_logger().info(f"[Voxblox_Foxy] Connected by {addr}!")
+        self.get_logger().info(f"[Voxblox_Foxy] Connected to the client by {addr}!")
 
     def callback(self, msg: PoseStamped):
         data = {
@@ -73,7 +73,7 @@ class FoxyRelay(Node):
 class JazzyRelay(Node):
     def __init__(self, foxy_host):
         super().__init__('vsgraphs_jazzy_relay')
-        self.pub = self.create_publisher(PoseStamped, VSGRAPHS_TOPIC, 10)
+        self.pub = self.create_publisher(PoseStamped, PUBLISHER_TOPIC, 10)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((foxy_host, PORT))
         self.sock.setblocking(False)
