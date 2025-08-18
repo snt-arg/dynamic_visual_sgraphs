@@ -144,10 +144,6 @@ RUN mkdir -p /home/$USERNAME/workspace/install/situational_graphs_reasoning/shar
 
 WORKDIR /home/$USERNAME/workspace/src/
 
-# RUN --mount=type=ssh git clone git@github.com:snt-arg/mav_voxblox_planning.git
-# RUN --mount=type=ssh wstool init . ./mav_voxblox_planning/install/install_ssh.rosinstall
-# RUN --mount=type=ssh wstool update
-
 # Download the yoso checkpoint
 RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
 RUN mv yoso_res50_coco.pth /home/$USERNAME/workspace/src/scene_segment_ros/include/
@@ -184,6 +180,13 @@ RUN echo "#!/bin/bash" >> /entrypoint.sh \
     && echo "echo \"source /home/$USERNAME/workspace/install/setup.bash\" >> ~/.bashrc" >> /entrypoint.sh \
     && echo 'exec "$@"' >> /entrypoint.sh \
     && chmod a+x /entrypoint.sh
+
+# ------------------------------------
+# Download Vox2Ros Toolkit for Voxblox
+# ------------------------------------
+WORKDIR /home/$USERNAME/workspace/voxblox
+RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/vox2ros.py -o /home/$USERNAME/workspace/voxblox/vox2ros.py
+RUN chmod +x /home/$USERNAME/workspace/voxblox/vox2ros.py
 
 USER $USERNAME
 RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
