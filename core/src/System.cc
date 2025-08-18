@@ -109,9 +109,8 @@ namespace ORB_SLAM3
 
         mStrVocabularyFilePath = strVocFile;
 
-        // Loading ORB Vocabulary
-        cout << "[ORB Vocabulary]" << endl;
-        cout << "- Loading ORB Vocabulary ..." << endl;
+        // ORB Vocabulary
+        std::cout << "[ORB Vocabulary] Loading ORB Vocabulary ..." << std::endl;
 
         mpVocabulary = new ORBVocabulary();
         bool bVocLoad = mpVocabulary->loadFromBinFile(strVocFile);

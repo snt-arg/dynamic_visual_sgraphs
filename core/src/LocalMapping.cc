@@ -134,7 +134,7 @@ namespace ORB_SLAM3
                             {
                                 if ((mTinit < 10.f) && (dist < 0.02))
                                 {
-                                    cout << "Not enough motion for initializing. Reseting..." << endl;
+                                    std::cout << "[Mapping] Not enough motion for map initializing. Reseting..." << std::endl;
                                     unique_lock<mutex> lock(mMutexReset);
                                     mbResetRequestedActiveMap = true;
                                     mpMapToReset = mpCurrentKeyFrame->GetMap();
@@ -194,6 +194,9 @@ namespace ORB_SLAM3
                     vdKFCulling_ms.push_back(timeKFCulling_ms);
 #endif
 
+                    // Staged IMU initialization
+                    // [Hint] For Visual-Inertial SLAM, the IMU biases and scale are initially unknown (the first 5secs). 
+                    // After 15 seconds, they are locked to avoid drift.
                     if ((mTinit < 50.0f) && mbInertial)
                     {
                         // Enter here everytime local-mapping is called
@@ -201,32 +204,34 @@ namespace ORB_SLAM3
                         {
                             if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA1())
                             {
+                                // First stage of IMU initialization (5 seconds after initialization)
                                 if (mTinit > 5.0f)
                                 {
-                                    cout << "start VIBA 1" << endl;
+                                    std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#1) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA1();
                                     if (mbMonocular)
                                         InitializeIMU(1.f, 1e5, true);
                                     else
                                         InitializeIMU(1.f, 1e5, true);
-                                    cout << "end VIBA 1" << endl;
+                                    std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#1) ..." << std::endl;
                                 }
                             }
                             else if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
+                                // Second stage of IMU initialization (15 seconds after initialization)
                                 if (mTinit > 15.0f)
                                 {
-                                    cout << "start VIBA 2" << endl;
+                                    std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#2) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA2();
                                     if (mbMonocular)
                                         InitializeIMU(0.f, 0.f, true);
                                     else
                                         InitializeIMU(0.f, 0.f, true);
-                                    cout << "end VIBA 2" << endl;
+                                    std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#2) ..." << std::endl;
                                 }
                             }
 
-                            // scale refinement
+                            // Scale refinement
                             if (((mpAtlas->KeyFramesInMap()) <= 200) &&
                                 ((mTinit > 25.0f && mTinit < 25.5f) ||
                                  (mTinit > 35.0f && mTinit < 35.5f) ||
@@ -1104,7 +1109,7 @@ namespace ORB_SLAM3
             {
                 executed_reset = true;
 
-                cout << "Reseting Atlas in Local Mapping ..." << endl;
+                cout << "[Mapping] Reseting Atlas in 'LocalMapping' ..." << endl;
                 mlNewKeyFrames.clear();
                 mlpRecentAddedMapPoints.clear();
                 mbResetRequested = false;
@@ -1121,7 +1126,7 @@ namespace ORB_SLAM3
             if (mbResetRequestedActiveMap)
             {
                 executed_reset = true;
-                cout << "Reseting the Current Map in Local Mapping ..." << endl;
+                cout << "[Mapping] Reseting the Current Map in 'LocalMapping' ..." << endl;
 
                 mlNewKeyFrames.clear();
                 mlpRecentAddedMapPoints.clear();
@@ -1135,8 +1140,6 @@ namespace ORB_SLAM3
                 mbResetRequestedActiveMap = false;
             }
         }
-        if (executed_reset)
-            cout << "Reset free the mutex in Local Mapping" << endl;
     }
 
     void LocalMapping::RequestFinish()

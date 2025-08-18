@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Raw Frames1
+        - /IMU1/Shape1
       Splitter Ratio: 0.5382353067398071
     Tree Height: 621
   - Class: rviz_common/Selection
@@ -156,6 +157,45 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /vs_graphs/camera_pose_vis
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz_default_plugins/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 100
+      Name: IMU
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 0.4000000059604645
+        Axes Length: 0.10000000149011612
+        Axes Radius: 0.014999999664723873
+        Color: 0; 170; 0
+        Head Length: 0.10000000149011612
+        Head Radius: 0.05000000074505806
+        Shaft Length: 0.10000000149011612
+        Shaft Radius: 0.019999999552965164
+        Value: Axes
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /vs_graphs/body_odom
       Value: true
     - Alpha: 0.5
       Autocompute Intensity Bounds: true
@@ -392,25 +432,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 18.096187591552734
+      Distance: 19.231632232666016
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.6509303450584412
-        Y: 1.7994542121887207
-        Z: 2.7419095039367676
+        X: 0.42981845140457153
+        Y: 0.9407592415809631
+        Z: 2.111768960952759
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5447969436645508
+      Pitch: 0.5197969079017639
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.540409088134766
+      Yaw: 6.240423679351807
     Saved: ~
 Window Geometry:
   Displays:

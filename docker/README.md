@@ -60,5 +60,5 @@ docker compose up -d
 docker exec -it vsgraphs bash
 
 # Inside the container
-ros2 launch vs_graphs vs_graphs.launch.py
+ros2 launch vs_graphs rgbd.launch.py
 ```

@@ -212,33 +212,50 @@ ament_target_dependencies(${PROJECT_NAME}_lib
   situational_graphs_msgs
 )
 
-# ROS2 node
-add_executable(ros_rgbd
-  src/ros_rgbd.cc
+# Common source files
+set(COMMON_SOURCES
   src/common.cc
 )
 
-target_link_libraries(ros_rgbd
-  ${PROJECT_NAME}_lib
-)
-
-ament_target_dependencies(ros_rgbd
+# Common dependencies
+set(COMMON_DEPENDENCIES
+  tf2
   rclcpp
+  tf2_ros
+  nav_msgs
+  std_msgs
+  cv_bridge
   sensor_msgs
   geometry_msgs
-  cv_bridge
-  std_msgs
-  nav_msgs
-  message_filters
-  tf2
-  tf2_ros
   segmenter_ros
+  message_filters
   situational_graphs_msgs
 )
 
-# Make sure executables can use the custom messages
-rosidl_target_interfaces(ros_rgbd ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# ROS2 nodes
+function(add_ros2_node target_name cpp_file)
+  add_executable(${target_name}
+    ${COMMON_SOURCES}
+    ${cpp_file}
+  )
+  target_link_libraries(${target_name}
+    ${PROJECT_NAME}_lib
+  )
+  ament_target_dependencies(${target_name}
+    ${COMMON_DEPENDENCIES}
+  )
+  rosidl_target_interfaces(${target_name} ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+  install(TARGETS ${target_name}
+    DESTINATION lib/${PROJECT_NAME}
+  )
+endfunction()
+
+# ROS2 nodes
+add_ros2_node(ros_rgbd          src/ros_rgbd.cc)
+add_ros2_node(ros_rgbd_inertial src/ros_rgbd_inertial.cc)
+
+# Install other resources
 install(
   DIRECTORY launch config core/Vocabulary
   DESTINATION share/${PROJECT_NAME}
@@ -246,12 +263,6 @@ install(
 
 # Install the library
 install(TARGETS ${PROJECT_NAME}_lib
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-# Install executables
-install(TARGETS
-  ros_rgbd
   DESTINATION lib/${PROJECT_NAME}
 )
 
