@@ -20,6 +20,7 @@ To launch the system with default parameters, use the following command:
 
 ```bash
 ros2 launch vs_graphs rgbd.launch.py
+# Or 'rgbd-imu.launch.py' for visual-inertial version
 ```
 
 ## 📸 Live Mode - RealSense D435(i)
