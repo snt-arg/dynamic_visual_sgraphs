@@ -109,13 +109,13 @@ def generate_launch_description():
                 name="bc_to_se",
                 package="tf2_ros",
                 executable="static_transform_publisher",
-                arguments=["0", "-3", "0", "0", "0", "0", "build_comp", "struc_elem"],
+                arguments=["0", "0", "3", "0", "0", "0", "build_comp", "struc_elem"],
             ),
             Node(
                 package="tf2_ros",
                 name="world_to_bc",
                 executable="static_transform_publisher",
-                arguments=["0", "-5", "0", "0", "0", "0", "world", "build_comp"],
+                arguments=["0", "0", "5", "0", "0", "0", "world", "build_comp"],
             ),
             Node(
                 package="tf2_ros",
