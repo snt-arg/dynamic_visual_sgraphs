@@ -13,7 +13,7 @@ vS-Graphs interfaces with several ROS topics to process sensor data, publish sem
 | `/aruco_marker_publisher/markers`    | `aruco_msgs::MarkerArray`              | Detected fiducial markers from the `aruco_ros` library |
 | `/camera/color/image_segment`        | `segmenter_ros::SegmenterDataMsg`      | Semantic segmentation results                          |
 | `/camera/color/image_segment_vis`    | `segmenter_ros::VSGraphDataMsg`        | Visualized semantic segmentation frame                 |
-| `/vox2ros/skeleton_sparse_graph`     | `visualization_msgs::MarkerArray`      | Sparse graph representation of the free-space topology |
+| `/vsgraphs_tools/vox2ros_skeleton_graph`     | `visualization_msgs::MarkerArray`      | Sparse graph representation of the free-space topology using [vox2ros](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox) |
 | `/gnn_room_detector`                 | `vs_graphs::VSGraphsAllDetectdetRooms` | GNN-based room segmentation output                     |
 
 > 💡 To customize input topics and other parameters at launch time, please refer to the [⚙️ vS-Graphs Launch Arguments](../launch/README.md) page for a full list and descriptions.

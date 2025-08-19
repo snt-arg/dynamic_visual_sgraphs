@@ -28,15 +28,12 @@ You can read about the SLAM-related configuration parameters (independent of the
 Once you have installed the required dependencies and configured the parameters, you are ready to run **vS-Graphs**! Follow the steps below to get started:
 
 1. Source vS-Graphs and run it by `ros2 launch vs_graphs rgbd.launch.py` for RGB-D version (or `rgbd-imu.launch.py` for RGB-D-Inertial). It will automatically run the vS-Graphs core and the semantic segmentation module for **building component** (walls and ground surfaces) recognition.
-2. (Optional) If you intend to detect **structural elements** (rooms and corridors) too, run the cluster-based solution using `ros2 launch voxblox_skeleton skeletonize_map_vsgraphs.launch 2>/dev/null`.
-
-   - In this case, you need to source `voxblox` with a `--extend` command, and then launch the framework:
+2. (Optional) If you intend to detect **structural elements** (rooms and corridors) too, check the **Voxblox Integration** procedure in the [Installation Guide](/doc/INSTALLATION.md).
 
    ```bash
    source /opt/ros/jazzy/setup.bash &&
    source ~/[VSGRAPHS_PATH]/install/setup.bash &&
-   source ~/[VOXBLOX_PATH]/install/setup.bash --extend &&
-   ros2 launch vs_graphs rgbd.launch.py
+   ros2 launch vs_graphs rgbd.launch.py # Or rgbd-imu.launch.py
    ```
 
 3. (Optional) If you have a database of ArUco markers representing room/corridor labels, do not forget to run `aruco_ros` using `ros2 launch aruco_ros marker_publisher.launch`.
