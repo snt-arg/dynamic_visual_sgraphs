@@ -1,0 +1,22 @@
+procs:
+  ---- vS-Graphs ----:
+    shell: ''
+    autostart: false
+  vS-Graphs RGB-D:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd.launch.py"'
+    autostart: false
+  vS-Graphs RGB-D-IMU:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd-imu.launch.py"'
+    autostart: false
+  
+  ---- Tools ----:
+    shell: ''
+    autostart: false
+  Vox2ROS Tool:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      python ~/workspace/vsgraphs_tools/vox2ros.py --mode vsgraphs_jazzy"'
+    autostart: false

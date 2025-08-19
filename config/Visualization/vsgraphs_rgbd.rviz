@@ -4,10 +4,7 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Raw Frames1
         - /IMU1/Shape1
-        - /Free-Space Cluster1/Status1
       Splitter Ratio: 0.6147058606147766
     Tree Height: 621
   - Class: rviz_common/Selection
@@ -391,11 +388,7 @@ Visualization Manager:
       Enabled: true
       Name: Free-Space Cluster
       Namespaces:
-        closed_spaces: true
-        connected_edges_0: true
-        connected_vertices_0: true
-        edges: true
-        vertices: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
