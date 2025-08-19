@@ -191,10 +191,8 @@ RUN echo "#!/bin/bash" >> /entrypoint.sh \
 WORKDIR /home/$USERNAME/workspace/vsgraphs_tools
 RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/vox2ros.py -o /home/$USERNAME/workspace/vsgraphs_tools/vox2ros.py
 RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/relay_jazzy.py -o /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
-RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/relay_noetic.py -o /home/$USERNAME/workspace/vsgraphs_tools/relay_noetic.py
 RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/vox2ros.py
 RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
-RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/relay_noetic.py
 
 USER $USERNAME
 RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
