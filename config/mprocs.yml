@@ -12,7 +12,16 @@ procs:
       source ~/workspace/install/setup.bash && 
       ros2 launch vs_graphs rgbd-imu.launch.py"'
     autostart: false
-  
+
+  ---- Procedures ----:
+    shell: ''
+    autostart: false
+  Build vS-Graphs:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-select vs_graphs"'
+    autostart: false
+
   ---- Tools ----:
     shell: ''
     autostart: false
