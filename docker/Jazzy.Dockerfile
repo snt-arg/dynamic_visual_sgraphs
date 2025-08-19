@@ -189,9 +189,7 @@ RUN echo "#!/bin/bash" >> /entrypoint.sh \
 # Download Vox2Ros Toolkit for Voxblox
 # ------------------------------------
 WORKDIR /home/$USERNAME/workspace/vsgraphs_tools
-RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/vox2ros.py -o /home/$USERNAME/workspace/vsgraphs_tools/vox2ros.py
 RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/relay_jazzy.py -o /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
-RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/vox2ros.py
 RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
 
 USER $USERNAME
@@ -202,7 +200,7 @@ WORKDIR /home/$USERNAME/workspace/
 # Aliases and Environment Setup
 # --------------------------
 RUN echo "alias mprocs='mprocs -c /home/$USERNAME/workspace/src/visual_sgraphs/config/mprocs.yml'" >> ~/.bashrc && \
-    echo "alias vox2ros='python /home/$USERNAME/workspace/vsgraphs_tools/vox2ros.py --mode vsgraphs_jazzy'" >> ~/.bashrc
+    echo "alias relay_rec='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_receive'" >> ~/.bashrc
 
 ENTRYPOINT ["/entrypoint.sh"]
 USER $USERNAME

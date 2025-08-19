@@ -27,9 +27,5 @@ procs:
     autostart: false
   Vox2ROS Tool:
     shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
-      python ~/workspace/vsgraphs_tools/vox2ros.py --mode vsgraphs_jazzy"'
-    autostart: false
-  Vox2ROS Tool:
-    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
       python ~/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_receive"'
     autostart: false
