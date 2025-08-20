@@ -159,7 +159,6 @@ RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symli
 
 # --- Miscalleanous ---
 RUN ldconfig
-RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/$USERNAME/.bashrc
 
 # --- Clean up ---
 # Remove the apt list files
