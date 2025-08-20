@@ -157,13 +157,6 @@ RUN apt-get update && \
 WORKDIR /home/$USERNAME/workspace/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
 
-# ---------------------------
-# Download and Install mprocs
-# ---------------------------
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y \
-    && . "$HOME/.cargo/env" \
-    && cargo install mprocs
-
 # --- Miscalleanous ---
 RUN ldconfig
 RUN echo 'export PS1="[\u@\h \W] 🐳 "' >> /home/$USERNAME/.bashrc
@@ -195,6 +188,13 @@ RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
 USER $USERNAME
 RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
 WORKDIR /home/$USERNAME/workspace/
+
+# ---------------------------
+# Download and Install mprocs
+# ---------------------------
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && cargo install mprocs
 
 # --------------------------
 # Aliases and Environment Setup
