@@ -101,6 +101,12 @@ def generate_launch_description():
             # Static Transforms
             Node(
                 package="tf2_ros",
+                name="map_to_map_elevated", # For Voxblox Skeleton
+                executable="static_transform_publisher",
+                arguments=["0", "0", "0", "0", "0", "0", "map", "map_elevated"],
+            ),
+            Node(
+                package="tf2_ros",
                 executable="static_transform_publisher",
                 name="bc_to_se",
                 arguments=["0", "-3", "0", "0", "0", "0", "build_comp", "struc_elem"],
