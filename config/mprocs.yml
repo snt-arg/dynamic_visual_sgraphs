@@ -25,7 +25,11 @@ procs:
   ---- Tools ----:
     shell: ''
     autostart: false
-  Vox2ROS Tool:
+  Voxblox Client:
     shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
-      python ~/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_receive"'
+      python ~/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_client"'
+    autostart: false
+  PointCloud Server:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      python ~/workspace/vsgraphs_tools/relay_jazzy.py --mode pc_server"'
     autostart: false

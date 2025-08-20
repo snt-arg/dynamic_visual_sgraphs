@@ -200,7 +200,8 @@ WORKDIR /home/$USERNAME/workspace/
 # Aliases and Environment Setup
 # --------------------------
 RUN echo "alias mprocs='mprocs -c /home/$USERNAME/workspace/src/visual_sgraphs/config/mprocs.yml'" >> ~/.bashrc && \
-    echo "alias relay_rec='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_receive'" >> ~/.bashrc
+    echo "alias rel_vox='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_client'" >> ~/.bashrc && \
+    echo "alias rel_pcl='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode pc_server'" >> ~/.bashrc
 
 ENTRYPOINT ["/entrypoint.sh"]
 USER $USERNAME
