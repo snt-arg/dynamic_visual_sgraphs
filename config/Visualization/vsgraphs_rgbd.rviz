@@ -394,7 +394,7 @@ Visualization Manager:
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /vsgraphs_tools/vox2ros_skeleton_graph
+        Value: /voxblox_skeletonizer/sparse_graph
       Value: true
   Enabled: true
   Global Options:

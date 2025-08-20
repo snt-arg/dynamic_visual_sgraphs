@@ -131,7 +131,7 @@ int main(int argc, char **argv)
 
     // Subsriber to get skeletonized graph from the `voxblox` module
     auto subVoxbloxSkeletonMesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
-        "/vsgraphs_tools/vox2ros_skeleton_graph", 1,
+        "/voxblox_skeletonizer/sparse_graph", 1,
         [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
         { igb->GrabVoxbloxSkeletonGraph(*msg); });
 
