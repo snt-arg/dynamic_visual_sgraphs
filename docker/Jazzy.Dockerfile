@@ -15,8 +15,8 @@ ENV CUDA_HOME=/usr/local/cuda \
 
 # --- Fix MPI issue ---
 RUN mkdir -p /opt/hpcx/ompi/lib/x86_64-linux-gnu \
- && ln -s /opt/hpcx/ompi /opt/hpcx/ompi/lib/x86_64-linux-gnu/openmpi \
- && dpkg-reconfigure libc-bin
+    && ln -s /opt/hpcx/ompi /opt/hpcx/ompi/lib/x86_64-linux-gnu/openmpi \
+    && dpkg-reconfigure libc-bin
 
 # --- Handle user creation ---
 RUN if id -u $USER_UID ; then userdel "$(id -un $USER_UID)" ; fi
@@ -121,13 +121,10 @@ RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segmen
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
 # Repositories for GNN-based room detection and reasoning
-RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_wrapper.git
-RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_datasets.git
-RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_reasoning.git
-RUN --mount=type=ssh git clone -b main git@github.com:snt-arg/situational_graphs_reasoning_msgs.git
-
-# USER $USERNAME
-# RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
+# RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_wrapper.git
+# RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_datasets.git
+# RUN --mount=type=ssh git clone -b develop git@github.com:snt-arg/situational_graphs_reasoning.git
+# RUN --mount=type=ssh git clone -b main git@github.com:snt-arg/situational_graphs_reasoning_msgs.git
 
 # Install the vS-Graphs dependencies
 WORKDIR /home/$USERNAME/workspace/src/visual_sgraphs/docker
@@ -135,18 +132,14 @@ RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
 
 # [Hint] Temp. fix for installing ROS2 Humble repositories (GNN-based room detection) in Jazzy
 # (Read more: https://github.com/ros2/ros2/issues/1702)
-RUN pip3 install --break-system-packages setuptools==79.0.1
+# RUN pip3 install --break-system-packages setuptools==79.0.1
 
 # Install reasoning dependencies
-RUN pip3 install --break-system-packages shapely==2.1.1 torch-geometric==2.6.1 transforms3d==0.4.2
-RUN mkdir -p /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
-    && chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
+# RUN pip3 install --break-system-packages shapely==2.1.1 torch-geometric==2.6.1 transforms3d==0.4.2
+# RUN mkdir -p /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
+#     && chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
 
 WORKDIR /home/$USERNAME/workspace/src/
-
-# RUN --mount=type=ssh git clone git@github.com:snt-arg/mav_voxblox_planning.git
-# RUN --mount=type=ssh wstool init . ./mav_voxblox_planning/install/install_ssh.rosinstall
-# RUN --mount=type=ssh wstool update
 
 # Download the yoso checkpoint
 RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
@@ -154,15 +147,22 @@ RUN mv yoso_res50_coco.pth /home/$USERNAME/workspace/src/scene_segment_ros/inclu
 
 # USER root
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt-get update && apt-get install -y ros-jazzy-rviz-visual-tools
-RUN sudo apt install ros-jazzy-pcl-ros
+RUN apt-get update && apt-get install -y ros-${ROS_DISTRO}-rviz-visual-tools
+RUN sudo apt install ros-${ROS_DISTRO}-pcl-ros
 
 RUN apt-get update && \
-    apt-get install -y ros-jazzy-depth-image-proc ros-jazzy-backward-ros
+    apt-get install -y ros-${ROS_DISTRO}-depth-image-proc ros-${ROS_DISTRO}-backward-ros ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
 
 # Build the workspace
 WORKDIR /home/$USERNAME/workspace/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release && rosdep update"
+
+# ---------------------------
+# Download and Install mprocs
+# ---------------------------
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y \
+    && . "$HOME/.cargo/env" \
+    && cargo install mprocs
 
 # --- Miscalleanous ---
 RUN ldconfig
@@ -185,9 +185,23 @@ RUN echo "#!/bin/bash" >> /entrypoint.sh \
     && echo 'exec "$@"' >> /entrypoint.sh \
     && chmod a+x /entrypoint.sh
 
+# ------------------------------------
+# Download Vox2Ros Toolkit for Voxblox
+# ------------------------------------
+WORKDIR /home/$USERNAME/workspace/vsgraphs_tools
+RUN curl -L https://raw.githubusercontent.com/snt-arg/vsgraphs_tools/refs/heads/main/Voxblox/relay_jazzy.py -o /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
+RUN chmod +x /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py
+
 USER $USERNAME
 RUN sudo chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace
 WORKDIR /home/$USERNAME/workspace/
+
+# --------------------------
+# Aliases and Environment Setup
+# --------------------------
+RUN echo "alias mprocs='mprocs -c /home/$USERNAME/workspace/src/visual_sgraphs/config/mprocs.yml'" >> ~/.bashrc && \
+    echo "alias rel_vox='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode voxblox_client'" >> ~/.bashrc && \
+    echo "alias rel_pcl='python /home/$USERNAME/workspace/vsgraphs_tools/relay_jazzy.py --mode pc_server'" >> ~/.bashrc
 
 ENTRYPOINT ["/entrypoint.sh"]
 USER $USERNAME

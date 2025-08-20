@@ -92,16 +92,22 @@ pip install -r src/requirements.txt
 # Follow the rest installation guide in the repository
 ```
 
-### 🦊 Install Voxblox Skeleton <a id="voxblox"></a>
+### 🦊 Integrating with Voxblox Skeleton (Optional) <a id="voxblox"></a>
 
-To detect **structural elements** (such as rooms and corridors), vS-Graphs requires `loco planning` integrated with `voxblox`, available [here](https://github.com/snt-arg/mav_voxblox_planning/tree/master). This module provides free-space information crucial for **cluster-based structural element detection**. Clone and install the module using below commands:
+For detecting **structural elements** (such as rooms and corridors), vS-Graphs relies on `loco planning` integrated with `Voxblox`, available in [the mav_voxblox_planning repository](https://github.com/snt-arg/mav_voxblox_planning/tree/master). However, the original repository is built for **ROS1 Noetic** and is no longer actively maintained, which makes direct integration with modern **ROS2** systems challenging.
 
+To address this, we developed a dockerized solution (available in the [vS-Graphs Tools repository](https://github.com/snt-arg/vsgraphs_tools/tree/main)), which contains a Dockerfile for building the complete `Voxblox` environment and a bridging utility (`vox2ros`) that translates Voxblox messages into **ROS2 Jazzy**, compatible format for vS-Graphs. You can learn more about the tool and how to integrate it in [this guide](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox).
+
+The procedure of using the tool is as below:
+
+1. Download the tool [from here](https://github.com/snt-arg/vsgraphs_tools/blob/main/Voxblox/vox2ros.py) in your machine (if you are using vS-Graph's Docker, it will be there in `~/workspace/voxblox/vox2ros.py` path)
+2. Inside `vox2ros` Docker environment, run the `mprocs` command:
 ```bash
-# Clone (ROS1 Noetic)
-git clone git@github.com:snt-arg/mav_voxblox_planning.git
-wstool init . ./mav_voxblox_planning/install/install_ssh.rosinstall
-wstool update
-catkin config --cmake-args -DCMAKE_BUILD_TYPE=Release && catkin build
+mprocs # Run Voxblox, Bridge, and Vox2ROS (keep the order)
+```
+3. Run the Python file as the listener for vS-Graphs:
+```bash
+python /[path]/voxblox/vox2ros.py --mode vsgraphs_jazzy
 ```
 
 ## ⚙️ II. Build the Project

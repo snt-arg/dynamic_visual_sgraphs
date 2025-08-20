@@ -4,10 +4,8 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
-        - /Raw Frames1
         - /IMU1/Shape1
-      Splitter Ratio: 0.5382353067398071
+      Splitter Ratio: 0.6147058606147766
     Tree Height: 621
   - Class: rviz_common/Selection
     Name: Selection
@@ -386,6 +384,18 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /vs_graphs/structural_elements
       Value: false
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: Free-Space Cluster
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /vsgraphs_tools/vox2ros_skeleton_graph
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 255; 255; 255
@@ -432,7 +442,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 19.231632232666016
+      Distance: 15.471290588378906
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
