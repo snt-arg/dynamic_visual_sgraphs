@@ -631,7 +631,7 @@ namespace ORB_SLAM3
                 smallPlane->resetPlaneSemantics();
                 smallPlane->excludedFromAssoc = true;
 
-                std::cout << "- Re-associating planes #" << smallPlane->getId() << " & #"
+                std::cout << "Re-associating planes #" << smallPlane->getId() << " & #"
                           << bigPlane->getId() << " ..." << std::endl;
             }
         }

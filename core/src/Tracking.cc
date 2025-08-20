@@ -2812,7 +2812,7 @@ namespace ORB_SLAM3
 
         if (nmatches < 15)
         {
-            cout << "TRACK_REF_KF: Less than 15 matches!!\n";
+            std::cout << "[Tracking] Warning: Less than 15 features matched!" << std::endl;
             return false;
         }
 
@@ -3859,7 +3859,7 @@ namespace ORB_SLAM3
         else
         {
             mnLastRelocFrameId = mCurrentFrame.mnId;
-            cout << "Relocalized!!" << endl;
+            std::cout << "[Tracking] Relocalized!" << std::endl;
             return true;
         }
     }
