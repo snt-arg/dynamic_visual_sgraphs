@@ -27,7 +27,7 @@ sudo systemctl restart docker
 
 ## ⚙️ II. Build
 
-To build the Docker image, run the following command within this directory:
+You can build the Docker image using the command `docker compose build`. Otherwise, and if you want to manually build the Docker image, run the following command within this directory:
 
 ```bash
 docker build --ssh default -t vsgraphs -f Noetic.Dockerfile .
@@ -42,11 +42,11 @@ docker build --ssh default -t vsgraphs -f Noetic.Dockerfile .
 Use one of the below options:
 
 ```bash
-# [Option I] using Docker
-docker run -it -d --privileged --name vsgraphs -e DISPLAY=$DISPLAY -e XAUTHORITY=$XAUTHORITY -v /tmp/.X11-unix:/tmp/.X11-unix -v $XAUTHORITY:$XAUTHORITY vsgraphs
-
-# [Option II] using Docker Compose
+# [Option I] using Docker Compose
 docker compose up -d
+
+# [Option II] manual Docker image run
+docker run -it -d --privileged --name vsgraphs_ros2 -e DISPLAY=$DISPLAY -e XAUTHORITY=$XAUTHORITY -v /tmp/.X11-unix:/tmp/.X11-unix -v $XAUTHORITY:$XAUTHORITY vsgraphs_ros2
 
 # [Option III] using devcontainers
 # in `VSCode`, select "Reopen in Container"
@@ -57,8 +57,10 @@ docker compose up -d
 ### III-B. Run the Container
 
 ```bash
-docker exec -it vsgraphs bash
+docker exec -it vsgraphs_ros2 bash
 
 # Inside the container
 ros2 launch vs_graphs rgbd.launch.py
 ```
+
+You can even use the **mprocs** tool provided inside the Docker image, by simply running `mprocs` (an alias for `mprocs -c [path]/visual_sgraphs/config/mprocs.yml`) and choose the prepared command sets there.
