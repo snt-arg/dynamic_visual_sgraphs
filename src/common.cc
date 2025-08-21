@@ -1496,6 +1496,8 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
     // Reset the buffer
     skeletonClusterPoints.clear();
 
+    std::cout << "Setting Voxblox skeleton cluster with " << skeletonArray.markers.size() << " markers." << std::endl;
+
     for (const auto &skeleton : skeletonArray.markers)
     {
         // Take the points of the current cluster
@@ -1504,6 +1506,7 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
         // Pick only the messages starting with name "connected_vertices_[x]"
         if (skeleton.ns.compare(0, strlen("connected_vertices"), "connected_vertices") == 0)
         {
+            std::cout << "Processing skeleton cluster: " << skeleton.ns << std::endl;
             // Skip small clusters
             if (skeleton.points.size() > ORB_SLAM3::SystemParams::GetParams()->room_seg.min_cluster_vertices)
                 // Add the points of the cluster to the buffer

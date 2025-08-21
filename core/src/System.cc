@@ -110,7 +110,7 @@ namespace ORB_SLAM3
         mStrVocabularyFilePath = strVocFile;
 
         // ORB Vocabulary
-        std::cout << "[ORB Vocabulary] Loading ORB Vocabulary ..." << std::endl;
+        std::cout << "[System] Loading ORB Vocabulary ..." << std::endl;
 
         mpVocabulary = new ORBVocabulary();
         bool bVocLoad = mpVocabulary->loadFromBinFile(strVocFile);
@@ -120,38 +120,28 @@ namespace ORB_SLAM3
             cerr << "- Failed to open at: " << strVocFile << endl;
             exit(-1);
         }
-        cout << "- Vocabulary loaded!" << endl
-             << endl;
 
         // Create KeyFrame Database
-        cout << "[Atlas Map Manager]" << endl;
         mpKeyFrameDatabase = new KeyFrameDatabase(*mpVocabulary);
 
         bool loadedAtlas = false;
         if (mStrLoadAtlasFromFile.empty())
         {
             // Create the Atlas
-            cout << "- Initializing Atlas from scratch ..." << endl;
+            std::cout << "[System] Initializing Atlas from scratch ..." << std::endl;
             mpAtlas = new Atlas(0);
-            cout << "- Atlas is ready!" << endl
-                 << endl;
         }
         else
         {
             // Load the file with an earlier session
             // clock_t start = clock();
-            cout << "- Initializing Atlas from file: " << mStrLoadAtlasFromFile << "... " << endl;
+            std::cout << "[System] Initializing Atlas from file: " << mStrLoadAtlasFromFile << "... " << std::endl;
             bool isRead = LoadAtlas(FileType::BINARY_FILE);
 
             if (!isRead)
             {
-                cout << "- Error while loading the file, please try again!" << endl;
+                std::cout << "[System] Error while loading Atlas file! Exiting ..." << std::endl;
                 exit(-1);
-            }
-            else
-            {
-                cout << "- Atlas is ready!" << endl
-                     << endl;
             }
 
             loadedAtlas = true;
@@ -160,7 +150,7 @@ namespace ORB_SLAM3
         }
 
         // Setup the system parameters
-        cout << "[System Params]" << endl;
+        std::cout << "[System]" << std::endl;
         SystemParams *sysParams = SystemParams::GetParams();
         sysParams->SetParams(strSysParamsFile);
 
