@@ -96,18 +96,24 @@ pip install -r src/requirements.txt
 
 For detecting **structural elements** (such as rooms and corridors), vS-Graphs relies on `loco planning` integrated with `Voxblox`, available in [the mav_voxblox_planning repository](https://github.com/snt-arg/mav_voxblox_planning/tree/master). However, the original repository is built for **ROS1 Noetic** and is no longer actively maintained, which makes direct integration with modern **ROS2** systems challenging.
 
-To address this, we developed a dockerized solution (available in the [vS-Graphs Tools repository](https://github.com/snt-arg/vsgraphs_tools/tree/main)), which contains a Dockerfile for building the complete `Voxblox` environment and a bridging utility (`vox2ros`) that translates Voxblox messages into **ROS2 Jazzy**, compatible format for vS-Graphs. You can learn more about the tool and how to integrate it in [this guide](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox).
+To address this, we developed a dockerized solution (available in the [vS-Graphs Tools repository](https://github.com/snt-arg/vsgraphs_tools/tree/main)), which contains a Dockerfile for building the complete `Voxblox` environment and a bridging utility that translates Voxblox input feed (`/camera/depth/points`) into **ROS1 Noetic** and output messages `/voxblox_skeletonizer/sparse_graph` into **ROS2 Jazzy**, compatible format for vS-Graphs. You can learn more about the tool and how to integrate it in [this guide](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox).
 
 The procedure of using the tool is as below:
 
-1. Download the tool [from here](https://github.com/snt-arg/vsgraphs_tools/blob/main/Voxblox/vox2ros.py) in your machine (if you are using vS-Graph's Docker, it will be there in `~/workspace/voxblox/vox2ros.py` path)
-2. Inside `vox2ros` Docker environment, run the `mprocs` command:
+1. Download the tool [from here](https://github.com/snt-arg/vsgraphs_tools/blob/main/Voxblox/vox2ros.py) in your machine (if you are using vS-Graph's Docker, it will be there in `~/workspace/vsgraphs_tools/relay_jazzy.py` path)
+2. Inside the relay's Docker environment, simply run the `mprocs` command:
 ```bash
-mprocs # Run Voxblox, Bridge, and Vox2ROS (keep the order)
+docker exec -it voxblox_bridge bash
+
+# Inside the tool's Docker environment
+mprocs # Run Voxblox, and then the relay commands (keep the order)
 ```
-3. Run the Python file as the listener for vS-Graphs:
+3. Run the Python file as the voxblox (client) and depth feed (server) for vS-Graphs:
 ```bash
-python /[path]/voxblox/vox2ros.py --mode vsgraphs_jazzy
+python /[path]/relay_jazzy.py --mode voxblox_client
+python /[path]/relay_jazzy.py --mode pc_server
+
+# In vS-Graphs Docker, simply choose them in `mprocs`
 ```
 
 ## ⚙️ II. Build the Project
