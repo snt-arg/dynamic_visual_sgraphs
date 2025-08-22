@@ -89,7 +89,7 @@ namespace ORB_SLAM3
         void AddMapPlane(Plane *pPlane);
         void AddMapMarker(Marker *pMarker);
         void AddDetectedMapRoom(Room *room);
-        void AddMarkerBasedMapRoom(Room *room);
+        void AddCandidateMapRoom(Room *room);
         void AddMapFloor(ORB_SLAM3::Floor *pFloor);
 
         void EraseMapDoor(Door *pDoor);

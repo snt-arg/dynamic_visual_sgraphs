@@ -300,6 +300,24 @@ namespace ORB_SLAM3
         givenRoom->setWalls(maxWallZ);
     }
 
+    void GeoSemHelpers::createBlankRoomCandidate(ORB_SLAM3::Atlas *mpAtlas, Eigen::Vector3d centroid)
+    {
+        // Variable
+        ORB_SLAM3::Room *newRoom = new ORB_SLAM3::Room();
+
+        // Fill the room entity
+        newRoom->setMap(mpAtlas->GetCurrentMap());
+        newRoom->setId(mpAtlas->GetAllRooms().size());
+        newRoom->setRoomCenter(Eigen::Vector3d(2.0, 0.0, 3.0));
+        newRoom->setRoomVariant(ORB_SLAM3::Room::roomVariant::UNDEFINED);
+
+        // Add the room to the map
+        mpAtlas->AddCandidateMapRoom(newRoom);
+
+        std::cout
+            << "[GeoSemHelper] New room candidate detected: Room#" << newRoom->getId() << " (blank)" << std::endl;
+    }
+
     void GeoSemHelpers::createMapRoomCandidateByMarker(Atlas *mpAtlas, ORB_SLAM3::Room *matchedRoom,
                                                        ORB_SLAM3::Marker *attachedMarker)
     {
@@ -340,7 +358,7 @@ namespace ORB_SLAM3
             << "- New room candidate detected: Room#" << newMapRoomCandidate->getId() << " ("
             << newMapRoomCandidate->getName() << ") using marker #" << attachedMarker->getId() << "!\n";
 
-        mpAtlas->AddMarkerBasedMapRoom(newMapRoomCandidate);
+        mpAtlas->AddCandidateMapRoom(newMapRoomCandidate);
     }
 
     ORB_SLAM3::Room *GeoSemHelpers::createMapRoomCandidateByFreeSpace(Atlas *mpAtlas, bool isCorridor,

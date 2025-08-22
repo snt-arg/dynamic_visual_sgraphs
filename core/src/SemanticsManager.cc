@@ -340,84 +340,87 @@ namespace ORB_SLAM3
             std::vector<ORB_SLAM3::Plane *> closestWalls;
             std::pair<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>, std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> rectangularRoom;
 
-            // [TODO] Create a new structural element
+            // Calculate the cluster centroid
+            Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // Loop over all walls
-            for (const auto &wall : allWalls)
-            {
-                // Loop over all cluster points
-                for (const auto &point : cluster)
-                {
-                    // Calculate distance between wall centroid and cluster centroid
-                    const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
-                    // If the distance is smaller than the threshold, add the wall to closestWalls
-                    if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
-                    {
-                        // Add the wall to closestWalls
-                        closestWalls.push_back(wall);
-                        break;
-                    }
-                }
-            }
+            // Create a new structural element (blank room)
+            GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
 
-            // If there is only one wall, no need to check for a room/corridor
-            if (closestWalls.size() < 2)
-                continue;
+            // // Loop over all walls
+            // for (const auto &wall : allWalls)
+            // {
+            //     // Loop over all cluster points
+            //     for (const auto &point : cluster)
+            //     {
+            //         // Calculate distance between wall centroid and cluster centroid
+            //         const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
+            //         // If the distance is smaller than the threshold, add the wall to closestWalls
+            //         if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
+            //         {
+            //             // Add the wall to closestWalls
+            //             closestWalls.push_back(wall);
+            //             break;
+            //         }
+            //     }
+            // }
 
-            // Get all the facing walls
-            std::vector<std::pair<Plane *, Plane *>> facingWalls =
-                Utils::getAllPlanesFacingEachOther(closestWalls);
+            // // If there is only one wall, no need to check for a room/corridor
+            // if (closestWalls.size() < 2)
+            //     continue;
 
-            // If no facing walls are found, continue to the next cluster
-            if (facingWalls.size() == 0)
-                continue;
+            // // Get all the facing walls
+            // std::vector<std::pair<Plane *, Plane *>> facingWalls =
+            //     Utils::getAllPlanesFacingEachOther(closestWalls);
 
-            // Print the facing walls
-            for (const auto &facingWall : facingWalls)
-                std::cout << "- Facing walls: " << facingWall.first->getId() << " & " << facingWall.second->getId() << std::endl;
+            // // If no facing walls are found, continue to the next cluster
+            // if (facingWalls.size() == 0)
+            //     continue;
 
-            // Check wall conditions if they shape a square room (with perpendicularity threshold)
-            bool isRectRoomFound = getRectangularRoom(rectangularRoom, facingWalls,
-                                                      sysParams->room_seg.walls_perpendicularity_thresh);
+            // // Print the facing walls
+            // for (const auto &facingWall : facingWalls)
+            //     std::cout << "- Facing walls: " << facingWall.first->getId() << " & " << facingWall.second->getId() << std::endl;
 
-            // Create room candidates for them
-            if (isRectRoomFound)
-            {
-                std::vector<ORB_SLAM3::Plane *> walls = {rectangularRoom.first.first, rectangularRoom.first.second,
-                                                         rectangularRoom.second.first, rectangularRoom.second.second};
-                // Search for a room candidate within the given range (marker-based)
-                // If found, augment information from new room to that one
-                newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, false, walls);
-            }
-            else
-            {
-                // Get the walls
-                std::vector<ORB_SLAM3::Plane *> walls = {facingWalls[0].first, facingWalls[0].second};
-                // Create a corridor
-                newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, true, walls,
-                                                                                       Utils::computeCentroidFromPoints(cluster));
-            }
+            // // Check wall conditions if they shape a square room (with perpendicularity threshold)
+            // bool isRectRoomFound = getRectangularRoom(rectangularRoom, facingWalls,
+            //                                           sysParams->room_seg.walls_perpendicularity_thresh);
 
-            // Check if the room has not been created before
-            ORB_SLAM3::Room *foundMarkerBasedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllMarkerBasedMapRooms());
-            if (foundMarkerBasedRoom != nullptr)
-            {
-                // If the room already exists, update the existing room candidate with the new information
-                GeoSemHelpers::augmentMapRoomCandidate(foundMarkerBasedRoom, newClusterBasedRoom, true);
-            }
-            else
-            {
-                // Otherwise, add the new room candidate to the map
-                ORB_SLAM3::Room *detectedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllDetectedMapRooms());
-                if (detectedRoom == nullptr)
-                {
-                    std::cout << "\n[SemSeg]" << std::endl;
-                    std::cout
-                        << "- New free-space cluster room detected! Mapping Room#" << newClusterBasedRoom->getId()
-                        << "!" << std::endl;
-                    mpAtlas->AddDetectedMapRoom(newClusterBasedRoom);
-                }
-            }
+            // // Create room candidates for them
+            // if (isRectRoomFound)
+            // {
+            //     std::vector<ORB_SLAM3::Plane *> walls = {rectangularRoom.first.first, rectangularRoom.first.second,
+            //                                              rectangularRoom.second.first, rectangularRoom.second.second};
+            //     // Search for a room candidate within the given range (marker-based)
+            //     // If found, augment information from new room to that one
+            //     newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, false, walls);
+            // }
+            // else
+            // {
+            //     // Get the walls
+            //     std::vector<ORB_SLAM3::Plane *> walls = {facingWalls[0].first, facingWalls[0].second};
+            //     // Create a corridor
+            //     newClusterBasedRoom = GeoSemHelpers::createMapRoomCandidateByFreeSpace(mpAtlas, true, walls, clusterCentroid);
+            // }
+
+            // // Check if the room has not been created before
+            // ORB_SLAM3::Room *foundMarkerBasedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllMarkerBasedMapRooms());
+            // if (foundMarkerBasedRoom != nullptr)
+            // {
+            //     // If the room already exists, update the existing room candidate with the new information
+            //     GeoSemHelpers::augmentMapRoomCandidate(foundMarkerBasedRoom, newClusterBasedRoom, true);
+            // }
+            // else
+            // {
+            //     // Otherwise, add the new room candidate to the map
+            //     ORB_SLAM3::Room *detectedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllDetectedMapRooms());
+            //     if (detectedRoom == nullptr)
+            //     {
+            //         std::cout << "\n[SemSeg]" << std::endl;
+            //         std::cout
+            //             << "- New free-space cluster room detected! Mapping Room#" << newClusterBasedRoom->getId()
+            //             << "!" << std::endl;
+            //         mpAtlas->AddDetectedMapRoom(newClusterBasedRoom);
+            //     }
+            // }
         }
     }
 

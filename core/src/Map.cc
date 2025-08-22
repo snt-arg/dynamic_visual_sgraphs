@@ -132,7 +132,7 @@ namespace ORB_SLAM3
         mspDetectedRooms.insert(pRoom);
     }
 
-    void Map::AddMarkerBasedMapRoom(Room *pRoom)
+    void Map::AddCandidateMapRoom(Room *pRoom)
     {
         unique_lock<mutex> lock(mMutexMap);
         mspMarkerBasedRooms.insert(pRoom);

@@ -1716,7 +1716,7 @@ namespace ORB_SLAM3
                         continue;
 
                     pRoom->setMap(pMergeMap);
-                    pMergeMap->AddMarkerBasedMapRoom(pRoom);
+                    pMergeMap->AddCandidateMapRoom(pRoom);
                     pCurrentMap->EraseMarkerBasedMapRoom(pRoom);
                 }
             }

@@ -101,6 +101,13 @@ namespace ORB_SLAM3
         static void organizeRoomWalls(Room *givenRoom);
 
         /**
+         * @brief Creates a blank room object (undefined variant) to be added to the map
+         * @param mpAtlas the current map in Atlas
+         * @param centroid the centroid of the room (optional)
+         */
+        static void createBlankRoomCandidate(Atlas *mpAtlas, Eigen::Vector3d centroid = Eigen::Vector3d::Zero());
+
+        /**
          * @brief Creates a new room object (corridor or room) to be added to the map
          * @param mpAtlas the current map in Atlas
          * @param matchedRoom the address of the room matched from the database

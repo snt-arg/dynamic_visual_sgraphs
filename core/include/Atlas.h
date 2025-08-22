@@ -101,7 +101,7 @@ namespace ORB_SLAM3
         void AddMapPoint(MapPoint *pMP);
         void AddMapMarker(Marker *marker);
         void AddDetectedMapRoom(Room *room);
-        void AddMarkerBasedMapRoom(Room *room);
+        void AddCandidateMapRoom(Room *room);
 
         std::vector<GeometricCamera *> GetAllCameras();
         GeometricCamera *AddCamera(GeometricCamera *pCam);

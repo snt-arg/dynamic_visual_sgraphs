@@ -142,10 +142,10 @@ namespace ORB_SLAM3
         pMapMP->AddDetectedMapRoom(room);
     }
 
-    void Atlas::AddMarkerBasedMapRoom(Room *room)
+    void Atlas::AddCandidateMapRoom(Room *room)
     {
         Map *pMapMP = room->getMap();
-        pMapMP->AddMarkerBasedMapRoom(room);
+        pMapMP->AddCandidateMapRoom(room);
     }
 
     void Atlas::AddMapFloor(Floor *floor)
