@@ -541,10 +541,14 @@ namespace ORB_SLAM3
         Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
         ORB_SLAM3::Floor *newMapFloor = new ORB_SLAM3::Floor();
 
-        // Set the ID and map
-        newMapFloor->setId(mpAtlas->GetAllFloors().size());
-        newMapFloor->setMap(mpAtlas->GetCurrentMap());
+        // Variables
+        int floorId = mpAtlas->GetAllFloors().size();
+
+        // Fill the floor entity
+        newMapFloor->setId(floorId);
         newMapFloor->setCentroid(centroid);
+        newMapFloor->setMap(mpAtlas->GetCurrentMap());
+        newMapFloor->setName("Floor#" + std::to_string(floorId));
 
         // Add the floor to the map
         mpAtlas->AddMapFloor(newMapFloor);

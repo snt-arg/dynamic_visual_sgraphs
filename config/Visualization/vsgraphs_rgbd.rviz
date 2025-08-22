@@ -385,17 +385,19 @@ Visualization Manager:
       Use rainbow: true
       Value: true
     - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
+      Enabled: true
       Name: Structural Elements
       Namespaces:
-        {}
+        "": true
+        floor_room_edge: true
+        floors: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /vs_graphs/structural_elements
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -475,16 +477,16 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 14.82674789428711
+      Distance: 20.530550003051758
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 0.42981845140457153
-        Y: 0.9407592415809631
-        Z: 2.111768960952759
+        X: 1.9117515087127686
+        Y: 0.7820098400115967
+        Z: 4.679400444030762
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false

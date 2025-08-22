@@ -29,6 +29,7 @@ namespace ORB_SLAM3
         int id;                               // Floor's ID
         int opId;                             // Floor's ID in the local optimizer
         int opIdG;                            // Floor's ID in the global optimizer
+        std::string name;                     // The name devoted for each room (optional)
         Eigen::Vector3d centroid;             // Floor's centroid in the global reference
         std::vector<ORB_SLAM3::Room *> rooms; // Floor's rooms and corridors
 
@@ -46,6 +47,9 @@ namespace ORB_SLAM3
 
         int getOpIdG() const;
         void setOpIdG(int value);
+
+        std::string getName() const;
+        void setName(std::string value);
 
         Eigen::Vector3d getCentroid() const;
         void setCentroid(Eigen::Vector3d value);

@@ -952,6 +952,10 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
     // If there are no rooms or floors, return
     if (numRooms == 0 && numFloors == 0)
         return;
+    
+    // Variables
+    double textOffset = 0.5;
+    double floorToRoomOffset = -2.0;
 
     // Visualization markers
     visualization_msgs::msg::MarkerArray roomArray, floorArray;
@@ -964,10 +968,10 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         for (int idx = 0; idx < numRooms; idx++)
         {
             // Variables
-            string roomName = rooms[idx]->getName();
+            std::string roomName = rooms[idx]->getName();
 
-            // Create color based on room type
-            std::vector<double> color = {0.2, 0.8, 0.5};
+            // Create color based on room type (undefined: gray, corridor: dark pink, room: purple)
+            std::vector<double> color = {0.5, 0.5, 0.5};
             if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::CORRIDOR)
                 color = {0.6, 0.0, 0.3};
             if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
@@ -1017,7 +1021,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomLabel.id = roomArray.markers.size();
             roomLabel.pose.position.x = centroid.x();
             roomLabel.pose.position.z = centroid.z();
-            roomLabel.pose.position.y = centroid.y() - 0.7;
+            roomLabel.pose.position.y = centroid.y() + textOffset;
             roomLabel.lifetime = rclcpp::Duration::from_seconds(0);
             roomLabel.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             roomArray.markers.push_back(roomLabel);
@@ -1269,14 +1273,14 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
     if (numFloors > 0)
     {
         // Variables
-        double offst = -2.0; // Visualization offset
         std::vector<double> color = {0.3, 0.6, 0.7};
-        visualization_msgs::msg::Marker floorMarker, floorRoomLine;
+        visualization_msgs::msg::Marker floorMarker, floorLabel, floorRoomLine;
 
         // Loop through all the floors
         for (int floorId = 0; floorId < numFloors; floorId++)
         {
             // Variables
+            std::string floorName = floors[floorId]->getName();
             Eigen::Vector3d floorCentroid = floors[floorId]->getCentroid();
 
             // Floor marker (cube)
@@ -1297,10 +1301,40 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             floorMarker.pose.orientation.w = 1.0;
             floorMarker.header.frame_id = frameSE;
             floorMarker.pose.position.x = floorCentroid.x();
+            floorMarker.pose.position.y = floorCentroid.y();
             floorMarker.pose.position.z = floorCentroid.z();
-            floorMarker.pose.position.y = floorCentroid.y() + offst;
             floorMarker.lifetime = rclcpp::Duration::from_seconds(0);
             floorMarker.type = visualization_msgs::msg::Marker::CUBE;
+
+            // Floor label (name)
+            floorLabel.color.a = 1;
+            floorLabel.color.r = 0;
+            floorLabel.color.g = 0;
+            floorLabel.color.b = 0;
+            floorLabel.scale.z = 0.2;
+            floorLabel.text = floorName;
+            floorLabel.ns = "floorLabel";
+            floorLabel.header.stamp = msgTime;
+            floorLabel.action = floorLabel.ADD;
+            floorLabel.header.frame_id = frameSE;
+            floorLabel.id = roomArray.markers.size();
+            floorLabel.pose.position.x = floorCentroid.x();
+            floorLabel.pose.position.y = floorCentroid.y();
+            floorLabel.pose.position.z = floorCentroid.z();
+            floorLabel.lifetime = rclcpp::Duration::from_seconds(0);
+            floorLabel.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+
+            // Apply offset to the floor centroid for better visualization
+            if (sensorType == ORB_SLAM3::System::IMU_RGBD)
+            {
+                floorMarker.pose.position.z += floorToRoomOffset;
+                floorLabel.pose.position.z += (floorToRoomOffset + textOffset);
+            }
+            else
+            {
+                floorLabel.pose.position.y += floorToRoomOffset;
+                floorMarker.pose.position.y += (floorToRoomOffset + textOffset);
+            }
 
             // Floor to Room connection line
             floorRoomLine.color.a = 0.9;
@@ -1333,8 +1367,8 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 geometry_msgs::msg::PointStamped roomPoint, roomPointT;
 
                 pFloor.x = floorPoint.point.x;
+                pFloor.y = floorPoint.point.y;
                 pFloor.z = floorPoint.point.z;
-                pFloor.y = floorPoint.point.y + offst;
                 floorRoomLine.points.push_back(pFloor);
 
                 roomPoint.header.stamp = msgTime;
@@ -1346,10 +1380,18 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 pRoom.x = roomPoint.point.x;
                 pRoom.y = roomPoint.point.y;
                 pRoom.z = roomPoint.point.z;
+
+                // Apply offset to the room centroid for better visualization
+                if (sensorType == ORB_SLAM3::System::IMU_RGBD)
+                    pRoom.z += floorToRoomOffset;
+                else
+                    pRoom.y += floorToRoomOffset;
+
                 floorRoomLine.points.push_back(pRoom);
             }
 
             // Add the floor marker
+            floorArray.markers.push_back(floorLabel);
             floorArray.markers.push_back(floorMarker);
             floorArray.markers.push_back(floorRoomLine);
         }

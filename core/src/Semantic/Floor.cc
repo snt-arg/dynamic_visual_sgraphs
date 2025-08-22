@@ -50,6 +50,16 @@ namespace ORB_SLAM3
         opIdG = value;
     }
 
+    std::string Floor::getName() const
+    {
+        return name;
+    }
+
+    void Floor::setName(std::string value)
+    {
+        name = value;
+    }
+
     Eigen::Vector3d Floor::getCentroid() const
     {
         return centroid;
