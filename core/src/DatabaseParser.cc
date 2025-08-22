@@ -57,8 +57,15 @@ namespace ORB_SLAM3
                 envRoom->setOpIdG(-1);
                 envRoom->setId(stoi(envDatum.key()));
                 envRoom->setName(envDatum.value()["name"]);
-                envRoom->setIsCorridor(envDatum.value()["isCorridor"]);
                 envRoom->setMetaMarkerId(envDatum.value()["metaMarker"]);
+
+                // Set the room variant
+                if (envDatum.value()["isCorridor"] == true)
+                    envRoom->setRoomVariant(Room::CORRIDOR);
+                else if (envDatum.value()["isCorridor"] == false)
+                    envRoom->setRoomVariant(Room::ROOM);
+                else
+                    envRoom->setRoomVariant(Room::UNDEFINED);
 
                 // Fill the set of doors (markers attached to doors) of a room
                 if (envDatum.value()["doorMarkers"].size() != 0)

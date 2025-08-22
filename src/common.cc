@@ -967,9 +967,11 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             string roomName = rooms[idx]->getName();
 
             // Create color based on room type
-            std::vector<double> color = {0.5, 0.1, 1.0};
-            if (rooms[idx]->getIsCorridor())
+            std::vector<double> color = {0.2, 0.8, 0.5};
+            if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::CORRIDOR)
                 color = {0.6, 0.0, 0.3};
+            if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
+                color = {0.5, 0.1, 1.0};
 
             Eigen::Vector3d centroid = rooms[idx]->getRoomCenter();
             visualization_msgs::msg::Marker room, roomWallLine, roomDoorLine, roomMarkerLine, roomLabel;
@@ -1555,10 +1557,6 @@ void setGNNBasedRoomCandidates(const situational_graphs_msgs::msg::RoomsData &ms
     //     newRoom->setId(room.id);
     //     newRoom->setHasKnownLabel(false);
 
-    //     // Check if corridor (if the length of room.wallIds is 2)
-    //     bool isCorridor = (room.wall_ids.size() == 2);
-    //     newRoom->setIsCorridor(isCorridor);
-
     //     // [TODO] use room.wallIds to fill newRoom->setWalls
     //     // [TODO] use room.centroid to fill newRoom->setRoomCenter
 
@@ -1586,10 +1584,6 @@ void setGNNBasedRoomCandidates(const vs_graphs::msg::VSGraphsAllDetectdetRooms &
         // Set the room properties
         newRoom->setId(room.id);
         newRoom->setHasKnownLabel(false);
-
-        // Check if corridor (if the length of room.wallIds is 2)
-        bool isCorridor = (room.wall_ids.size() == 2);
-        newRoom->setIsCorridor(isCorridor);
 
         // [TODO] use room.wallIds to fill newRoom->setWalls
         // [TODO] use room.centroid to fill newRoom->setRoomCenter

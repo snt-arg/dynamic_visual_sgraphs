@@ -83,14 +83,14 @@ namespace ORB_SLAM3
         name = value;
     }
 
-    bool Room::getIsCorridor() const
+    Room::roomVariant Room::getRoomVariant()
     {
-        return isCorridor;
+        return variant;
     }
 
-    void Room::setIsCorridor(bool value)
+    void Room::setRoomVariant(Room::roomVariant value)
     {
-        isCorridor = value;
+        variant = value;
     }
 
     bool Room::getHasKnownLabel() const

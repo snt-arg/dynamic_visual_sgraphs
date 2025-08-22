@@ -428,7 +428,7 @@ namespace ORB_SLAM3
             // Get list of walls of the room
             vector<Plane *> walls = vpRoom->getWalls();
             if (walls.size() > 0)
-                if (vpRoom->getIsCorridor())
+                if (vpRoom->getRoomVariant() == Room::roomVariant::CORRIDOR)
                 {
                     // Adding an edge between the room and the two walls
                     ORB_SLAM3::EdgeVertex2PlaneProjectSE3Room *e = new ORB_SLAM3::EdgeVertex2PlaneProjectSE3Room();
@@ -442,7 +442,7 @@ namespace ORB_SLAM3
                     rk->setDelta(thHuber2D);
                     optimizer.addEdge(e);
                 }
-                else
+                else if (vpRoom->getRoomVariant() == Room::roomVariant::ROOM)
                 {
                     // Adding an edge between the room and the two walls
                     ORB_SLAM3::EdgeVertex4PlaneProjectSE3Room *e = new ORB_SLAM3::EdgeVertex4PlaneProjectSE3Room();
@@ -2180,7 +2180,7 @@ namespace ORB_SLAM3
             // Setting the local optimization ID for the room
             pMapRoom->setOpId(opId);
 
-            if (pMapRoom->getIsCorridor())
+            if (pMapRoom->getRoomVariant() == ORB_SLAM3::Room::roomVariant::CORRIDOR)
             {
                 if (optimizer.vertex(opId) && optimizer.vertex(walls[0]->getOpId()) && optimizer.vertex(walls[1]->getOpId()))
                 {
@@ -2197,7 +2197,7 @@ namespace ORB_SLAM3
                     optimizer.addEdge(e);
                 }
             }
-            else
+            else if (pMapRoom->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
             {
                 if (optimizer.vertex(opId) && optimizer.vertex(walls[0]->getOpId()) && optimizer.vertex(walls[1]->getOpId()) && optimizer.vertex(walls[2]->getOpId()) && optimizer.vertex(walls[2]->getOpId()))
                 {

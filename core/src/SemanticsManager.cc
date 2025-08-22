@@ -286,7 +286,7 @@ namespace ORB_SLAM3
                 }
 
                 // If the room is a corridor
-                if (roomCandidate->getIsCorridor())
+                if (roomCandidate->getRoomVariant() == ORB_SLAM3::Room::roomVariant::CORRIDOR)
                 {
                     if (closestPair1.first != nullptr && closestPair1.second != nullptr)
                     {
@@ -295,7 +295,7 @@ namespace ORB_SLAM3
                         roomCandidate->setWalls(closestPair1.second);
                     }
                 }
-                else
+                else if (roomCandidate->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
                 {
                     // Update the room walls
                     if (closestPair1.first != nullptr && closestPair1.second != nullptr)
@@ -309,9 +309,6 @@ namespace ORB_SLAM3
                         roomCandidate->setWalls(closestPair2.second);
                     }
                 }
-
-                // [TODO] Check the isCorridor and the number of walls we connected
-                // If it is more than 4 four 4-wall room or 2 for corridor, we should take only the ones closest to the room
             }
     }
 

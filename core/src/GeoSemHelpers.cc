@@ -323,7 +323,6 @@ namespace ORB_SLAM3
         newMapRoomCandidate->setName(matchedRoom->getName());
         newMapRoomCandidate->setMap(mpAtlas->GetCurrentMap());
         newMapRoomCandidate->setId(mpAtlas->GetAllRooms().size());
-        newMapRoomCandidate->setIsCorridor(matchedRoom->getIsCorridor());
         newMapRoomCandidate->setMetaMarkerId(matchedRoom->getMetaMarkerId());
         newMapRoomCandidate->setRoomCenter(attachedMarker->getGlobalPose().translation().cast<double>());
 
@@ -354,9 +353,13 @@ namespace ORB_SLAM3
 
         // Fill the room entity
         newMapRoomCandidate->setHasKnownLabel(false);
-        newMapRoomCandidate->setIsCorridor(isCorridor);
         newMapRoomCandidate->setMap(mpAtlas->GetCurrentMap());
         newMapRoomCandidate->setId(mpAtlas->GetAllRooms().size());
+
+        if (isCorridor)
+            newMapRoomCandidate->setRoomVariant(ORB_SLAM3::Room::roomVariant::CORRIDOR);
+        else
+            newMapRoomCandidate->setRoomVariant(ORB_SLAM3::Room::roomVariant::ROOM);
 
         // Set name based on ID
         int roomId = newMapRoomCandidate->getId();
@@ -419,9 +422,9 @@ namespace ORB_SLAM3
             // Augment the already detected cluster-based room with the marker-based room information
             clusterBasedRoom->setHasKnownLabel(true);
             clusterBasedRoom->setName(markerBasedRoom->getName());
-            clusterBasedRoom->setIsCorridor(markerBasedRoom->getIsCorridor());
             clusterBasedRoom->setMetaMarker(markerBasedRoom->getMetaMarker());
             clusterBasedRoom->setMetaMarkerId(markerBasedRoom->getMetaMarkerId());
+            clusterBasedRoom->setRoomVariant(markerBasedRoom->getRoomVariant());
             // Connect the doors to the room
             for (ORB_SLAM3::Door *door : markerBasedRoom->getDoors())
                 clusterBasedRoom->setDoors(door);

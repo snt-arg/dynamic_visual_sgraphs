@@ -11,7 +11,7 @@
  * This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details: https://www.gnu.org/licenses/
-*/
+ */
 
 #ifndef ROOM_H
 #define ROOM_H
@@ -25,24 +25,32 @@ namespace ORB_SLAM3
 
     class Room
     {
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        enum roomVariant
+        {
+            UNDEFINED = -1, // Not defined, due to lack of semantic information
+            CORRIDOR = 0,   // Contains two parallel walls
+            ROOM = 1        // Contains more than two walls
+        };
+
     private:
-        int id;                         // The room's identifier
-        int opId;                       // The room's identifier in the local optimizer
-        int opIdG;                      // The room's identifier in the global optimizer
-        bool isCorridor;                // Checks if the room is a corridor or not
+        int id;    // The room's identifier
+        int opId;  // The room's identifier in the local optimizer
+        int opIdG; // The room's identifier in the global optimizer
         int metaMarkerId;               // The identifier of the room's meta-marker (containing information about the room)
         std::string name;               // The name devoted for each room (optional)
         bool hasKnownLabel;             // Checks if it is a candidate room (meta-marker detected) or not
         Marker *metaMarker;             // The meta-marker assigned for the room
         Plane *groundPlane;             // The ground plane associated with the room
+        roomVariant variant;            // The room's semantic type (e.g., corridor, room, etc.)
         std::vector<Door *> doors;      // The vector of detected doors of a room
         std::vector<Plane *> walls;     // The vector of detected walls of a room
         Eigen::Vector3d roomCenter;     // The center of the room as a 3D vector in the global reference
         std::vector<int> doorMarkerIds; // Markers attached to the doors of a room [in real map], e.g. [3, 4]
 
     public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
         Room();
         ~Room();
 
@@ -55,8 +63,8 @@ namespace ORB_SLAM3
         int getOpIdG() const;
         void setOpIdG(int value);
 
-        bool getIsCorridor() const;
-        void setIsCorridor(bool value);
+        roomVariant getRoomVariant();
+        void setRoomVariant(roomVariant value);
 
         bool getHasKnownLabel() const;
         void setHasKnownLabel(bool value);
