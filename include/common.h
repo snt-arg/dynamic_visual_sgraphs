@@ -167,14 +167,14 @@ void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
 void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name);
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
+void publishDoors(std::vector<ORB_SLAM3::Door *>);
 void publishCameraPose(Sophus::SE3f, rclcpp::Time);
-void publishDoors(std::vector<ORB_SLAM3::Door *>, rclcpp::Time);
+void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *>);
 void publishPlanes(std::vector<ORB_SLAM3::Plane *>, rclcpp::Time);
 void publishTFTransform(Sophus::SE3f, string, string, rclcpp::Time);
 void publishAllPoints(std::vector<ORB_SLAM3::MapPoint *>, rclcpp::Time);
 void publishTrackedPoints(std::vector<ORB_SLAM3::MapPoint *>, rclcpp::Time);
 void publishFiducialMarkers(std::vector<ORB_SLAM3::Marker *>, rclcpp::Time);
-void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishKeyFrameMarkers(std::vector<ORB_SLAM3::KeyFrame *>, rclcpp::Time);
 void publishBodyOdometry(Sophus::SE3f, Eigen::Vector3f, Eigen::Vector3f, rclcpp::Time);

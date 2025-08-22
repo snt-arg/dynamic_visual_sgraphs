@@ -182,9 +182,9 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     std::vector<ORB_SLAM3::KeyFrame *> keyframes = pSLAM->GetAllKeyFrames();
 
     // Setup publishers
+    publishDoors(pSLAM->GetAllDoors());
     publishKeyFrameImages(keyframes, msgTime);
     publishKeyFrameMarkers(keyframes, msgTime);
-    publishDoors(pSLAM->GetAllDoors(), msgTime);
     publishFiducialMarkers(pSLAM->GetAllMarkers(), msgTime);
     publishTrackingImage(pSLAM->GetCurrentFrame(), msgTime);
     publishStructuralElements(pSLAM->GetAllRooms(), pSLAM->GetAllFloors(), msgTime);
@@ -195,7 +195,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     // Publish pointclouds
     if (pubPointClouds)
     {
-        publishSegmentedCloud(keyframes, msgTime);
+        publishSegmentedCloud(keyframes);
         publishPlanes(pSLAM->GetAllPlanes(), msgTime);
         publishAllPoints(pSLAM->GetAllMapPoints(), msgTime);
         publishTrackedPoints(pSLAM->GetTrackedMapPoints(), msgTime);
@@ -521,7 +521,7 @@ void clearKFClsClouds(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec)
         keyframe->clearClsClouds();
 }
 
-void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclcpp::Time msgTime)
+void publishSegmentedCloud(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec)
 {
     // get the latest processed keyframe
     ORB_SLAM3::KeyFrame *thisKF = nullptr;
@@ -713,7 +713,7 @@ void publishFiducialMarkers(std::vector<ORB_SLAM3::Marker *> markers, rclcpp::Ti
     pubFiducialMarker->publish(markerArray);
 }
 
-void publishDoors(std::vector<ORB_SLAM3::Door *> doors, rclcpp::Time msgTime)
+void publishDoors(std::vector<ORB_SLAM3::Door *> doors)
 {
     // If there are no doors, return
     int numDoors = doors.size();
@@ -842,7 +842,6 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
         const std::string planeLabelText = "Plane#" + std::to_string(plane->getId());
 
         // If the plane is undefined, skip it
-        ORB_SLAM3::Plane::planeVariant planeType = plane->getPlaneType();
         if (plane->getPlaneType() == ORB_SLAM3::Plane::planeVariant::UNDEFINED)
             continue;
 
@@ -851,7 +850,6 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
         if (planeClouds == nullptr || planeClouds->empty())
             continue;
 
-        Eigen::Vector4d planeCoeffs = plane->getGlobalEquation().coeffs();
         for (const auto &point : planeClouds->points)
         {
             pcl::PointXYZRGB newPoint;
@@ -952,7 +950,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
     // If there are no rooms or floors, return
     if (numRooms == 0 && numFloors == 0)
         return;
-    
+
     // Variables
     double textOffset = 0.5;
     double floorToRoomOffset = -2.0;
@@ -981,6 +979,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             visualization_msgs::msg::Marker room, roomWallLine, roomDoorLine, roomMarkerLine, roomLabel;
 
             // Room values
+            room.id = idx;
             room.ns = "room";
             room.scale.x = 0.3;
             room.scale.y = 0.3;
@@ -992,7 +991,6 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             room.color.b = color[2];
             room.header.stamp = msgTime;
             room.header.frame_id = frameSE;
-            room.id = roomArray.markers.size();
             room.mesh_use_embedded_materials = true;
             room.lifetime = rclcpp::Duration::from_seconds(0);
             room.type = visualization_msgs::msg::Marker::CUBE;
@@ -1008,6 +1006,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomArray.markers.push_back(room);
 
             // Room label (name)
+            roomLabel.id = idx;
             roomLabel.color.a = 1;
             roomLabel.color.r = 0;
             roomLabel.color.g = 0;
@@ -1018,7 +1017,6 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomLabel.action = roomLabel.ADD;
             roomLabel.header.stamp = msgTime;
             roomLabel.header.frame_id = frameSE;
-            roomLabel.id = roomArray.markers.size();
             roomLabel.pose.position.x = centroid.x();
             roomLabel.pose.position.z = centroid.z();
             roomLabel.pose.position.y = centroid.y() + textOffset;
@@ -1027,6 +1025,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomArray.markers.push_back(roomLabel);
 
             // Room to Plane (Wall) connection line
+            roomWallLine.id = idx;
             roomWallLine.color.a = 0.8;
             roomWallLine.color.r = 0.0;
             roomWallLine.color.g = 0.0;
@@ -1037,12 +1036,12 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomWallLine.ns = "room_wall_lines";
             roomWallLine.header.stamp = msgTime;
             roomWallLine.action = roomWallLine.ADD;
-            roomWallLine.header.frame_id = frameWorld;
-            roomWallLine.id = roomArray.markers.size();
+            roomWallLine.header.frame_id = frameSE;
             roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
             roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Room to Door connection line
+            roomDoorLine.id = idx;
             roomDoorLine.color.a = 0.5;
             roomDoorLine.color.r = 0.0;
             roomDoorLine.color.g = 0.0;
@@ -1053,26 +1052,25 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomDoorLine.ns = "room_door_lines";
             roomDoorLine.header.stamp = msgTime;
             roomDoorLine.action = roomDoorLine.ADD;
-            roomDoorLine.header.frame_id = frameWorld;
-            roomDoorLine.id = roomArray.markers.size() + 1;
+            roomDoorLine.header.frame_id = frameSE;
             roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
             roomDoorLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Room to Marker connection line
-            roomMarkerLine.color.a = 0.5;
-            roomMarkerLine.color.r = 0.0;
-            roomMarkerLine.color.g = 0.0;
-            roomMarkerLine.color.b = 0.0;
-            roomMarkerLine.scale.x = 0.005;
-            roomMarkerLine.scale.y = 0.005;
-            roomMarkerLine.scale.z = 0.005;
-            roomMarkerLine.header.stamp = msgTime;
-            roomMarkerLine.ns = "room_marker_lines";
-            roomMarkerLine.action = roomMarkerLine.ADD;
-            roomMarkerLine.header.frame_id = frameWorld;
-            roomMarkerLine.id = roomArray.markers.size() + 1;
-            roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
-            roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
+            // roomMarkerLine.color.a = 0.5;
+            // roomMarkerLine.color.r = 0.0;
+            // roomMarkerLine.color.g = 0.0;
+            // roomMarkerLine.color.b = 0.0;
+            // roomMarkerLine.scale.x = 0.005;
+            // roomMarkerLine.scale.y = 0.005;
+            // roomMarkerLine.scale.z = 0.005;
+            // roomMarkerLine.header.stamp = msgTime;
+            // roomMarkerLine.ns = "room_marker_lines";
+            // roomMarkerLine.action = roomMarkerLine.ADD;
+            // roomMarkerLine.header.frame_id = frameSE;
+            // roomMarkerLine.id = roomArray.markers.size() + 1;
+            // roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
+            // roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Get the room center in the world frame
             // tf::Stamped<tf::Point> roomPoint, roomPointTransformed;
@@ -1142,48 +1140,48 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             }
 
             // Room to Door connection line
-            for (const auto door : rooms[idx]->getDoors())
-            {
-                geometry_msgs::msg::Point pointRoom, pointDoor;
-                geometry_msgs::msg::PointStamped doorPoint, doorPointTransformed;
+            // for (const auto door : rooms[idx]->getDoors())
+            // {
+            //     geometry_msgs::msg::Point pointRoom, pointDoor;
+            //     geometry_msgs::msg::PointStamped doorPoint, doorPointTransformed;
 
-                pointRoom.x = roomPointTransformed.point.x;
-                pointRoom.y = roomPointTransformed.point.y;
-                pointRoom.z = roomPointTransformed.point.z;
-                roomDoorLine.points.push_back(pointRoom);
+            //     pointRoom.x = roomPointTransformed.point.x;
+            //     pointRoom.y = roomPointTransformed.point.y;
+            //     pointRoom.z = roomPointTransformed.point.z;
+            //     roomDoorLine.points.push_back(pointRoom);
 
-                doorPoint.header.stamp = msgTime;
-                doorPoint.header.frame_id = frameBC;
-                doorPoint.point.x = door->getGlobalPose().translation()(0);
-                doorPoint.point.y = door->getGlobalPose().translation()(1);
-                doorPoint.point.z = door->getGlobalPose().translation()(2);
+            //     doorPoint.header.stamp = msgTime;
+            //     doorPoint.header.frame_id = frameBC;
+            //     doorPoint.point.x = door->getGlobalPose().translation()(0);
+            //     doorPoint.point.y = door->getGlobalPose().translation()(1);
+            //     doorPoint.point.z = door->getGlobalPose().translation()(2);
 
-                try
-                {
-                    auto tf_stamped = tfBuffer_->lookupTransform(
-                        frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
-                    tf2::doTransform(doorPoint, doorPointTransformed, tf_stamped);
-                }
-                catch (tf2::TransformException &ex)
-                {
-                    RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform door centroid: %s", ex.what());
-                    doorPointTransformed = doorPoint;
-                }
+            //     try
+            //     {
+            //         auto tf_stamped = tfBuffer_->lookupTransform(
+            //             frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
+            //         tf2::doTransform(doorPoint, doorPointTransformed, tf_stamped);
+            //     }
+            //     catch (tf2::TransformException &ex)
+            //     {
+            //         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform door centroid: %s", ex.what());
+            //         doorPointTransformed = doorPoint;
+            //     }
 
-                pointDoor.x = doorPointTransformed.point.x;
-                pointDoor.y = doorPointTransformed.point.y - 2.0;
-                pointDoor.z = doorPointTransformed.point.z;
-                roomDoorLine.points.push_back(pointDoor);
-            }
+            //     pointDoor.x = doorPointTransformed.point.x;
+            //     pointDoor.y = doorPointTransformed.point.y - 2.0;
+            //     pointDoor.z = doorPointTransformed.point.z;
+            //     roomDoorLine.points.push_back(pointDoor);
+            // }
 
             // Room to Marker connection line
-            geometry_msgs::msg::Point pointRoom, pointMarker;
-            ORB_SLAM3::Marker *metaMarker = rooms[idx]->getMetaMarker();
+            // geometry_msgs::msg::Point pointRoom, pointMarker;
+            // ORB_SLAM3::Marker *metaMarker = rooms[idx]->getMetaMarker();
 
-            pointRoom.x = roomPointTransformed.point.x;
-            pointRoom.y = roomPointTransformed.point.y;
-            pointRoom.z = roomPointTransformed.point.z;
-            roomMarkerLine.points.push_back(pointRoom);
+            // pointRoom.x = roomPointTransformed.point.x;
+            // pointRoom.y = roomPointTransformed.point.y;
+            // pointRoom.z = roomPointTransformed.point.z;
+            // roomMarkerLine.points.push_back(pointRoom);
             // for (const auto door : rooms[idx]->getDoors())
             // {
             //     geometry_msgs::Point pointRoom, pointDoor;
@@ -1218,33 +1216,33 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             // roomMarkerLine.points.push_back(pointRoom);
 
             // In free space-based room candidate detection, the metaMarker is not available
-            if (metaMarker != nullptr)
-            {
-                geometry_msgs::msg::PointStamped pointMarkerInit, pointMarkerTransform;
-                pointMarkerInit.header.stamp = msgTime;
-                pointMarkerInit.header.frame_id = frameBC;
-                pointMarkerInit.point.x = metaMarker->getGlobalPose().translation()(0);
-                pointMarkerInit.point.y = metaMarker->getGlobalPose().translation()(1);
-                pointMarkerInit.point.z = metaMarker->getGlobalPose().translation()(2);
+            // if (metaMarker != nullptr)
+            // {
+            //     geometry_msgs::msg::PointStamped pointMarkerInit, pointMarkerTransform;
+            //     pointMarkerInit.header.stamp = msgTime;
+            //     pointMarkerInit.header.frame_id = frameBC;
+            //     pointMarkerInit.point.x = metaMarker->getGlobalPose().translation()(0);
+            //     pointMarkerInit.point.y = metaMarker->getGlobalPose().translation()(1);
+            //     pointMarkerInit.point.z = metaMarker->getGlobalPose().translation()(2);
 
-                try
-                {
-                    auto tf_stamped = tfBuffer_->lookupTransform(
-                        frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
-                    tf2::doTransform(pointMarkerInit, pointMarkerTransform, tf_stamped);
-                }
-                catch (tf2::TransformException &ex)
-                {
-                    RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform marker centroid: %s", ex.what());
-                    pointMarkerTransform = pointMarkerInit;
-                }
+            //     try
+            //     {
+            //         auto tf_stamped = tfBuffer_->lookupTransform(
+            //             frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
+            //         tf2::doTransform(pointMarkerInit, pointMarkerTransform, tf_stamped);
+            //     }
+            //     catch (tf2::TransformException &ex)
+            //     {
+            //         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform marker centroid: %s", ex.what());
+            //         pointMarkerTransform = pointMarkerInit;
+            //     }
 
-                geometry_msgs::msg::Point pointMarker;
-                pointMarker.x = pointMarkerTransform.point.x;
-                pointMarker.y = pointMarkerTransform.point.y;
-                pointMarker.z = pointMarkerTransform.point.z;
-                roomMarkerLine.points.push_back(pointMarker);
-            }
+            //     geometry_msgs::msg::Point pointMarker;
+            //     pointMarker.x = pointMarkerTransform.point.x;
+            //     pointMarker.y = pointMarkerTransform.point.y;
+            //     pointMarker.z = pointMarkerTransform.point.z;
+            //     roomMarkerLine.points.push_back(pointMarker);
+            // }
             // if (metaMarker != nullptr)
             // {
             //     pointMarkerInit.frame_id_ = frameBC;
@@ -1262,8 +1260,8 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
             // Add items to the roomArray
             roomArray.markers.push_back(roomWallLine);
-            roomArray.markers.push_back(roomDoorLine);
-            roomArray.markers.push_back(roomMarkerLine);
+            // roomArray.markers.push_back(roomDoorLine);
+            // roomArray.markers.push_back(roomMarkerLine);
         }
 
         pubStructuralElements->publish(roomArray);
@@ -1274,7 +1272,6 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
     {
         // Variables
         std::vector<double> color = {0.3, 0.6, 0.7};
-        visualization_msgs::msg::Marker floorMarker, floorLabel, floorRoomLine;
 
         // Loop through all the floors
         for (int floorId = 0; floorId < numFloors; floorId++)
@@ -1282,6 +1279,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             // Variables
             std::string floorName = floors[floorId]->getName();
             Eigen::Vector3d floorCentroid = floors[floorId]->getCentroid();
+            visualization_msgs::msg::Marker floorMarker, floorLabel, floorRoomLine;
 
             // Floor marker (cube)
             floorMarker.id = floorId;
@@ -1312,12 +1310,12 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             floorLabel.color.g = 0;
             floorLabel.color.b = 0;
             floorLabel.scale.z = 0.2;
+            floorLabel.id = floorId;
             floorLabel.text = floorName;
-            floorLabel.ns = "floorLabel";
+            floorLabel.ns = "floorLabels";
             floorLabel.header.stamp = msgTime;
             floorLabel.action = floorLabel.ADD;
             floorLabel.header.frame_id = frameSE;
-            floorLabel.id = roomArray.markers.size();
             floorLabel.pose.position.x = floorCentroid.x();
             floorLabel.pose.position.y = floorCentroid.y();
             floorLabel.pose.position.z = floorCentroid.z();
@@ -1337,6 +1335,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             }
 
             // Floor to Room connection line
+            floorRoomLine.id = floorId;
             floorRoomLine.color.a = 0.9;
             floorRoomLine.color.r = 0.0;
             floorRoomLine.color.g = 0.0;
@@ -1344,21 +1343,20 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             floorRoomLine.scale.x = 0.05;
             floorRoomLine.scale.y = 0.05;
             floorRoomLine.scale.z = 0.05;
-            floorRoomLine.ns = "floor_room_edge";
+            floorRoomLine.ns = "floorRoomEdges";
             floorRoomLine.header.stamp = msgTime;
             floorRoomLine.header.frame_id = frameSE;
             floorRoomLine.action = floorRoomLine.ADD;
-            floorRoomLine.id = roomArray.markers.size();
             floorRoomLine.lifetime = rclcpp::Duration::from_seconds(0);
             floorRoomLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Create point for the floor centroid in the world frame
             geometry_msgs::msg::PointStamped floorPoint, floorPointT;
             floorPoint.header.stamp = msgTime;
+            floorPoint.header.frame_id = frameSE;
             floorPoint.point.x = floorCentroid.x();
             floorPoint.point.y = floorCentroid.y();
             floorPoint.point.z = floorCentroid.z();
-            floorPoint.header.frame_id = frameSE;
 
             // Connect the floor to its rooms
             for (const auto room : floors[floorId]->getRooms())
@@ -1372,7 +1370,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 floorRoomLine.points.push_back(pFloor);
 
                 roomPoint.header.stamp = msgTime;
-                roomPoint.header.frame_id = frameBC;
+                roomPoint.header.frame_id = frameSE;
                 roomPoint.point.x = room->getRoomCenter().x();
                 roomPoint.point.y = room->getRoomCenter().y();
                 roomPoint.point.z = room->getRoomCenter().z();
@@ -1438,9 +1436,9 @@ sensor_msgs::msg::PointCloud2 mapPointToPointcloud(std::vector<ORB_SLAM3::MapPoi
             Eigen::Vector3d P3Dw = mapPoints[idx]->GetWorldPos().cast<double>();
             tf2::Vector3 pointTranslation(P3Dw.x(), P3Dw.y(), P3Dw.z());
             float dataArray[numChannels] = {
-                pointTranslation.x(),
-                pointTranslation.y(),
-                pointTranslation.z()};
+                static_cast<float>(pointTranslation.x()),
+                static_cast<float>(pointTranslation.y()),
+                static_cast<float>(pointTranslation.z())};
             memcpy(cloudDataPtr + (idx * cloud.point_step), dataArray, numChannels * sizeof(float));
         }
     }
