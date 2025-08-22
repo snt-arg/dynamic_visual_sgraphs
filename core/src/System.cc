@@ -272,7 +272,7 @@ namespace ORB_SLAM3
 
     void System::setSkeletonCluster(const std::vector<std::vector<Eigen::Vector3d>> &skeletonClusterPoints)
     {
-        // Adding the skeleton cluster to the SemanticSegmentation
+        // Adding the skeleton cluster to the SemanticsManager
         mpAtlas->SetSkeletonClusterPoints(skeletonClusterPoints);
     }
 

@@ -110,12 +110,12 @@ namespace ORB_SLAM3
          * 🚧 [vS-Graphs v.1.2.0] This solution is not very reliable. It is recommended to use other
          * structural element recognition solutions.
          */
-        void updateMapRoomCandidateToRoomGeo(KeyFrame *pKF);
+        void updateMapRoomCandidateToRoomGeo(ORB_SLAM3::KeyFrame *pKF);
 
         /**
-         * @brief Uses the Skeleton Voxblox to detect room candidates
+         * @brief Processes the latest skeleton cluster to detect rooms based on free space clustering
          */
-        void detectMapRoomCandidateVoxblox();
+        void detectRoomCandidate_FreeSpaceCluster();
 
         /**
          * @brief Gets the rooms detected by the GNN module

@@ -1514,7 +1514,6 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
                     pointIn.header.frame_id = frameMap;
                     pointIn.header.stamp = rclcpp::Time(0);
                     pointIn.point = point;
-                    // transformListener->transformPoint(frameWorld, pointIn, pointOut);
                     try
                     {
                         auto tf_stamped = tfBuffer_->lookupTransform(
@@ -1524,11 +1523,10 @@ void setVoxbloxSkeletonCluster(const visualization_msgs::msg::MarkerArray &skele
                     catch (tf2::TransformException &ex)
                     {
                         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform skeleton cluster point: %s", ex.what());
-                        pointOut = pointIn; // fallback: use original point
+                        pointOut = pointIn; // Fallback: use original point
                     }
                     // Add the point to the cluster
                     Eigen::Vector3d newPoint(pointOut.point.x, pointOut.point.y, pointOut.point.z);
-
                     clusterPoints.push_back(newPoint);
                 }
 

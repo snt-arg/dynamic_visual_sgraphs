@@ -22,12 +22,6 @@ def generate_launch_description():
                 description="The method to segment the semantic scene",
                 choices=["yoso", "pfcn"],
             ),
-            DeclareLaunchArgument(
-                "structural_element_detector",
-                default_value="none",
-                description="The method to detect structural elements",
-                choices=["none", "freespace", "gnn_legacy", "gnn_new"],
-            ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
             DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
@@ -221,31 +215,7 @@ def generate_launch_description():
                     ],
                 ],
             ),
-            # Structural Element Detectors (based on structural_element_detector argument)
-            # -- Method 1: Free-Space Clustering
-            Node(
-                condition=IfCondition(
-                    EqualsSubstitution(
-                        LaunchConfiguration("structural_element_detector"), "freespace"
-                    )
-                ),
-                name="voxblox_skeleton",
-                package="voxblox_skeleton",
-                executable="situational_graphs_reasoning",
-                output="screen",
-            ),
-            # -- Method 2: GNN-based Segmentation (legacy)
-            Node(
-                condition=IfCondition(
-                    EqualsSubstitution(
-                        LaunchConfiguration("structural_element_detector"), "gnn_legacy"
-                    )
-                ),
-                name="situational_graphs_reasoning",
-                package="situational_graphs_reasoning",
-                executable="situational_graphs_reasoning",
-                output="screen",
-            ),
+            # Structural Element Detectors
             # Node(
             #     name="situational_graphs_reasoning",
             #     package="situational_graphs_reasoning",

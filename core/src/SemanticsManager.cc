@@ -50,10 +50,8 @@ namespace ORB_SLAM3
                 Utils::reAssociateSemanticPlanes(mpAtlas);
 
             // Check for possible room candidates
-            // if (sysParams->room_seg.method == SystemParams::room_seg::Method::GEOMETRIC)
-            // updateMapRoomCandidateToRoomGeo(thisKF);
             if (sysParams->room_seg.method == SystemParams::room_seg::Method::FREE_SPACE)
-                detectMapRoomCandidateVoxblox();
+                detectRoomCandidate_FreeSpaceCluster();
             else if (sysParams->room_seg.method == SystemParams::room_seg::Method::GNN)
                 detectMapRoomCandidateGNN();
 
@@ -317,17 +315,21 @@ namespace ORB_SLAM3
             }
     }
 
-    void SemanticsManager::detectMapRoomCandidateVoxblox()
+    void SemanticsManager::detectRoomCandidate_FreeSpaceCluster()
     {
         // Variables
-        std::vector<Plane *> allWalls;
+        std::vector<ORB_SLAM3::Plane *> allWalls;
         ORB_SLAM3::Room *newClusterBasedRoom = nullptr;
 
         // Get the skeleton clusters
         std::vector<std::vector<Eigen::Vector3d>> clusters = getLatestSkeletonCluster();
 
+        // If there are no clusters, return
+        if (clusters.empty())
+            return;
+
         // Get all the mapped planes
-        std::vector<Plane *> allPlanes = mpAtlas->GetAllPlanes();
+        std::vector<ORB_SLAM3::Plane *> allPlanes = mpAtlas->GetAllPlanes();
 
         // Filter the planes to get only the walls
         for (const auto &plane : allPlanes)
@@ -338,8 +340,10 @@ namespace ORB_SLAM3
         for (const auto &cluster : clusters)
         {
             // Initializations
-            std::vector<Plane *> closestWalls;
-            std::pair<std::pair<Plane *, Plane *>, std::pair<Plane *, Plane *>> rectangularRoom;
+            std::vector<ORB_SLAM3::Plane *> closestWalls;
+            std::pair<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>, std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> rectangularRoom;
+
+            // [TODO] Create a new structural element
 
             // Loop over all walls
             for (const auto &wall : allWalls)
