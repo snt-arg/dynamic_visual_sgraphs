@@ -24,7 +24,7 @@ def generate_launch_description():
             ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
-            DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
+            DeclareLaunchArgument("sensor_config", default_value="SMapper_RealSense"),
             DeclareLaunchArgument(
                 "rgb_image_topic", default_value="/camera/realsense/color/image_raw"
             ),
