@@ -303,12 +303,14 @@ namespace ORB_SLAM3
     void GeoSemHelpers::createBlankRoomCandidate(ORB_SLAM3::Atlas *mpAtlas, Eigen::Vector3d centroid)
     {
         // Variable
+        int roomId = mpAtlas->GetAllRooms().size();
         ORB_SLAM3::Room *newRoom = new ORB_SLAM3::Room();
 
         // Fill the room entity
+        newRoom->setId(roomId);
+        newRoom->setRoomCentroid(centroid);
         newRoom->setMap(mpAtlas->GetCurrentMap());
-        newRoom->setId(mpAtlas->GetAllRooms().size());
-        newRoom->setRoomCenter(Eigen::Vector3d(2.0, 0.0, 3.0));
+        newRoom->setName("Room#" + std::to_string(roomId));
         newRoom->setRoomVariant(ORB_SLAM3::Room::roomVariant::UNDEFINED);
 
         // Add the room to the map
@@ -342,7 +344,7 @@ namespace ORB_SLAM3
         newMapRoomCandidate->setMap(mpAtlas->GetCurrentMap());
         newMapRoomCandidate->setId(mpAtlas->GetAllRooms().size());
         newMapRoomCandidate->setMetaMarkerId(matchedRoom->getMetaMarkerId());
-        newMapRoomCandidate->setRoomCenter(attachedMarker->getGlobalPose().translation().cast<double>());
+        newMapRoomCandidate->setRoomCentroid(attachedMarker->getGlobalPose().translation().cast<double>());
 
         // Add door markers to the room
         for (int markerId : matchedRoom->getDoorMarkerIds())
@@ -415,7 +417,7 @@ namespace ORB_SLAM3
             // Find the room center and add its vertex
             centroid = Utils::getRoomCenter(wall1, wall2, wall3, wall4);
         }
-        newMapRoomCandidate->setRoomCenter(centroid);
+        newMapRoomCandidate->setRoomCentroid(centroid);
 
         return newMapRoomCandidate;
     }
@@ -427,7 +429,7 @@ namespace ORB_SLAM3
         if (isMarkerBasedMapped)
         {
             // Augment the already detected marker-based room with the cluster-based room information
-            markerBasedRoom->setRoomCenter(clusterBasedRoom->getRoomCenter());
+            markerBasedRoom->setRoomCentroid(clusterBasedRoom->getRoomCentroid());
             // Connect the walls to the room
             for (ORB_SLAM3::Plane *wall : clusterBasedRoom->getWalls())
                 markerBasedRoom->setWalls(wall);

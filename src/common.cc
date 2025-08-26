@@ -952,7 +952,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         return;
 
     // Variables
-    double textOffset = 0.5;
+    double textOffset = -0.5;
     double floorToRoomOffset = -2.0;
 
     // Visualization markers
@@ -975,7 +975,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
                 color = {0.5, 0.1, 1.0};
 
-            Eigen::Vector3d centroid = rooms[idx]->getRoomCenter();
+            Eigen::Vector3d centroid = rooms[idx]->getRoomCentroid();
             visualization_msgs::msg::Marker room, roomWallLine, roomDoorLine, roomMarkerLine, roomLabel;
 
             // Room values
@@ -1330,8 +1330,8 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             }
             else
             {
-                floorLabel.pose.position.y += floorToRoomOffset;
-                floorMarker.pose.position.y += (floorToRoomOffset + textOffset);
+                floorMarker.pose.position.y += floorToRoomOffset;
+                floorLabel.pose.position.y += (floorToRoomOffset + textOffset);
             }
 
             // Floor to Room connection line
@@ -1371,9 +1371,9 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
                 roomPoint.header.stamp = msgTime;
                 roomPoint.header.frame_id = frameSE;
-                roomPoint.point.x = room->getRoomCenter().x();
-                roomPoint.point.y = room->getRoomCenter().y();
-                roomPoint.point.z = room->getRoomCenter().z();
+                roomPoint.point.x = room->getRoomCentroid().x();
+                roomPoint.point.y = room->getRoomCentroid().y();
+                roomPoint.point.z = room->getRoomCentroid().z();
 
                 pRoom.x = roomPoint.point.x;
                 pRoom.y = roomPoint.point.y;

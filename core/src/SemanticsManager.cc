@@ -336,6 +336,10 @@ namespace ORB_SLAM3
         // Find the walls within the threshold distance to the cluster points
         for (const auto &cluster : clusters)
         {
+            // If the cluster is empty, continue to the next cluster
+            if (cluster.empty())
+                continue;
+
             // Initializations
             std::vector<ORB_SLAM3::Plane *> closestWalls;
             std::pair<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>, std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> rectangularRoom;
@@ -444,7 +448,7 @@ namespace ORB_SLAM3
             std::vector<Eigen::Vector3d> roomCentroids;
             for (auto &room : allRooms)
                 // Add the centroid to the vector
-                roomCentroids.push_back(room->getRoomCenter());
+                roomCentroids.push_back(room->getRoomCentroid());
 
             // Set all the detected rooms to the floor (assuming single floor)
             for (auto &floor : mpAtlas->GetAllFloors())
@@ -507,12 +511,12 @@ namespace ORB_SLAM3
         }
 
         // Get the given room center
-        Eigen::Vector3d detetedRoomCenter = givenRoom->getRoomCenter();
+        Eigen::Vector3d detetedRoomCenter = givenRoom->getRoomCentroid();
 
         // Check to find the room with the minimum distance from the center
         for (const auto &mapRoom : givenRoomList)
         {
-            Eigen::Vector3d mapRoomCenter = mapRoom->getRoomCenter();
+            Eigen::Vector3d mapRoomCenter = mapRoom->getRoomCentroid();
             double distance = (detetedRoomCenter - mapRoomCenter).norm();
 
             if (distance < minDistance)
