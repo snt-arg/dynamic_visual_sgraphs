@@ -138,12 +138,12 @@ namespace ORB_SLAM3
         doors.push_back(value);
     }
 
-    Eigen::Vector3d Room::getRoomCentroid() const
+    Eigen::Vector3d Room::getCentroid() const
     {
         return centroid;
     }
 
-    void Room::setRoomCentroid(Eigen::Vector3d value)
+    void Room::setCentroid(Eigen::Vector3d value)
     {
         centroid = value;
     }

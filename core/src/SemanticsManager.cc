@@ -350,8 +350,8 @@ namespace ORB_SLAM3
             // [TODO] Check if the room already exists in the map
             ORB_SLAM3::Room *existedRoom = associateRooms(clusterCentroid);
             if (existedRoom != nullptr)
-                // If the room already exists, do not create a new one
-                continue;
+                // If the room already exists, update its centroid
+                existedRoom->setCentroid(clusterCentroid);
             else
                 // Create a new structural element (blank room)
                 GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
@@ -454,7 +454,7 @@ namespace ORB_SLAM3
             std::vector<Eigen::Vector3d> roomCentroids;
             for (auto &room : allRooms)
                 // Add the centroid to the vector
-                roomCentroids.push_back(room->getRoomCentroid());
+                roomCentroids.push_back(room->getCentroid());
 
             // Set all the detected rooms to the floor (assuming single floor)
             for (auto &floor : mpAtlas->GetAllFloors())
@@ -481,7 +481,7 @@ namespace ORB_SLAM3
 
         for (const auto &mapRoom : allRooms)
         {
-            Eigen::Vector3d mapRoomCentroid = mapRoom->getRoomCentroid();
+            Eigen::Vector3d mapRoomCentroid = mapRoom->getCentroid();
             double distance = (givenRoomCentroid - mapRoomCentroid).norm();
 
             if (distance < distanceThresh)
@@ -542,12 +542,12 @@ namespace ORB_SLAM3
         }
 
         // Get the given room center
-        Eigen::Vector3d detetedRoomCenter = givenRoom->getRoomCentroid();
+        Eigen::Vector3d detetedRoomCenter = givenRoom->getCentroid();
 
         // Check to find the room with the minimum distance from the center
         for (const auto &mapRoom : givenRoomList)
         {
-            Eigen::Vector3d mapRoomCenter = mapRoom->getRoomCentroid();
+            Eigen::Vector3d mapRoomCenter = mapRoom->getCentroid();
             double distance = (detetedRoomCenter - mapRoomCenter).norm();
 
             if (distance < minDistance)

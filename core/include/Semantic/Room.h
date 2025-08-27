@@ -92,8 +92,8 @@ namespace ORB_SLAM3
         void setDoorMarkerIds(int value);
         std::vector<int> getDoorMarkerIds() const;
 
-        Eigen::Vector3d getRoomCentroid() const;
-        void setRoomCentroid(Eigen::Vector3d value);
+        Eigen::Vector3d getCentroid() const;
+        void setCentroid(Eigen::Vector3d value);
 
         Map *getMap();
         void setMap(Map *pMap);

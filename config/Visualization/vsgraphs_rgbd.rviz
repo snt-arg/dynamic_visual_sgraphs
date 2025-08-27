@@ -315,7 +315,7 @@ Visualization Manager:
       Axis: X
       Channel Name: intensity
       Class: rviz_default_plugins/PointCloud2
-      Color: 0; 170; 255
+      Color: 255; 170; 0
       Color Transformer: FlatColor
       Decay Time: 0
       Enabled: true
@@ -389,8 +389,12 @@ Visualization Manager:
       Name: Structural Elements
       Namespaces:
         "": true
-        floor_room_edge: true
+        floorLabels: true
+        floorRoomEdges: true
         floors: true
+        room: true
+        roomLabel: true
+        room_wall_lines: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -492,10 +496,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.42979684472084045
+      Pitch: 0.549796998500824
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.6953988075256348
+      Yaw: 2.815408229827881
     Saved: ~
 Window Geometry:
   Displays:

@@ -308,7 +308,7 @@ namespace ORB_SLAM3
 
         // Fill the room entity
         newRoom->setId(roomId);
-        newRoom->setRoomCentroid(centroid);
+        newRoom->setCentroid(centroid);
         newRoom->setMap(mpAtlas->GetCurrentMap());
         newRoom->setName("Room#" + std::to_string(roomId));
         newRoom->setRoomVariant(ORB_SLAM3::Room::roomVariant::UNDEFINED);
@@ -344,7 +344,7 @@ namespace ORB_SLAM3
         newMapRoomCandidate->setMap(mpAtlas->GetCurrentMap());
         newMapRoomCandidate->setId(mpAtlas->GetAllRooms().size());
         newMapRoomCandidate->setMetaMarkerId(matchedRoom->getMetaMarkerId());
-        newMapRoomCandidate->setRoomCentroid(attachedMarker->getGlobalPose().translation().cast<double>());
+        newMapRoomCandidate->setCentroid(attachedMarker->getGlobalPose().translation().cast<double>());
 
         // Add door markers to the room
         for (int markerId : matchedRoom->getDoorMarkerIds())
@@ -417,7 +417,7 @@ namespace ORB_SLAM3
             // Find the room center and add its vertex
             centroid = Utils::getRoomCenter(wall1, wall2, wall3, wall4);
         }
-        newMapRoomCandidate->setRoomCentroid(centroid);
+        newMapRoomCandidate->setCentroid(centroid);
 
         return newMapRoomCandidate;
     }
@@ -429,7 +429,7 @@ namespace ORB_SLAM3
         if (isMarkerBasedMapped)
         {
             // Augment the already detected marker-based room with the cluster-based room information
-            markerBasedRoom->setRoomCentroid(clusterBasedRoom->getRoomCentroid());
+            markerBasedRoom->setCentroid(clusterBasedRoom->getCentroid());
             // Connect the walls to the room
             for (ORB_SLAM3::Plane *wall : clusterBasedRoom->getWalls())
                 markerBasedRoom->setWalls(wall);

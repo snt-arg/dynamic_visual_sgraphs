@@ -975,7 +975,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             if (rooms[idx]->getRoomVariant() == ORB_SLAM3::Room::roomVariant::ROOM)
                 color = {0.5, 0.1, 1.0};
 
-            Eigen::Vector3d centroid = rooms[idx]->getRoomCentroid();
+            Eigen::Vector3d centroid = rooms[idx]->getCentroid();
             visualization_msgs::msg::Marker room, roomWallLine, roomDoorLine, roomMarkerLine, roomLabel;
 
             // Room values
@@ -1371,9 +1371,9 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
                 roomPoint.header.stamp = msgTime;
                 roomPoint.header.frame_id = frameSE;
-                roomPoint.point.x = room->getRoomCentroid().x();
-                roomPoint.point.y = room->getRoomCentroid().y();
-                roomPoint.point.z = room->getRoomCentroid().z();
+                roomPoint.point.x = room->getCentroid().x();
+                roomPoint.point.y = room->getCentroid().y();
+                roomPoint.point.z = room->getCentroid().z();
 
                 pRoom.x = roomPoint.point.x;
                 pRoom.y = roomPoint.point.y;

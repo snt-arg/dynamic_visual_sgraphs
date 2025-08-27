@@ -418,7 +418,7 @@ namespace ORB_SLAM3
             int opIdG = maxOpId + nRooms;
             vrtxRoom->setId(opIdG);
             vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                               vpRoom->getRoomCentroid().cast<double>()));
+                                               vpRoom->getCentroid().cast<double>()));
             optimizer.addVertex(vrtxRoom);
             nRooms++;
 
@@ -2173,7 +2173,7 @@ namespace ORB_SLAM3
             int opId = maxOpId + nRooms;
             vrtxRoom->setId(opId);
             vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                               pMapRoom->getRoomCentroid().cast<double>()));
+                                               pMapRoom->getCentroid().cast<double>()));
             optimizer.addVertex(vrtxRoom);
             nRooms++;
 
@@ -2442,7 +2442,7 @@ namespace ORB_SLAM3
             Room *pMapRoom = *idx;
             g2o::VertexSE3Expmap *vrtxRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapRoom->getOpId()));
             g2o::SE3Quat SE3quat = vrtxRoom->estimate();
-            pMapRoom->setRoomCentroid(SE3quat.translation());
+            pMapRoom->setCentroid(SE3quat.translation());
 
             // Locally Optimized Doors
             for (const auto door : pMapRoom->getDoors())
@@ -3212,7 +3212,7 @@ namespace ORB_SLAM3
                 continue;
 
             // Update the global pose of the room
-            pRoom->setRoomCentroid(pMarker->getGlobalPose().translation().cast<double>());
+            pRoom->setCentroid(pMarker->getGlobalPose().translation().cast<double>());
         }
 
         // Correct the pose of the detected rooms in the new map
@@ -3220,7 +3220,7 @@ namespace ORB_SLAM3
         for (Room *pRoom : vpCurrentDetMapRooms)
         {
             // Get the current room center
-            Eigen::Vector3d roomCenter = pRoom->getRoomCentroid();
+            Eigen::Vector3d roomCenter = pRoom->getCentroid();
 
             // Check if there is a valid reference KeyFrame
             if (pSampleRefKF)
@@ -3233,7 +3233,7 @@ namespace ORB_SLAM3
                 Eigen::Vector3d correctedRoomCenter = transformedCenter.head<3>();
 
                 // Update the global pose of the room
-                pRoom->setRoomCentroid(correctedRoomCenter);
+                pRoom->setCentroid(correctedRoomCenter);
             }
             else
                 std::cout << "-- Skipped fixing room#" << pRoom->getId()
