@@ -99,11 +99,18 @@ namespace ORB_SLAM3
                                 double perpThreshDeg = 5.0);
 
         /**
+         * @brief Checks for the existing of a room within a certain distance from the given room centroid.
+         * It returns the address of the existing room if found, otherwise returns nullptr.
+         * @param givenRoomCentroid the centroid of the given room
+         */
+        ORB_SLAM3::Room *associateRooms(const Eigen::Vector3d givenRoomCentroid);
+
+        /**
          * @brief Checks for the association of a given room
          * @param givenRoom the address of the given room
          * @param givenRoomList the list of rooms to be checked
          */
-        Room *roomAssociation(const ORB_SLAM3::Room *givenRoom, const vector<Room *> &givenRoomList);
+        ORB_SLAM3::Room *associateRooms(const ORB_SLAM3::Room *givenRoom, const vector<Room *> &givenRoomList);
 
         /**
          * @brief Converts mapped room candidates to rooms using geometric constraints

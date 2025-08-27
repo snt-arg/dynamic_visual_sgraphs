@@ -347,8 +347,14 @@ namespace ORB_SLAM3
             // Calculate the cluster centroid
             Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // Create a new structural element (blank room)
-            GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
+            // [TODO] Check if the room already exists in the map
+            ORB_SLAM3::Room *existedRoom = associateRooms(clusterCentroid);
+            if (existedRoom != nullptr)
+                // If the room already exists, do not create a new one
+                continue;
+            else
+                // Create a new structural element (blank room)
+                GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
 
             // // Loop over all walls
             // for (const auto &wall : allWalls)
@@ -406,7 +412,7 @@ namespace ORB_SLAM3
             // }
 
             // // Check if the room has not been created before
-            // ORB_SLAM3::Room *foundMarkerBasedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllMarkerBasedMapRooms());
+            // ORB_SLAM3::Room *foundMarkerBasedRoom = associateRooms(newClusterBasedRoom, mpAtlas->GetAllMarkerBasedMapRooms());
             // if (foundMarkerBasedRoom != nullptr)
             // {
             //     // If the room already exists, update the existing room candidate with the new information
@@ -415,7 +421,7 @@ namespace ORB_SLAM3
             // else
             // {
             //     // Otherwise, add the new room candidate to the map
-            //     ORB_SLAM3::Room *detectedRoom = roomAssociation(newClusterBasedRoom, mpAtlas->GetAllDetectedMapRooms());
+            //     ORB_SLAM3::Room *detectedRoom = associateRooms(newClusterBasedRoom, mpAtlas->GetAllDetectedMapRooms());
             //     if (detectedRoom == nullptr)
             //     {
             //         std::cout << "\n[SemSeg]" << std::endl;
@@ -463,8 +469,33 @@ namespace ORB_SLAM3
         }
     }
 
-    ORB_SLAM3::Room *SemanticsManager::roomAssociation(const ORB_SLAM3::Room *givenRoom,
-                                                       const vector<Room *> &givenRoomList)
+    ORB_SLAM3::Room *SemanticsManager::associateRooms(const Eigen::Vector3d givenRoomCentroid)
+    {
+        // Variables
+        ORB_SLAM3::Room *closestRoom = nullptr;
+        double distanceThresh = sysParams->room_seg.center_distance_thresh;
+
+        const auto &allRooms = mpAtlas->GetAllRooms();
+        if (allRooms.empty())
+            return nullptr;
+
+        for (const auto &mapRoom : allRooms)
+        {
+            Eigen::Vector3d mapRoomCentroid = mapRoom->getRoomCentroid();
+            double distance = (givenRoomCentroid - mapRoomCentroid).norm();
+
+            if (distance < distanceThresh)
+            {
+                distanceThresh = distance;
+                closestRoom = mapRoom;
+            }
+        }
+
+        return closestRoom;
+    }
+
+    ORB_SLAM3::Room *SemanticsManager::associateRooms(const ORB_SLAM3::Room *givenRoom,
+                                                      const vector<Room *> &givenRoomList)
     {
         // Variables
         ORB_SLAM3::Room *foundMappedRoom = nullptr;
