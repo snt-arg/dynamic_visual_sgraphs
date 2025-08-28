@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "Settings.h"
 
@@ -45,19 +45,19 @@ namespace ORB_SLAM3
         {
             if (required)
             {
-                std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
+                std::cerr << "\t- Required parameter '" << name << "' does not exist! Aborting..." << std::endl;
                 exit(-1);
             }
             else
             {
-                std::cerr << name << " optional parameter does not exist..." << std::endl;
+                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
                 found = false;
                 return 0.0f;
             }
         }
         else if (!node.isReal())
         {
-            std::cerr << name << " parameter must be a real number, aborting..." << std::endl;
+            std::cerr << "\t- Parameter '" << name << "' is not a real number! Aborting..." << std::endl;
             exit(-1);
         }
         else
@@ -75,19 +75,19 @@ namespace ORB_SLAM3
         {
             if (required)
             {
-                std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
+                std::cerr << "\t- Required parameter '" << name << "' does not exist! Aborting..." << std::endl;
                 exit(-1);
             }
             else
             {
-                std::cerr << name << " optional parameter does not exist..." << std::endl;
+                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
                 found = false;
                 return 0;
             }
         }
         else if (!node.isInt())
         {
-            std::cerr << name << " parameter must be an integer number, aborting..." << std::endl;
+            std::cerr << "\t- Parameter '" << name << "' is not an integer! Aborting..." << std::endl;
             exit(-1);
         }
         else
@@ -105,19 +105,19 @@ namespace ORB_SLAM3
         {
             if (required)
             {
-                std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
+                std::cerr << "\t- Required parameter '" << name << "' does not exist! Aborting..." << std::endl;
                 exit(-1);
             }
             else
             {
-                std::cerr << name << " optional parameter does not exist..." << std::endl;
+                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
                 found = false;
                 return string();
             }
         }
         else if (!node.isString())
         {
-            std::cerr << name << " parameter must be a string, aborting..." << std::endl;
+            std::cerr << "\t- Parameter '" << name << "' is not a string! Aborting..." << std::endl;
             exit(-1);
         }
         else
@@ -135,12 +135,12 @@ namespace ORB_SLAM3
         {
             if (required)
             {
-                std::cerr << name << " required parameter does not exist, aborting..." << std::endl;
+                std::cerr << "\t- Required parameter '" << name << "' does not exist! Aborting..." << std::endl;
                 exit(-1);
             }
             else
             {
-                std::cerr << name << " optional parameter does not exist..." << std::endl;
+                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
                 found = false;
                 return cv::Mat();
             }
@@ -152,7 +152,9 @@ namespace ORB_SLAM3
         }
     }
 
-    Settings::Settings(const std::string &configFile, const int &sensor) : bNeedToUndistort_(false), bNeedToRectify_(false), bNeedToResize1_(false), bNeedToResize2_(false)
+    Settings::Settings(const std::string &configFile, const int &sensor) : bNeedToUndistort_(false),
+                                                                           bNeedToRectify_(false), bNeedToResize1_(false),
+                                                                           bNeedToResize2_(false)
     {
         sensor_ = sensor;
 
@@ -160,85 +162,87 @@ namespace ORB_SLAM3
         cv::FileStorage fSettings(configFile, cv::FileStorage::READ);
         if (!fSettings.isOpened())
         {
-            cerr << "[ERROR]: could not open configuration file at: " << configFile << endl;
-            cerr << "Aborting..." << endl;
-
+            std::cerr << "\n[Settings] Could not open the configuration file at '" << configFile << "'! Aborting..." << std::endl;
             exit(-1);
         }
         else
-        {
-            cout << "Loading settings from " << configFile << endl;
-        }
+            std::cout << "\n[Settings] Loading configurations from '" << configFile << "'..." << std::endl;
 
-        // Read first camera
+        // Read Camera#1 (monocular, stereo or RGB-D)
         readCamera1(fSettings);
-        cout << "\t-Loaded camera 1" << endl;
+        std::cout << "[Settings] Camera#1 settings loaded!" << std::endl;
 
-        // Read second camera if stereo (not rectified)
+        // Read Camera#2 (stereo)
         if (sensor_ == System::STEREO || sensor_ == System::IMU_STEREO)
         {
             readCamera2(fSettings);
-            cout << "\t-Loaded camera 2" << endl;
+            std::cout << "[Settings] Camera#2 settings loaded!" << std::endl;
         }
 
         // Read image info
         readImageInfo(fSettings);
-        cout << "\t-Loaded image info" << endl;
+        std::cout << "[Settings] Camera info loaded!" << std::endl;
 
+        // Read IMU params
         if (sensor_ == System::IMU_MONOCULAR || sensor_ == System::IMU_STEREO || sensor_ == System::IMU_RGBD)
         {
             readIMU(fSettings);
-            cout << "\t-Loaded IMU calibration" << endl;
+            std::cout << "[Settings] IMU calibration settings loaded!" << std::endl;
         }
 
         if (sensor_ == System::RGBD || sensor_ == System::IMU_RGBD)
         {
             readRGBD(fSettings);
-            cout << "\t-Loaded RGB-D calibration" << endl;
+            std::cout << "[Settings] RGB-D settings loaded!" << std::endl;
         }
 
+        // Read ORB parameters
         readORB(fSettings);
-        cout << "\t-Loaded ORB settings" << endl;
+        std::cout << "[Settings] ORB settings loaded!" << std::endl;
+
+        // Read Viewer parameters
         readViewer(fSettings);
-        cout << "\t-Loaded viewer settings" << endl;
+        std::cout << "[Settings] Viewer settings loaded!" << std::endl;
+
+        // Read Atlas parameters
         readLoadAndSave(fSettings);
-        cout << "\t-Loaded Atlas settings" << endl;
+        std::cout << "[Settings] ATLAS settings loaded!" << std::endl;
+
+        // Read other parameters
         readOtherParameters(fSettings);
-        cout << "\t-Loaded misc parameters" << endl;
+        std::cout << "[Settings] Misc. parameters loaded!" << std::endl;
 
         if (bNeedToRectify_)
         {
             precomputeRectificationMaps();
-            cout << "\t-Computed rectification maps" << endl;
+            std::cout << "[Settings] Computed rectification maps!" << std::endl;
         }
-
-        cout << "----------------------------------" << endl;
     }
 
     void Settings::readCamera1(cv::FileStorage &fSettings)
     {
+        // Variables
         bool found;
+        std::vector<float> vCalibration;
 
-        // Read camera model
-        string cameraModel = readParameter<string>(fSettings, "Camera.type", found);
+        // Camera model
+        std::string cameraModel = readParameter<std::string>(fSettings, "Camera.type", found);
 
-        vector<float> vCalibration;
         if (cameraModel == "PinHole")
         {
             cameraType_ = PinHole;
 
-            // Read intrinsic parameters
+            // Intrinsic parameters
             float fx = readParameter<float>(fSettings, "Camera1.fx", found);
             float fy = readParameter<float>(fSettings, "Camera1.fy", found);
             float cx = readParameter<float>(fSettings, "Camera1.cx", found);
             float cy = readParameter<float>(fSettings, "Camera1.cy", found);
-
             vCalibration = {fx, fy, cx, cy};
 
             calibration1_ = new Pinhole(vCalibration);
             originalCalib1_ = new Pinhole(vCalibration);
 
-            // Check if it is a distorted PinHole
+            // Check if the PinHole is distorted
             readParameter<float>(fSettings, "Camera1.k1", found, false);
             if (found)
             {
@@ -249,9 +253,7 @@ namespace ORB_SLAM3
                     vPinHoleDistorsion1_[4] = readParameter<float>(fSettings, "Camera1.k3", found);
                 }
                 else
-                {
                     vPinHoleDistorsion1_.resize(4);
-                }
                 vPinHoleDistorsion1_[0] = readParameter<float>(fSettings, "Camera1.k1", found);
                 vPinHoleDistorsion1_[1] = readParameter<float>(fSettings, "Camera1.k2", found);
                 vPinHoleDistorsion1_[2] = readParameter<float>(fSettings, "Camera1.p1", found);
@@ -260,26 +262,21 @@ namespace ORB_SLAM3
 
             // Check if we need to correct distortion from the images
             if ((sensor_ == System::MONOCULAR || sensor_ == System::IMU_MONOCULAR) && vPinHoleDistorsion1_.size() != 0)
-            {
                 bNeedToUndistort_ = true;
-            }
         }
         else if (cameraModel == "Rectified")
         {
             cameraType_ = Rectified;
 
-            // Read intrinsic parameters
+            // Intrinsic parameters
             float fx = readParameter<float>(fSettings, "Camera1.fx", found);
             float fy = readParameter<float>(fSettings, "Camera1.fy", found);
             float cx = readParameter<float>(fSettings, "Camera1.cx", found);
             float cy = readParameter<float>(fSettings, "Camera1.cy", found);
-
             vCalibration = {fx, fy, cx, cy};
 
             calibration1_ = new Pinhole(vCalibration);
             originalCalib1_ = new Pinhole(vCalibration);
-
-            // Rectified images are assumed to be ideal PinHole images (no distortion)
         }
         else if (cameraModel == "KannalaBrandt8")
         {
@@ -297,7 +294,6 @@ namespace ORB_SLAM3
             float k3 = readParameter<float>(fSettings, "Camera1.k4", found);
 
             vCalibration = {fx, fy, cx, cy, k0, k1, k2, k3};
-
             calibration1_ = new KannalaBrandt8(vCalibration);
             originalCalib1_ = new KannalaBrandt8(vCalibration);
 
@@ -305,14 +301,13 @@ namespace ORB_SLAM3
             {
                 int colBegin = readParameter<int>(fSettings, "Camera1.overlappingBegin", found);
                 int colEnd = readParameter<int>(fSettings, "Camera1.overlappingEnd", found);
-                vector<int> vOverlapping = {colBegin, colEnd};
-
+                std::vector<int> vOverlapping = {colBegin, colEnd};
                 static_cast<KannalaBrandt8 *>(calibration1_)->mvLappingArea = vOverlapping;
             }
         }
         else
         {
-            cerr << "Error: " << cameraModel << " not known" << endl;
+            std::cerr << "[Settings] Could not find Camera#1 settings for '" << cameraModel << "'! Exiting ..." << std::endl;
             exit(-1);
         }
     }
@@ -480,13 +475,9 @@ namespace ORB_SLAM3
 
         readParameter<int>(fSettings, "IMU.InsertKFsWhenLost", found, false);
         if (found)
-        {
             insertKFsWhenLost_ = (bool)readParameter<int>(fSettings, "IMU.InsertKFsWhenLost", found, false);
-        }
         else
-        {
             insertKFsWhenLost_ = true;
-        }
     }
 
     void Settings::readRGBD(cv::FileStorage &fSettings)
@@ -601,146 +592,121 @@ namespace ORB_SLAM3
         }
     }
 
-    ostream &operator<<(std::ostream &output, const Settings &settings)
+    std::ostream &operator<<(std::ostream &output, const Settings &settings)
     {
-        output << "SLAM settings: " << endl;
-
-        output << "\t-Camera 1 parameters (";
+        // Camera#1
+        output << "\t- Camera#1 parameters (";
         if (settings.cameraType_ == Settings::PinHole || settings.cameraType_ == Settings::Rectified)
-        {
             output << "Pinhole";
-        }
         else
-        {
             output << "Kannala-Brandt";
-        }
-        output << ")"
-               << ": [";
+        output << "): [";
         for (size_t i = 0; i < settings.originalCalib1_->size(); i++)
-        {
             output << " " << settings.originalCalib1_->getParameter(i);
-        }
         output << " ]" << endl;
 
         if (!settings.vPinHoleDistorsion1_.empty())
         {
-            output << "\t-Camera 1 distortion parameters: [ ";
+            output << "\t- Camera#1 distortion parameters: [ ";
             for (float d : settings.vPinHoleDistorsion1_)
-            {
                 output << " " << d;
-            }
             output << " ]" << endl;
         }
 
         if ((settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO) && (settings.cameraType_ != Settings::Rectified))
         {
-            output << "\t-Camera 2 parameters (";
+            output << "\t- Camera#2 parameters (";
             if (settings.cameraType_ == Settings::PinHole)
-            {
                 output << "Pinhole";
-            }
             else
-            {
                 output << "Kannala-Brandt";
-            }
-            output << ")"
-                   << ": [";
+            output << "): [";
             for (size_t i = 0; i < settings.originalCalib2_->size(); i++)
-            {
                 output << " " << settings.originalCalib2_->getParameter(i);
-            }
             output << " ]" << endl;
 
             if (!settings.vPinHoleDistorsion2_.empty())
             {
-                output << "\t-Camera 2 distortion parameters: [ ";
+                output << "\t- Camera#2 distortion parameters: [ ";
                 for (float d : settings.vPinHoleDistorsion2_)
-                {
                     output << " " << d;
-                }
                 output << " ]" << endl;
             }
         }
 
-        output << "\t-Original image size: [ " << settings.originalImSize_.width << " , " << settings.originalImSize_.height << " ]" << endl;
-        output << "\t-Current image size: [ " << settings.newImSize_.width << " , " << settings.newImSize_.height << " ]" << endl;
+        output << "\t- Original frame size: [ " << settings.originalImSize_.width << "," << settings.originalImSize_.height << " ]" << endl;
+        output << "\t- Current frame size: [ " << settings.newImSize_.width << "," << settings.newImSize_.height << " ]" << endl;
 
         if (settings.bNeedToRectify_)
         {
-            output << "\t-Camera 1 parameters after rectification: [ ";
+            output << "\t- Camera#1 parameters after rectification: [";
             for (size_t i = 0; i < settings.calibration1_->size(); i++)
-            {
                 output << " " << settings.calibration1_->getParameter(i);
-            }
             output << " ]" << endl;
 
             if (settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO)
             {
-                output << "\t-Camera 2 parameters after rectification: [ ";
+                output << "\t- Camera#2 parameters after rectification: [";
                 for (size_t i = 0; i < settings.calibration2_->size(); i++)
-                {
                     output << " " << settings.calibration2_->getParameter(i);
-                }
                 output << " ]" << endl;
             }
         }
         else if (settings.bNeedToResize1_)
         {
-            output << "\t-Camera 1 parameters after resize: [ ";
+            output << "\t- Camera#1 parameters after resize: [";
             for (size_t i = 0; i < settings.calibration1_->size(); i++)
-            {
                 output << " " << settings.calibration1_->getParameter(i);
-            }
             output << " ]" << endl;
 
             if ((settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO) &&
                 settings.cameraType_ == Settings::KannalaBrandt)
             {
-                output << "\t-Camera 2 parameters after resize: [ ";
+                output << "\t- Camera#2 parameters after resize: [";
                 for (size_t i = 0; i < settings.calibration2_->size(); i++)
-                {
                     output << " " << settings.calibration2_->getParameter(i);
-                }
                 output << " ]" << endl;
             }
         }
 
-        output << "\t-Sequence FPS: " << settings.fps_ << endl;
+        // Frame rate
+        output << "\t- Sequence FPS: " << settings.fps_ << endl;
 
         // Stereo stuff
         if (settings.sensor_ == System::STEREO || settings.sensor_ == System::IMU_STEREO)
         {
-            output << "\t-Stereo baseline: " << settings.b_ << endl;
-            output << "\t-Stereo depth threshold : " << settings.thDepth_ << endl;
+            output << "\t- Stereo baseline: " << settings.b_ << endl;
+            output << "\t- Stereo depth threshold : " << settings.thDepth_ << endl;
 
             if (settings.cameraType_ == Settings::KannalaBrandt)
             {
                 auto vOverlapping1 = static_cast<KannalaBrandt8 *>(settings.calibration1_)->mvLappingArea;
                 auto vOverlapping2 = static_cast<KannalaBrandt8 *>(settings.calibration2_)->mvLappingArea;
-                output << "\t-Camera 1 overlapping area: [ " << vOverlapping1[0] << " , " << vOverlapping1[1] << " ]" << endl;
-                output << "\t-Camera 2 overlapping area: [ " << vOverlapping2[0] << " , " << vOverlapping2[1] << " ]" << endl;
+                output << "\t- Camera 1 overlapping area: [ " << vOverlapping1[0] << " , " << vOverlapping1[1] << " ]" << endl;
+                output << "\t- Camera 2 overlapping area: [ " << vOverlapping2[0] << " , " << vOverlapping2[1] << " ]" << endl;
             }
         }
 
+        // IMU parameters
         if (settings.sensor_ == System::IMU_MONOCULAR || settings.sensor_ == System::IMU_STEREO || settings.sensor_ == System::IMU_RGBD)
         {
-            output << "\t-Gyro noise: " << settings.noiseGyro_ << endl;
-            output << "\t-Accelerometer noise: " << settings.noiseAcc_ << endl;
-            output << "\t-Gyro walk: " << settings.gyroWalk_ << endl;
-            output << "\t-Accelerometer walk: " << settings.accWalk_ << endl;
-            output << "\t-IMU frequency: " << settings.imuFrequency_ << endl;
+            output << "\t- Gyro noise: " << settings.noiseGyro_ << endl;
+            output << "\t- Accelerometer noise: " << settings.noiseAcc_ << endl;
+            output << "\t- Gyro walk: " << settings.gyroWalk_ << endl;
+            output << "\t- Accelerometer walk: " << settings.accWalk_ << endl;
+            output << "\t- IMU frequency: " << settings.imuFrequency_ << endl;
         }
 
+        // RGB-D parameters
         if (settings.sensor_ == System::RGBD || settings.sensor_ == System::IMU_RGBD)
-        {
-            output << "\t-RGB-D depth map factor: " << settings.depthMapFactor_ << endl;
-        }
+            output << "\t- RGB-D depth map factor: " << settings.depthMapFactor_ << endl;
 
-        output << "\t-Features per image: " << settings.nFeatures_ << endl;
-        output << "\t-ORB scale factor: " << settings.scaleFactor_ << endl;
-        output << "\t-ORB number of scales: " << settings.nLevels_ << endl;
-        output << "\t-Initial FAST threshold: " << settings.initThFAST_ << endl;
-        output << "\t-Min FAST threshold: " << settings.minThFAST_ << endl;
+        // ORB parameters
+        output << "\t- Features per image: " << settings.nFeatures_ << endl;
+        output << "\t- ORB scale factor: " << settings.scaleFactor_ << endl;
+        output << "\t- ORB number of scales: " << settings.nLevels_ << endl;
+        output << "\t- Initial FAST threshold: " << settings.initThFAST_ << endl;
+        output << "\t- Min FAST threshold: " << settings.minThFAST_ << endl;
 
         return output;
     }

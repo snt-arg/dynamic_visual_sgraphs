@@ -39,6 +39,16 @@ RGBD.DepthMapFactor: 1000.0
 RGBD.NearThresh: 0.3
 RGBD.FarThresh: 3.5
 
+# IMU Parameters
+IMU.Frequency: 400.0
+IMU.NoiseGyro: 0.0010273469802412588
+IMU.NoiseAcc: 0.005119536556707974
+IMU.GyroWalk: 3.8743601798420855e-05
+IMU.AccWalk: 0.0007446449364276494
+
+# Number of KFs to insert when IMU is lost
+IMU.InsertKFsWhenLost: 0
+
 # Transformation (IMU to Camera)
 IMU.T_b_c1: !!opencv-matrix
    rows: 4
@@ -48,16 +58,6 @@ IMU.T_b_c1: !!opencv-matrix
           -0.05130052290257775, 0.01752642757563294, -0.9985294590979066, -0.11186067996703218,
            0.9985746651308847, -0.013844282908206218, -0.05154584357151279, -0.12417107842813298,
            0.0, 0.0, 0.0, 1.0]
-
-# Number of KFs to insert when IMU is lost
-IMU.InsertKFsWhenLost: 0
-
-# IMU Noise
-IMU.NoiseGyro: 0.0010273469802412588
-IMU.NoiseAcc: 0.005119536556707974
-IMU.GyroWalk: 3.8743601798420855e-05
-IMU.AccWalk: 0.0007446449364276494
-IMU.Frequency: 400.0
 
 # Number of ORB Features per Frame
 ORBextractor.nFeatures: 1250

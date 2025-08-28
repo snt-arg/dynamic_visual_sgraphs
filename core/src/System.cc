@@ -45,32 +45,32 @@ namespace ORB_SLAM3
                                                                                          mbActivateLocalizationMode(false), mbDeactivateLocalizationMode(false), mbShutDown(false)
     {
         // Output welcome message
-        cout << endl
-             << "Visual S-Graphs Copyright © 2023-2024 by Ali Tourani, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos, SnT - University of Luxembourg." << endl
-             << "Based on ORB-SLAM3 Copyright © 2017-2023 by C. Campos, R. Elvira, J.J. Gómez, J.M.M. Montiel, and J.D. Tardós, University of Zaragoza." << endl
-             << "To redistribute the software please see LICENSE.txt." << endl
-             << endl;
+        std::cout << std::endl
+             << "🚀 Visual S-Graphs (vS-Graphs) Copyright © 2023-2025 by Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos, SnT - University of Luxembourg." << std::endl
+             << "✨ Based on ORB-SLAM3 Copyright © 2017-2023 by C. Campos, R. Elvira, J.J. Gómez, J.M.M. Montiel, and J.D. Tardós, University of Zaragoza." << std::endl
+             << "To redistribute the software please see LICENSE.txt." << std::endl
+             << std::endl;
 
         // Input sensor
-        cout << "Input sensor is set to: ";
+        std::cout << "[System] Input sensor is set to: ";
         if (mSensor == MONOCULAR)
-            cout << "Monocular" << endl;
+            std::cout << "Monocular" << std::endl;
         else if (mSensor == STEREO)
-            cout << "Stereo" << endl;
+            std::cout << "Stereo" << std::endl;
         else if (mSensor == RGBD)
-            cout << "RGB-D" << endl;
+            std::cout << "RGB-D" << std::endl;
         else if (mSensor == IMU_MONOCULAR)
-            cout << "Monocular-Inertial" << endl;
+            std::cout << "Monocular-Inertial" << std::endl;
         else if (mSensor == IMU_STEREO)
-            cout << "Stereo-Inertial" << endl;
+            std::cout << "Stereo-Inertial" << std::endl;
         else if (mSensor == IMU_RGBD)
-            cout << "RGB-D-Inertial" << endl;
+            std::cout << "RGB-D-Inertial" << std::endl;
 
         // Check settings file
         cv::FileStorage fsSettings(strSettingsFile.c_str(), cv::FileStorage::READ);
         if (!fsSettings.isOpened())
         {
-            cerr << "Failed to open settings file at: " << strSettingsFile << endl;
+            std::cerr << "[System] Failed to open settings file at '" << strSettingsFile << "'! Exiting ..." << std::endl;
             exit(-1);
         }
 
@@ -78,11 +78,9 @@ namespace ORB_SLAM3
         if (!node.empty() && node.isString() && node.string() == "1.0")
         {
             settings_ = new Settings(strSettingsFile, mSensor);
-
             mStrLoadAtlasFromFile = settings_->atlasLoadFile();
             mStrSaveAtlasToFile = settings_->atlasSaveFile();
-
-            cout << (*settings_) << endl;
+            std::cout << (*settings_) << std::endl;
         }
         else
         {
@@ -111,7 +109,6 @@ namespace ORB_SLAM3
 
         // ORB Vocabulary
         std::cout << "[System] Loading ORB Vocabulary ..." << std::endl;
-
         mpVocabulary = new ORBVocabulary();
         bool bVocLoad = mpVocabulary->loadFromBinFile(strVocFile);
         if (!bVocLoad)
@@ -134,7 +131,6 @@ namespace ORB_SLAM3
         else
         {
             // Load the file with an earlier session
-            // clock_t start = clock();
             std::cout << "[System] Initializing Atlas from file: " << mStrLoadAtlasFromFile << "... " << std::endl;
             bool isRead = LoadAtlas(FileType::BINARY_FILE);
 

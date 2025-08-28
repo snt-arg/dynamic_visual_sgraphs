@@ -2436,7 +2436,7 @@ namespace ORB_SLAM3
                 mCurrentFrame.mpImuPreintegrated = mpImuPreintegratedFromLastKF;
             }
 
-            // Set Frame pose to the origin (In case of inertial SLAM to imu)
+            // Set Frame pose to the origin
             if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
             {
                 Eigen::Matrix3f Rwb0 = mCurrentFrame.mImuCalib.mTcb.rotationMatrix();
@@ -2449,7 +2449,7 @@ namespace ORB_SLAM3
                 mCurrentFrame.SetPose(Sophus::SE3f());
 
             // Create KeyFrame
-            KeyFrame *pKFini = new KeyFrame(mCurrentFrame, mpAtlas->GetCurrentMap(), mpKeyFrameDB);
+            ORB_SLAM3::KeyFrame *pKFini = new ORB_SLAM3::KeyFrame(mCurrentFrame, mpAtlas->GetCurrentMap(), mpKeyFrameDB);
 
             // Insert KeyFrame in the map
             mpAtlas->AddKeyFrame(pKFini);
