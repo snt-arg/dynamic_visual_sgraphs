@@ -663,6 +663,7 @@ namespace ORB_SLAM3
         // IMU parameters
         Sophus::SE3f Tbc = settings->Tbc();
         mImuFreq = settings->imuFrequency();
+        imuThresh = settings->imuThreshold();
         mInsertKFsLost = settings->insertKFsWhenLost();
         mImuPer = 1.0 / static_cast<double>(mImuFreq);
         float Ng = settings->noiseGyro();
@@ -1358,7 +1359,8 @@ namespace ORB_SLAM3
 
     bool Tracking::ParseIMUParamFile(cv::FileStorage &fSettings)
     {
-        bool b_miss_params = false;
+        bool boolMissingParam = false;
+        float Ng, Na, Ngw, Naw;
 
         cv::Mat cvTbc;
         cv::FileNode node = fSettings["Tbc"];
@@ -1368,13 +1370,13 @@ namespace ORB_SLAM3
             if (cvTbc.rows != 4 || cvTbc.cols != 4)
             {
                 std::cerr << "\t- Tbc matrix needs to be a 4x4 transformation matrix!" << std::endl;
-                b_miss_params = true;
+                boolMissingParam = true;
             }
         }
         else
         {
             std::cerr << "\t- Tbc matrix does not exist!" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
         }
         cout << "\t- Left camera to Imu Transform (Tbc): " << endl
              << cvTbc << endl;
@@ -1391,8 +1393,6 @@ namespace ORB_SLAM3
         if (!mInsertKFsLost)
             cout << "Do not insert keyframes when lost visual tracking " << endl;
 
-        float Ng, Na, Ngw, Naw;
-
         node = fSettings["IMU.Frequency"];
         if (!node.empty() && node.isInt())
         {
@@ -1402,7 +1402,7 @@ namespace ORB_SLAM3
         else
         {
             std::cerr << "*IMU.Frequency parameter doesn't exist or is not an integer*" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
         }
 
         node = fSettings["IMU.NoiseGyro"];
@@ -1413,7 +1413,16 @@ namespace ORB_SLAM3
         else
         {
             std::cerr << "*IMU.NoiseGyro parameter doesn't exist or is not a real number*" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
+        }
+
+        node = fSettings["IMU.Threshold"];
+        if (!node.empty() && node.isReal())
+            imuThresh = node.real();
+        else
+        {
+            std::cerr << "- IMU.Threshold parameter doesn't exist or is not a real number!" << std::endl;
+            boolMissingParam = true;
         }
 
         node = fSettings["IMU.NoiseAcc"];
@@ -1424,7 +1433,7 @@ namespace ORB_SLAM3
         else
         {
             std::cerr << "*IMU.NoiseAcc parameter doesn't exist or is not a real number*" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
         }
 
         node = fSettings["IMU.GyroWalk"];
@@ -1435,7 +1444,7 @@ namespace ORB_SLAM3
         else
         {
             std::cerr << "*IMU.GyroWalk parameter doesn't exist or is not a real number*" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
         }
 
         node = fSettings["IMU.AccWalk"];
@@ -1446,7 +1455,7 @@ namespace ORB_SLAM3
         else
         {
             std::cerr << "*IMU.AccWalk parameter doesn't exist or is not a real number*" << std::endl;
-            b_miss_params = true;
+            boolMissingParam = true;
         }
 
         node = fSettings["IMU.FastInit"];
@@ -1457,7 +1466,7 @@ namespace ORB_SLAM3
         if (mFastInit)
             std::cout << "\t- Fast IMU initialization triggered! Acceleration is not checked!" << std::endl;
 
-        if (b_miss_params)
+        if (boolMissingParam)
             return false;
 
         const float sf = sqrt(mImuFreq);
@@ -2386,9 +2395,6 @@ namespace ORB_SLAM3
     // Map initialization for Stereo and RGB-D (with/without IMU) setups
     void Tracking::StereoInitialization()
     {
-        // Variables
-        const double kMinAccelerationThreshold = 0.5;
-
         if (mCurrentFrame.N > 500)
         {
             if (mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)
@@ -2406,11 +2412,11 @@ namespace ORB_SLAM3
                                               mLastFrame.mpImuPreintegratedFrame->avgA)
                                                  .norm();
 
-                    if (accelDiff < kMinAccelerationThreshold)
+                    if (accelDiff < imuThresh)
                     {
                         std::cout << "[Tracking] Low IMU acceleration changes: "
                                   << std::fixed << std::setprecision(2) << accelDiff << " (threshold: "
-                                  << kMinAccelerationThreshold << ")! Skipping ..." << std::endl;
+                                  << imuThresh << ")! Skipping ..." << std::endl;
                         return;
                     }
                 }

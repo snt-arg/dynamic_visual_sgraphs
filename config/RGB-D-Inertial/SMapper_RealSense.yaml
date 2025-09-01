@@ -40,6 +40,7 @@ RGBD.NearThresh: 0.3
 RGBD.FarThresh: 3.5
 
 # IMU Parameters
+IMU.Threshold: 0.4      # Default: 0.5
 IMU.FastInit: 1         # 0: disabled, 1: enabled
 IMU.Frequency: 1000.0   # 400.0
 IMU.NoiseGyro: 0.0010273469802412588

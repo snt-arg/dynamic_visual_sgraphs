@@ -90,11 +90,13 @@ namespace ORB_SLAM3
         bool needToResize() { return bNeedToResize1_; }
         bool needToRectify() { return bNeedToRectify_; }
 
-        float noiseGyro() { return noiseGyro_; }
-        float noiseAcc() { return noiseAcc_; }
-        float gyroWalk() { return gyroWalk_; }
+        // IMU parameters
         float accWalk() { return accWalk_; }
+        float gyroWalk() { return gyroWalk_; }
+        float noiseAcc() { return noiseAcc_; }
         float imuFrequency() { return imuFrequency_; }
+        float imuThreshold() { return imuThreshold_; }
+        float noiseGyro() { return noiseGyro_; }
         Sophus::SE3f Tbc() { return Tbc_; }
         bool insertKFsWhenLost() { return insertKFsWhenLost_; }
 
@@ -200,6 +202,7 @@ namespace ORB_SLAM3
         float noiseGyro_, noiseAcc_;
         float gyroWalk_, accWalk_;
         float imuFrequency_;
+        float imuThreshold_;
         Sophus::SE3f Tbc_;
         bool insertKFsWhenLost_;
 

@@ -359,6 +359,7 @@ namespace ORB_SLAM3
 
         // IMU parameters
         float mImuFreq;
+        float imuThresh;
         bool mInsertKFsLost;
         double mImuPer = 0.001;
 

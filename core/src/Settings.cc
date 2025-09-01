@@ -464,10 +464,11 @@ namespace ORB_SLAM3
     void Settings::readIMU(cv::FileStorage &fSettings)
     {
         bool found;
-        noiseGyro_ = readParameter<float>(fSettings, "IMU.NoiseGyro", found);
+        accWalk_ = readParameter<float>(fSettings, "IMU.AccWalk", found);
         noiseAcc_ = readParameter<float>(fSettings, "IMU.NoiseAcc", found);
         gyroWalk_ = readParameter<float>(fSettings, "IMU.GyroWalk", found);
-        accWalk_ = readParameter<float>(fSettings, "IMU.AccWalk", found);
+        noiseGyro_ = readParameter<float>(fSettings, "IMU.NoiseGyro", found);
+        imuThreshold_ = readParameter<float>(fSettings, "IMU.Threshold", found);
         imuFrequency_ = readParameter<float>(fSettings, "IMU.Frequency", found);
 
         cv::Mat cvTbc = readParameter<cv::Mat>(fSettings, "IMU.T_b_c1", found);
@@ -695,6 +696,7 @@ namespace ORB_SLAM3
             output << "\t- Gyro walk: " << settings.gyroWalk_ << endl;
             output << "\t- Accelerometer walk: " << settings.accWalk_ << endl;
             output << "\t- IMU frequency: " << settings.imuFrequency_ << endl;
+            output << "\t- IMU threshold: " << settings.imuThreshold_ << endl;
         }
 
         // RGB-D parameters
