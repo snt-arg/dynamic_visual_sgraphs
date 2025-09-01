@@ -46,10 +46,12 @@ namespace ORB_SLAM3
     {
         // Output welcome message
         std::cout << std::endl
-             << "🚀 Visual S-Graphs (vS-Graphs) Copyright © 2023-2025 by Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos, SnT - University of Luxembourg." << std::endl
-             << "✨ Based on ORB-SLAM3 Copyright © 2017-2023 by C. Campos, R. Elvira, J.J. Gómez, J.M.M. Montiel, and J.D. Tardós, University of Zaragoza." << std::endl
-             << "To redistribute the software please see LICENSE.txt." << std::endl
-             << std::endl;
+                  << "------------------------------------------------------" << std::endl
+                  << "🚀 Visual S-Graphs (vS-Graphs) Copyright © 2023-2025 by A. Tourani, S. Ejaz, H. Bavle, J.L. Sanchez-Lopez, and H. Voos, SnT - University of Luxembourg." << std::endl
+                  << "✨ Based on ORB-SLAM3 Copyright © 2017-2023 by C. Campos, R. Elvira, J.J. Gómez, J.M.M. Montiel, and J.D. Tardós, University of Zaragoza." << std::endl
+                  << "To redistribute the software please see LICENSE.txt." << std::endl
+                  << "------------------------------------------------------" << std::endl
+                  << std::endl;
 
         // Input sensor
         std::cout << "[System] Input sensor is set to: ";
@@ -87,15 +89,11 @@ namespace ORB_SLAM3
             settings_ = nullptr;
             cv::FileNode node = fsSettings["System.LoadAtlasFromFile"];
             if (!node.empty() && node.isString())
-            {
                 mStrLoadAtlasFromFile = (string)node;
-            }
 
             node = fsSettings["System.SaveAtlasToFile"];
             if (!node.empty() && node.isString())
-            {
                 mStrSaveAtlasToFile = (string)node;
-            }
         }
 
         node = fsSettings["loopClosing"];
@@ -146,7 +144,6 @@ namespace ORB_SLAM3
         }
 
         // Setup the system parameters
-        std::cout << "[System]" << std::endl;
         SystemParams *sysParams = SystemParams::GetParams();
         sysParams->SetParams(strSysParamsFile);
 

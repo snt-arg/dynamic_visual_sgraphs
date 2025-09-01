@@ -357,9 +357,10 @@ namespace ORB_SLAM3
         float mbf;
         float mImageScale;
 
+        // IMU parameters
         float mImuFreq;
-        double mImuPer;
         bool mInsertKFsLost;
+        double mImuPer = 0.001;
 
         // New KeyFrame rules (according to fps)
         int mMinFrames;

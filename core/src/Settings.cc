@@ -50,7 +50,7 @@ namespace ORB_SLAM3
             }
             else
             {
-                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
+                std::cerr << "\t- Skipping optional parameter '" << name << "' ..." << std::endl;
                 found = false;
                 return 0.0f;
             }
@@ -80,7 +80,7 @@ namespace ORB_SLAM3
             }
             else
             {
-                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
+                std::cerr << "\t- Skipping optional parameter '" << name << "' ..." << std::endl;
                 found = false;
                 return 0;
             }
@@ -110,7 +110,7 @@ namespace ORB_SLAM3
             }
             else
             {
-                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
+                std::cerr << "\t- Skipping optional parameter '" << name << "' ..." << std::endl;
                 found = false;
                 return string();
             }
@@ -140,7 +140,7 @@ namespace ORB_SLAM3
             }
             else
             {
-                std::cerr << "\t- Optional parameter '" << name << "' does not exist! Skipping..." << std::endl;
+                std::cerr << "\t- Skipping optional parameter '" << name << "' ..." << std::endl;
                 found = false;
                 return cv::Mat();
             }

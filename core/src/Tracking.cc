@@ -52,40 +52,40 @@ namespace ORB_SLAM3
         // Load camera parameters from settings file
         if (settings)
         {
+            std::cout << "[Tracking] New parameters from the config file!" << std::endl;
             newParameterLoader(settings);
         }
         else
         {
             cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
-            bool b_parse_cam = ParseCamParamFile(fSettings);
-            if (!b_parse_cam)
-            {
-                std::cout << "*Error with the camera parameters in the config file*" << std::endl;
-            }
+            // Load camera parameters
+            std::cout << "[Tracking] Loading camera parameters from the config file!" << std::endl;
+            bool boolParseCamParams = ParseCamParamFile(fSettings);
+            if (!boolParseCamParams)
+                std::cerr << "[Tracking] Error with the camera parameters in the config file!" << std::endl;
 
             // Load ORB parameters
-            bool b_parse_orb = ParseORBParamFile(fSettings);
-            if (!b_parse_orb)
-            {
-                std::cout << "*Error with the ORB parameters in the config file*" << std::endl;
-            }
+            std::cout << "[Tracking] Loading ORB parameters from the config file!" << std::endl;
+            bool boolParseORBFeats = ParseORBParamFile(fSettings);
+            if (!boolParseORBFeats)
+                std::cerr << "[Tracking] Error with the ORB parameters in the config file!" << std::endl;
 
-            bool b_parse_imu = true;
+            // Load IMU parameters if needed
+            bool boolParseIMU = true;
+            std::cout << "[Tracking] Loading IMU parameters from the config file!" << std::endl;
             if (sensor == System::IMU_MONOCULAR || sensor == System::IMU_STEREO || sensor == System::IMU_RGBD)
             {
-                b_parse_imu = ParseIMUParamFile(fSettings);
-                if (!b_parse_imu)
-                {
-                    std::cout << "*Error with the IMU parameters in the config file*" << std::endl;
-                }
-
+                boolParseIMU = ParseIMUParamFile(fSettings);
+                if (!boolParseIMU)
+                    std::cerr << "[Tracking] Error with the IMU parameters in the config file!" << std::endl;
                 mnFramesToResetIMU = mMaxFrames;
             }
 
-            if (!b_parse_cam || !b_parse_orb || !b_parse_imu)
+            // Check if everything is correctly loaded
+            if (!boolParseCamParams || !boolParseORBFeats || !boolParseIMU)
             {
-                std::cerr << "**ERROR in the config file, the format is not correct**" << std::endl;
+                std::cerr << "[Tracking] Error found in the config file! The format seems to be incorrect!" << std::endl;
                 try
                 {
                     throw -1;
@@ -136,8 +136,7 @@ namespace ORB_SLAM3
         mnNumDataset = 0;
 
         vector<GeometricCamera *> vpCams = mpAtlas->GetAllCameras();
-        std::cout << "\n[Tracking]" << std::endl;
-        std::cout << "- Found " << vpCams.size() << " camera(s) in Atlas!" << std::endl;
+        std::cout << "\n[Tracking] Found " << vpCams.size() << " camera(s) in Atlas!" << std::endl;
         for (GeometricCamera *pCam : vpCams)
         {
             std::cout << "- Camera " << pCam->GetId();
@@ -148,7 +147,6 @@ namespace ORB_SLAM3
             else
                 std::cout << " is unknown!" << std::endl;
         }
-        std::cout << std::endl;
 
 #ifdef REGISTER_TIMES
         vdRectStereo_ms.clear();
@@ -586,10 +584,7 @@ namespace ORB_SLAM3
 
 #endif
 
-    Tracking::~Tracking()
-    {
-        // f_track_stats.close();
-    }
+    Tracking::~Tracking() {}
 
     void Tracking::newParameterLoader(Settings *settings)
     {
@@ -667,9 +662,9 @@ namespace ORB_SLAM3
 
         // IMU parameters
         Sophus::SE3f Tbc = settings->Tbc();
-        mInsertKFsLost = settings->insertKFsWhenLost();
         mImuFreq = settings->imuFrequency();
-        mImuPer = 0.001; // 1.0 / (double) mImuFreq;     //TODO: ESTO ESTA BIEN?
+        mInsertKFsLost = settings->insertKFsWhenLost();
+        mImuPer = 1.0 / static_cast<double>(mImuFreq);
         float Ng = settings->noiseGyro();
         float Na = settings->noiseAcc();
         float Ngw = settings->gyroWalk();
@@ -1372,17 +1367,16 @@ namespace ORB_SLAM3
             cvTbc = node.mat();
             if (cvTbc.rows != 4 || cvTbc.cols != 4)
             {
-                std::cerr << "*Tbc matrix have to be a 4x4 transformation matrix*" << std::endl;
+                std::cerr << "\t- Tbc matrix needs to be a 4x4 transformation matrix!" << std::endl;
                 b_miss_params = true;
             }
         }
         else
         {
-            std::cerr << "*Tbc matrix doesn't exist*" << std::endl;
+            std::cerr << "\t- Tbc matrix does not exist!" << std::endl;
             b_miss_params = true;
         }
-        cout << endl;
-        cout << "Left camera to Imu Transform (Tbc): " << endl
+        cout << "\t- Left camera to Imu Transform (Tbc): " << endl
              << cvTbc << endl;
         Eigen::Matrix<float, 4, 4, Eigen::RowMajor> eigTbc(cvTbc.ptr<float>(0));
         Sophus::SE3f Tbc(eigTbc);
@@ -1403,7 +1397,7 @@ namespace ORB_SLAM3
         if (!node.empty() && node.isInt())
         {
             mImuFreq = node.operator int();
-            mImuPer = 0.001; // 1.0 / (double) mImuFreq;
+            mImuPer = 1.0 / static_cast<double>(mImuFreq);
         }
         else
         {
@@ -1455,20 +1449,16 @@ namespace ORB_SLAM3
             b_miss_params = true;
         }
 
-        node = fSettings["IMU.fastInit"];
+        node = fSettings["IMU.FastInit"];
         mFastInit = false;
         if (!node.empty())
-        {
-            mFastInit = static_cast<int>(fSettings["IMU.fastInit"]) != 0;
-        }
+            mFastInit = static_cast<int>(fSettings["IMU.FastInit"]) != 0;
 
         if (mFastInit)
-            cout << "Fast IMU initialization. Acceleration is not checked \n";
+            std::cout << "\t- Fast IMU initialization triggered! Acceleration is not checked!" << std::endl;
 
         if (b_miss_params)
-        {
             return false;
-        }
 
         const float sf = sqrt(mImuFreq);
         cout << endl;
@@ -1704,7 +1694,6 @@ namespace ORB_SLAM3
 
     void Tracking::PreintegrateIMU()
     {
-
         if (!mCurrentFrame.mpPrevFrame)
         {
             Verbose::PrintMess("non prev frame ", Verbose::VERBOSITY_NORMAL);
@@ -1731,9 +1720,7 @@ namespace ORB_SLAM3
                     IMU::Point *m = &mlQueueImuData.front();
                     cout.precision(17);
                     if (m->t < mCurrentFrame.mpPrevFrame->mTimeStamp - mImuPer)
-                    {
                         mlQueueImuData.pop_front();
-                    }
                     else if (m->t < mCurrentFrame.mTimeStamp - mImuPer)
                     {
                         mvImuFromLastFrame.push_back(*m);

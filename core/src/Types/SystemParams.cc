@@ -33,16 +33,16 @@ namespace ORB_SLAM3
 
     void SystemParams::SetParams(const std::string &strConfigFile)
     {
-        std::cout << "- Loading system parameters from " << strConfigFile << std::endl;
+        std::cout << "[SysParams] Loading system parameters from " << strConfigFile << std::endl;
         try
         {
             mConfig = YAML::LoadFile(strConfigFile);
-            std::cout << "- System parameters loaded!\n\n";
+            std::cout << "[SysParams] System parameters loaded!\n\n";
         }
         catch (YAML::BadFile &e)
         {
-            std::cout << "- Error loading configuration file " << e.what() << std::endl;
-            std::cout << "- Exiting ... \n\n";
+            std::cout << "[SysParams] Error loading configuration file " << e.what() << std::endl;
+            std::cout << "[SysParams] Exiting ... \n\n";
             exit(1);
         }
 
