@@ -28,20 +28,12 @@ You can read about the SLAM-related configuration parameters (independent of the
 Once you have installed the required dependencies and configured the parameters, you are ready to run **vS-Graphs**! Follow the steps below to get started:
 
 1. Source vS-Graphs and run it by `ros2 launch vs_graphs rgbd.launch.py` for RGB-D version (or `rgbd-imu.launch.py` for RGB-D-Inertial). It will automatically run the vS-Graphs core and the semantic segmentation module for **building component** (walls and ground surfaces) recognition.
-2. (Optional) If you intend to detect **structural elements** (rooms and corridors) too, check the **Voxblox Integration** procedure in the [Installation Guide](/doc/INSTALLATION.md).
-
-   ```bash
-   source /opt/ros/jazzy/setup.bash &&
-   source ~/[VSGRAPHS_PATH]/install/setup.bash &&
-   ros2 launch vs_graphs rgbd.launch.py # Or rgbd-imu.launch.py
-   ```
+2. (Optional) If you intend to detect **structural elements** (rooms, corridors, and floors) too, check the **Voxblox Integration** procedure in the [Installation Guide](/doc/INSTALLATION.md).
 
 3. (Optional) If you have a database of ArUco markers representing room/corridor labels, do not forget to run `aruco_ros` using `ros2 launch aruco_ros marker_publisher.launch`.
-4. Now, play a recorded `bag` file by running `ros2 bag play [sample].bag --clock`.
+4. Now, play a recorded `bag` file by running `ros2 bag play [sample].bag --clock`. You can also run vS-Graphs with live feed of RealSense D400 series cameras ([read more](/doc/RealSense/README.md)).
 
 ✨ For a complete list of configurable launch arguments, check the [Launch Parameters](/launch/README.md).
-
-✨ For detailed description on how to use a RealSense D400 series camera for live feed and data collection, check [this page](/doc/RealSense/README.md).
 
 > 🛎️ Note: The current version of vS-Graphs supports **ROS2 Jazzy** and is primarily tested on Ubuntu 24.04.2 LTS.
 

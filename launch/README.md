@@ -25,6 +25,8 @@ ros2 launch vs_graphs rgbd.launch.py
 
 ## 📸 Live Mode - RealSense D435(i)
 
+Read more about running RealSense as the live feed to `vS-Graphs` [here](/doc/RealSense/README.md).
+
 ```bash
 ros2 launch vs_graphs rgbd.launch.py offline:=false
 ```
@@ -34,12 +36,13 @@ ros2 launch vs_graphs rgbd.launch.py offline:=false
 Next, launch the RealSense camera driver:
 
 ```bash
-ros2 launch realsense2_camera rs_rgbd.launch
-# [Optional] align depth and IMU data arguments
-# align_depth:=true unite_imu_method:=linear_interpolation
+ros2 launch realsense2_camera rs_launch.py \
+    pointcloud.enable:=true \
+    align_depth.enable:=true \
+    rgb_camera.color_profile:="640,480,30" \
+    depth_camera.depth_profile:="640,480,30"
+# [Optional] enable IMU data: enable_accel:=true enable_gyro:=true gyro_fps:=200 accel_fps:=63 unite_imu_method:=0
 ```
-
-> 🛎️ Tip: To convert raw RealSense streams into usable depth images, you need to load nodelets via [rgbd_launch](http://wiki.ros.org/rgbd_launch). You can use a launch file similar to the one provided [here](/doc/RealSense/rs_d435_rgbd.launch).
 
 > 🛎️ Tip: If you intend to use IR images instead of RGB, you will need to disable the RealSense **emitter**. While the launch file includes related arguments, they may not always take effect. The simplest method is to open `realsense-viewer` and manually set `Emitter Enabled` to `False`.
 
