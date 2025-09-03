@@ -81,8 +81,8 @@ namespace ORB_SLAM3
         void setDoors(Door *value);
         std::vector<Door *> getDoors() const;
 
-        void setWalls(Plane *value);
-        std::vector<Plane *> getWalls() const;
+        void setWalls(ORB_SLAM3::Plane *value);
+        std::vector<ORB_SLAM3::Plane *> getWalls() const;
 
         void clearWalls();
 

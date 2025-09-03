@@ -1026,13 +1026,13 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
             // Room to Plane (Wall) connection line
             roomWallLine.id = idx;
-            roomWallLine.color.a = 0.8;
+            roomWallLine.color.a = 0.9;
             roomWallLine.color.r = 0.0;
             roomWallLine.color.g = 0.0;
             roomWallLine.color.b = 0.0;
-            roomWallLine.scale.x = 0.04;
-            roomWallLine.scale.y = 0.04;
-            roomWallLine.scale.z = 0.04;
+            roomWallLine.scale.x = 0.05;
+            roomWallLine.scale.y = 0.05;
+            roomWallLine.scale.z = 0.05;
             roomWallLine.ns = "room_wall_lines";
             roomWallLine.header.stamp = msgTime;
             roomWallLine.action = roomWallLine.ADD;

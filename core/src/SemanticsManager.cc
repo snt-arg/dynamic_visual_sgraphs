@@ -347,32 +347,60 @@ namespace ORB_SLAM3
             // Calculate the cluster centroid
             Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // [TODO] Check if the room already exists in the map
+            // Check if the room already exists in the map
             ORB_SLAM3::Room *existedRoom = associateRooms(clusterCentroid);
-            if (existedRoom != nullptr)
-                // If the room already exists, update its centroid
-                existedRoom->setCentroid(clusterCentroid);
-            else
-                // Create a new structural element (blank room)
+            if (existedRoom == nullptr)
+            {
+                // Create a new structural element (blank room) and exit the function
                 GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
+                continue;
+            }
 
-            // // Loop over all walls
-            // for (const auto &wall : allWalls)
-            // {
-            //     // Loop over all cluster points
-            //     for (const auto &point : cluster)
-            //     {
-            //         // Calculate distance between wall centroid and cluster centroid
-            //         const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
-            //         // If the distance is smaller than the threshold, add the wall to closestWalls
-            //         if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
-            //         {
-            //             // Add the wall to closestWalls
-            //             closestWalls.push_back(wall);
-            //             break;
-            //         }
-            //     }
-            // }
+            // If the room already exists, update its centroid
+            existedRoom->setCentroid(clusterCentroid);
+
+            // Loop over all walls
+            for (const auto &wall : allWalls)
+            {
+                // Loop over all cluster points
+                for (const auto &point : cluster)
+                {
+                    // Calculate distance between wall centroid and cluster centroid
+                    const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
+                    // If the distance is smaller than the threshold, add the wall to closestWalls
+                    if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
+                    {
+                        // Add the wall to closestWalls
+                        closestWalls.push_back(wall);
+                        break;
+                    }
+                }
+            }
+
+            // Filter out closest walls with normals pointing away from the cluster
+            closestWalls.erase(
+                std::remove_if(closestWalls.begin(), closestWalls.end(),
+                               [&](ORB_SLAM3::Plane *wall)
+                               {
+                                   // Plane normal from global equation
+                                   Eigen::Vector3d normal = wall->getGlobalEquation().normal().cast<double>();
+                                   // Direction from cluster centroid to wall centroid
+                                   Eigen::Vector3d direction = (wall->getCentroid().cast<double>() - clusterCentroid).normalized();
+                                   // Remove walls whose normal points away from the cluster centroid
+                                   return normal.dot(direction) >= 0;
+                               }),
+                closestWalls.end());
+
+            // Get the room's walls
+            std::vector<ORB_SLAM3::Plane *> roomWalls = existedRoom->getWalls();
+
+            // If the walls close to the cluster and facing the cluster are not already in the room, add them to the room
+            for (const auto &wall : closestWalls)
+            {
+                // If the wall is not already in closestWalls, add it to the room
+                if (std::find(roomWalls.begin(), roomWalls.end(), wall) == roomWalls.end())
+                    existedRoom->setWalls(wall);
+            }
 
             // // If there is only one wall, no need to check for a room/corridor
             // if (closestWalls.size() < 2)
