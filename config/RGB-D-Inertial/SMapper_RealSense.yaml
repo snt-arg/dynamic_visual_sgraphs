@@ -40,13 +40,14 @@ RGBD.NearThresh: 0.3
 RGBD.FarThresh: 3.5
 
 # IMU Parameters
-IMU.Threshold: 0.4      # Default: 0.5
+IMU.Threshold: 0.1      # Default: 0.5
 IMU.FastInit: 1         # 0: disabled, 1: enabled
-IMU.Frequency: 1000.0   # 400.0
+IMU.Frequency: 400.0    # 400.0
 IMU.NoiseGyro: 0.0010273469802412588
 IMU.NoiseAcc: 0.005119536556707974
 IMU.GyroWalk: 3.8743601798420855e-05
 IMU.AccWalk: 0.0007446449364276494
+IMU.TimeShift: 0.023254825488191154 # [TODO] Should be read
 
 # Number of KFs to insert when IMU is lost
 IMU.InsertKFsWhenLost: 0

@@ -19,8 +19,8 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "semantic_scene_segmenter",
                 default_value="yoso",
-                description="The method to segment the semantic scene",
-                choices=["yoso", "pfcn"],
+                description="The method to segment the semantic scene (if off, the baseline)",
+                choices=["yoso", "pfcn", "off"],
             ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),

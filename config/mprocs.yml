@@ -24,6 +24,11 @@ procs:
       ros2 launch vs_graphs rgbd-imu.launch.py offline:=false rgb_image_topic:=/camera/camera/color/image_raw imu_topic:=/camera/camera/imu
       depth_image_topic:=/camera/camera/aligned_depth_to_color/image_raw rgb_camera_info_topic:=/camera/camera/color/camera_info"'
     autostart: false
+  Baseline RGB-D:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd.launch.py semantic_scene_segmenter:=off"'
+    autostart: false
 
   ---- Procedures ----:
     shell: ''
