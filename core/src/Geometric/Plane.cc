@@ -22,12 +22,10 @@ namespace ORB_SLAM3
 {
     Plane::Plane()
     {
-        // planeCloud = boost::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
-        planeCloud = std::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
-
-        octree = boost::make_shared<pcl::octree::OctreePointCloudSearch<pcl::PointXYZRGBA>>(SystemParams::GetParams()->refine_map_points.octree.resolution);
+        mbBad = false;
         centroid.setZero();
-        excludedFromAssoc = false;
+        planeCloud = std::make_shared<pcl::PointCloud<pcl::PointXYZRGBA>>();
+        octree = boost::make_shared<pcl::octree::OctreePointCloudSearch<pcl::PointXYZRGBA>>(SystemParams::GetParams()->refine_map_points.octree.resolution);
     }
     Plane::~Plane() {}
 
@@ -59,6 +57,18 @@ namespace ORB_SLAM3
     void Plane::setOpIdG(int value)
     {
         opIdG = value;
+    }
+
+    void Plane::setBad()
+    {
+        unique_lock<mutex> lock(mMutexType);
+        mbBad = true;
+    }
+
+    bool Plane::isBad()
+    {
+        unique_lock<mutex> lock(mMutexType);
+        return mbBad;
     }
 
     std::vector<uint8_t> Plane::getColor() const

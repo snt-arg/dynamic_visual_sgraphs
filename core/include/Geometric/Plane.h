@@ -45,8 +45,6 @@ namespace ORB_SLAM3
             WINDOW = 2
         };
 
-        bool excludedFromAssoc; // The plane's exclusion from association (once excluded, can't be associated again)
-
         struct Observation
         {
             g2o::Plane3D localPlane;                        // The plane equation in the local frame
@@ -64,7 +62,8 @@ namespace ORB_SLAM3
         int id;                                             // The plane's identifier
         int opId;                                           // The plane's identifier in the local optimizer
         int opIdG;                                          // The plane's identifier in the global optimizer
-        planeVariant planeType;                             // The plane's semantic type (e.g., wall, ground, etc.)
+        bool mbBad;                                         // Marks the plane as bad (if true, the plane will not be used)
+        planeVariant planeType;                             // The plane's semantic type (e.g., wall, ground, etc.)s
         Eigen::Vector3f centroid;                           // The centroid of the plane
         std::vector<uint8_t> color;                         // A color devoted for visualization
         g2o::Plane3D localEquation;                         // The plane equation in the local map
@@ -87,6 +86,9 @@ namespace ORB_SLAM3
 
         int getOpIdG() const;
         void setOpIdG(int value);
+
+        bool isBad();
+        void setBad();
 
         void setColor();
         std::vector<uint8_t> getColor() const;

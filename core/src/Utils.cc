@@ -461,7 +461,7 @@ namespace ORB_SLAM3
         for (const auto &mPlane : mappedPlanes)
         {
             // Skip the plane if it's excluded from association
-            if (mPlane->excludedFromAssoc || mPlane->getMapClouds()->empty())
+            if (mPlane->isBad() || mPlane->getMapClouds()->empty())
                 continue;
 
             if ((obsPlaneType != Plane::planeVariant::UNDEFINED) && (mPlane->getExpectedPlaneType() != obsPlaneType))
@@ -571,7 +571,7 @@ namespace ORB_SLAM3
         for (const auto &plane : planes)
         {
             // Only consider planes with a semantic type and not excluded from association
-            if (plane->getPlaneType() == ORB_SLAM3::Plane::planeVariant::UNDEFINED || plane->excludedFromAssoc)
+            if (plane->getPlaneType() == ORB_SLAM3::Plane::planeVariant::UNDEFINED || plane->isBad())
                 continue;
 
             // Get plane information
@@ -629,7 +629,9 @@ namespace ORB_SLAM3
 
                 // Reset the smaller plane semantics
                 smallPlane->resetPlaneSemantics();
-                smallPlane->excludedFromAssoc = true;
+                
+                // Set the smaller plane as bad
+                smallPlane->setBad();
 
                 std::cout << "Re-associating planes #" << smallPlane->getId() << " & #"
                           << bigPlane->getId() << " ..." << std::endl;

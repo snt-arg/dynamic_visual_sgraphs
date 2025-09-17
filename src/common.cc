@@ -967,7 +967,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         {
             // Variables
             std::string roomName = rooms[idx]->getName();
-            geometry_msgs::msg::PointStamped roomPoint, roomPointTransformed;
+            geometry_msgs::msg::PointStamped roomPoint, roomPointTr;
 
             // Create color based on room type (undefined: gray, corridor: dark pink, room: purple)
             std::vector<double> color = {0.5, 0.5, 0.5};
@@ -1039,16 +1039,6 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
             roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
-            // Get the room center in the world frame
-            // tf::Stamped<tf::Point> roomPoint, roomPointTransformed;
-
-            // roomPoint.setX(centroid.x());
-            // roomPoint.setY(centroid.y());
-            // roomPoint.setZ(centroid.z());
-            // roomPoint.frame_id_ = frameSE;
-            // transformListener->transformPoint(frameWorld, ros::Time(0), roomPoint,
-            //                                   frameSE, roomPointTransformed);
-
             // Fill in the room center point
             roomPoint.header.stamp = msgTime;
             roomPoint.point.x = centroid.x();
@@ -1061,23 +1051,28 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 // Transform the room center point to the world frame
                 auto tfStamped = tfBuffer_->lookupTransform(
                     frameWorld, frameSE, msgTime, rclcpp::Duration::from_seconds(0.1));
-                tf2::doTransform(roomPoint, roomPointTransformed, tfStamped);
+                tf2::doTransform(roomPoint, roomPointTr, tfStamped);
             }
             catch (tf2::TransformException &ex)
             {
                 RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Room center transform failed: %s", ex.what());
-                roomPointTransformed = roomPoint;
+                roomPointTr = roomPoint;
             }
 
             // Room to Wall connection line
             for (const auto wall : rooms[idx]->getWalls())
             {
-                geometry_msgs::msg::Point pointRoom, pointWall;
-                geometry_msgs::msg::PointStamped wallPoint, wallPointTransformed;
+                // Skip if the wall is bad
+                if (wall->isBad())
+                    continue;
 
-                pointRoom.x = roomPointTransformed.point.x;
-                pointRoom.y = roomPointTransformed.point.y;
-                pointRoom.z = roomPointTransformed.point.z;
+                // Variables
+                geometry_msgs::msg::Point pointRoom, pointWall;
+                geometry_msgs::msg::PointStamped wallPoint, wallPointTr;
+
+                pointRoom.x = roomPointTr.point.x;
+                pointRoom.y = roomPointTr.point.y;
+                pointRoom.z = roomPointTr.point.z;
                 roomWallLine.points.push_back(pointRoom);
 
                 wallPoint.header.stamp = msgTime;
@@ -1091,17 +1086,17 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                     // Transform the room center point to the world frame
                     auto tfStamped = tfBuffer_->lookupTransform(
                         frameWorld, frameBC, msgTime, rclcpp::Duration::from_seconds(0.1));
-                    tf2::doTransform(wallPoint, wallPointTransformed, tfStamped);
+                    tf2::doTransform(wallPoint, wallPointTr, tfStamped);
                 }
                 catch (tf2::TransformException &ex)
                 {
                     RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Wall centroid transform failed: %s", ex.what());
-                    wallPointTransformed = wallPoint;
+                    wallPointTr = wallPoint;
                 }
 
-                pointWall.x = wallPointTransformed.point.x;
-                pointWall.y = wallPointTransformed.point.y;
-                pointWall.z = wallPointTransformed.point.z;
+                pointWall.x = wallPointTr.point.x;
+                pointWall.y = wallPointTr.point.y;
+                pointWall.z = wallPointTr.point.z;
                 roomWallLine.points.push_back(pointWall);
             }
 
