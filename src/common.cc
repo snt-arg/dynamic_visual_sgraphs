@@ -967,6 +967,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         {
             // Variables
             std::string roomName = rooms[idx]->getName();
+            geometry_msgs::msg::PointStamped roomPoint, roomPointTransformed;
 
             // Create color based on room type (undefined: gray, corridor: dark pink, room: purple)
             std::vector<double> color = {0.5, 0.5, 0.5};
@@ -990,19 +991,17 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             room.color.g = color[1];
             room.color.b = color[2];
             room.header.stamp = msgTime;
-            room.header.frame_id = frameSE;
-            room.mesh_use_embedded_materials = true;
-            room.lifetime = rclcpp::Duration::from_seconds(0);
-            room.type = visualization_msgs::msg::Marker::CUBE;
-
-            // Rotation and displacement of the room for better visualization
             room.pose.orientation.x = 0.0;
             room.pose.orientation.y = 0.0;
             room.pose.orientation.z = 0.0;
             room.pose.orientation.w = 1.0;
+            room.header.frame_id = frameSE;
             room.pose.position.x = centroid.x();
             room.pose.position.y = centroid.y();
             room.pose.position.z = centroid.z();
+            room.mesh_use_embedded_materials = true;
+            room.lifetime = rclcpp::Duration::from_seconds(0);
+            room.type = visualization_msgs::msg::Marker::CUBE;
             roomArray.markers.push_back(room);
 
             // Room label (name)
@@ -1024,7 +1023,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomLabel.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             roomArray.markers.push_back(roomLabel);
 
-            // Room to Plane (Wall) connection line
+            // Room to Wall connection line
             roomWallLine.id = idx;
             roomWallLine.color.a = 0.9;
             roomWallLine.color.r = 0.0;
@@ -1033,44 +1032,12 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             roomWallLine.scale.x = 0.05;
             roomWallLine.scale.y = 0.05;
             roomWallLine.scale.z = 0.05;
-            roomWallLine.ns = "room_wall_lines";
+            roomWallLine.ns = "roomWallLine";
             roomWallLine.header.stamp = msgTime;
             roomWallLine.action = roomWallLine.ADD;
-            roomWallLine.header.frame_id = frameSE;
+            roomWallLine.header.frame_id = frameWorld;
             roomWallLine.lifetime = rclcpp::Duration::from_seconds(0);
             roomWallLine.type = visualization_msgs::msg::Marker::LINE_LIST;
-
-            // Room to Door connection line
-            roomDoorLine.id = idx;
-            roomDoorLine.color.a = 0.5;
-            roomDoorLine.color.r = 0.0;
-            roomDoorLine.color.g = 0.0;
-            roomDoorLine.color.b = 0.0;
-            roomDoorLine.scale.x = 0.005;
-            roomDoorLine.scale.y = 0.005;
-            roomDoorLine.scale.z = 0.005;
-            roomDoorLine.ns = "room_door_lines";
-            roomDoorLine.header.stamp = msgTime;
-            roomDoorLine.action = roomDoorLine.ADD;
-            roomDoorLine.header.frame_id = frameSE;
-            roomDoorLine.lifetime = rclcpp::Duration::from_seconds(0);
-            roomDoorLine.type = visualization_msgs::msg::Marker::LINE_LIST;
-
-            // Room to Marker connection line
-            // roomMarkerLine.color.a = 0.5;
-            // roomMarkerLine.color.r = 0.0;
-            // roomMarkerLine.color.g = 0.0;
-            // roomMarkerLine.color.b = 0.0;
-            // roomMarkerLine.scale.x = 0.005;
-            // roomMarkerLine.scale.y = 0.005;
-            // roomMarkerLine.scale.z = 0.005;
-            // roomMarkerLine.header.stamp = msgTime;
-            // roomMarkerLine.ns = "room_marker_lines";
-            // roomMarkerLine.action = roomMarkerLine.ADD;
-            // roomMarkerLine.header.frame_id = frameSE;
-            // roomMarkerLine.id = roomArray.markers.size() + 1;
-            // roomMarkerLine.lifetime = rclcpp::Duration::from_seconds(0);
-            // roomMarkerLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Get the room center in the world frame
             // tf::Stamped<tf::Point> roomPoint, roomPointTransformed;
@@ -1082,7 +1049,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             // transformListener->transformPoint(frameWorld, ros::Time(0), roomPoint,
             //                                   frameSE, roomPointTransformed);
 
-            geometry_msgs::msg::PointStamped roomPoint, roomPointTransformed;
+            // Fill in the room center point
             roomPoint.header.stamp = msgTime;
             roomPoint.point.x = centroid.x();
             roomPoint.point.y = centroid.y();
@@ -1091,20 +1058,18 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
             try
             {
-                // Use tfBuffer_ for the transform, with timeout 100ms
-                // auto tf_stamped = tfBuffer_->lookupTransform(
-                //     frameWorld, frameSE, tf2::TimePointZero, rclcpp::Duration::from_seconds(0.1));
-                auto tf_stamped = tfBuffer_->lookupTransform(
+                // Transform the room center point to the world frame
+                auto tfStamped = tfBuffer_->lookupTransform(
                     frameWorld, frameSE, msgTime, rclcpp::Duration::from_seconds(0.1));
-                tf2::doTransform(roomPoint, roomPointTransformed, tf_stamped);
+                tf2::doTransform(roomPoint, roomPointTransformed, tfStamped);
             }
             catch (tf2::TransformException &ex)
             {
-                RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform room center: %s", ex.what());
-                roomPointTransformed = roomPoint; // fallback: use original point
+                RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Room center transform failed: %s", ex.what());
+                roomPointTransformed = roomPoint;
             }
 
-            // Room to Plane (Wall) connection line
+            // Room to Wall connection line
             for (const auto wall : rooms[idx]->getWalls())
             {
                 geometry_msgs::msg::Point pointRoom, pointWall;
@@ -1123,13 +1088,14 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
 
                 try
                 {
-                    auto tf_stamped = tfBuffer_->lookupTransform(
-                        frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
-                    tf2::doTransform(wallPoint, wallPointTransformed, tf_stamped);
+                    // Transform the room center point to the world frame
+                    auto tfStamped = tfBuffer_->lookupTransform(
+                        frameWorld, frameBC, msgTime, rclcpp::Duration::from_seconds(0.1));
+                    tf2::doTransform(wallPoint, wallPointTransformed, tfStamped);
                 }
                 catch (tf2::TransformException &ex)
                 {
-                    RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform wall centroid: %s", ex.what());
+                    RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Wall centroid transform failed: %s", ex.what());
                     wallPointTransformed = wallPoint;
                 }
 
@@ -1139,129 +1105,8 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 roomWallLine.points.push_back(pointWall);
             }
 
-            // Room to Door connection line
-            // for (const auto door : rooms[idx]->getDoors())
-            // {
-            //     geometry_msgs::msg::Point pointRoom, pointDoor;
-            //     geometry_msgs::msg::PointStamped doorPoint, doorPointTransformed;
-
-            //     pointRoom.x = roomPointTransformed.point.x;
-            //     pointRoom.y = roomPointTransformed.point.y;
-            //     pointRoom.z = roomPointTransformed.point.z;
-            //     roomDoorLine.points.push_back(pointRoom);
-
-            //     doorPoint.header.stamp = msgTime;
-            //     doorPoint.header.frame_id = frameBC;
-            //     doorPoint.point.x = door->getGlobalPose().translation()(0);
-            //     doorPoint.point.y = door->getGlobalPose().translation()(1);
-            //     doorPoint.point.z = door->getGlobalPose().translation()(2);
-
-            //     try
-            //     {
-            //         auto tf_stamped = tfBuffer_->lookupTransform(
-            //             frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
-            //         tf2::doTransform(doorPoint, doorPointTransformed, tf_stamped);
-            //     }
-            //     catch (tf2::TransformException &ex)
-            //     {
-            //         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform door centroid: %s", ex.what());
-            //         doorPointTransformed = doorPoint;
-            //     }
-
-            //     pointDoor.x = doorPointTransformed.point.x;
-            //     pointDoor.y = doorPointTransformed.point.y - 2.0;
-            //     pointDoor.z = doorPointTransformed.point.z;
-            //     roomDoorLine.points.push_back(pointDoor);
-            // }
-
-            // Room to Marker connection line
-            // geometry_msgs::msg::Point pointRoom, pointMarker;
-            // ORB_SLAM3::Marker *metaMarker = rooms[idx]->getMetaMarker();
-
-            // pointRoom.x = roomPointTransformed.point.x;
-            // pointRoom.y = roomPointTransformed.point.y;
-            // pointRoom.z = roomPointTransformed.point.z;
-            // roomMarkerLine.points.push_back(pointRoom);
-            // for (const auto door : rooms[idx]->getDoors())
-            // {
-            //     geometry_msgs::Point pointRoom, pointDoor;
-            //     tf::Stamped<tf::Point> pointDoorInit, pointDoorTransform;
-
-            //     pointRoom.x = roomPointTransformed.x();
-            //     pointRoom.y = roomPointTransformed.y();
-            //     pointRoom.z = roomPointTransformed.z();
-            //     roomDoorLine.points.push_back(pointRoom);
-
-            //     pointDoorInit.frame_id_ = frameBC;
-            //     pointDoorInit.setX(door->getGlobalPose().translation()(0));
-            //     pointDoorInit.setY(door->getGlobalPose().translation()(1));
-            //     pointDoorInit.setZ(door->getGlobalPose().translation()(2));
-            //     transformListener->transformPoint(frameWorld, ros::Time(0), pointDoorInit,
-            //                                       frameBC, pointDoorTransform);
-
-            //     pointDoor.x = pointDoorTransform.x();
-            //     pointDoor.z = pointDoorTransform.z();
-            //     pointDoor.y = pointDoorTransform.y() - 2.0;
-            //     roomDoorLine.points.push_back(pointDoor);
-            // }
-
-            // // Room to Marker connection line
-            // geometry_msgs::Point pointRoom, pointMarker;
-            // tf::Stamped<tf::Point> pointMarkerInit, pointMarkerTransform;
-            // ORB_SLAM3::Marker *metaMarker = rooms[idx]->getMetaMarker();
-
-            // pointRoom.x = roomPointTransformed.x();
-            // pointRoom.y = roomPointTransformed.y();
-            // pointRoom.z = roomPointTransformed.z();
-            // roomMarkerLine.points.push_back(pointRoom);
-
-            // In free space-based room candidate detection, the metaMarker is not available
-            // if (metaMarker != nullptr)
-            // {
-            //     geometry_msgs::msg::PointStamped pointMarkerInit, pointMarkerTransform;
-            //     pointMarkerInit.header.stamp = msgTime;
-            //     pointMarkerInit.header.frame_id = frameBC;
-            //     pointMarkerInit.point.x = metaMarker->getGlobalPose().translation()(0);
-            //     pointMarkerInit.point.y = metaMarker->getGlobalPose().translation()(1);
-            //     pointMarkerInit.point.z = metaMarker->getGlobalPose().translation()(2);
-
-            //     try
-            //     {
-            //         auto tf_stamped = tfBuffer_->lookupTransform(
-            //             frameWorld, frameBC, tf2::TimePointZero, tf2::durationFromSec(0.1));
-            //         tf2::doTransform(pointMarkerInit, pointMarkerTransform, tf_stamped);
-            //     }
-            //     catch (tf2::TransformException &ex)
-            //     {
-            //         RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Could not transform marker centroid: %s", ex.what());
-            //         pointMarkerTransform = pointMarkerInit;
-            //     }
-
-            //     geometry_msgs::msg::Point pointMarker;
-            //     pointMarker.x = pointMarkerTransform.point.x;
-            //     pointMarker.y = pointMarkerTransform.point.y;
-            //     pointMarker.z = pointMarkerTransform.point.z;
-            //     roomMarkerLine.points.push_back(pointMarker);
-            // }
-            // if (metaMarker != nullptr)
-            // {
-            //     pointMarkerInit.frame_id_ = frameBC;
-            //     pointMarkerInit.setX(metaMarker->getGlobalPose().translation()(0));
-            //     pointMarkerInit.setY(metaMarker->getGlobalPose().translation()(1));
-            //     pointMarkerInit.setZ(metaMarker->getGlobalPose().translation()(2));
-            //     transformListener->transformPoint(frameWorld, ros::Time(0), pointMarkerInit,
-            //                                       frameBC, pointMarkerTransform);
-
-            //     pointMarker.x = pointMarkerTransform.x();
-            //     pointMarker.z = pointMarkerTransform.z();
-            //     pointMarker.y = pointMarkerTransform.y();
-            //     roomMarkerLine.points.push_back(pointMarker);
-            // }
-
             // Add items to the roomArray
             roomArray.markers.push_back(roomWallLine);
-            // roomArray.markers.push_back(roomDoorLine);
-            // roomArray.markers.push_back(roomMarkerLine);
         }
 
         pubStructuralElements->publish(roomArray);
