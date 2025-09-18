@@ -102,7 +102,7 @@ namespace ORB_SLAM3
         return std::abs(angle - M_PI / 2.0) < threshold;
     }
 
-    std::vector<std::pair<Plane *, Plane *>> Utils::getAllPlanesFacingEachOther(const std::vector<Plane *> &planes)
+    std::vector<std::pair<Plane *, Plane *>> Utils::getFacingPlanes(const std::vector<Plane *> &planes)
     {
         // Variables
         SystemParams *sysParams = SystemParams::GetParams();

@@ -246,7 +246,7 @@ namespace ORB_SLAM3
 
         // Get all the facing walls
         std::vector<std::pair<Plane *, Plane *>> facingWalls =
-            Utils::getAllPlanesFacingEachOther(closestWalls);
+            Utils::getFacingPlanes(closestWalls);
 
         // If there is at least one pair of facing wall
         if (facingWalls.size() > 0)
@@ -356,9 +356,6 @@ namespace ORB_SLAM3
                 continue;
             }
 
-            // If the room already exists, update its centroid
-            existedRoom->setCentroid(clusterCentroid);
-
             // Loop over all walls
             for (const auto &wall : allWalls)
             {
@@ -402,13 +399,32 @@ namespace ORB_SLAM3
                     existedRoom->setWalls(wall);
             }
 
-            // // If there is only one wall, no need to check for a room/corridor
-            // if (closestWalls.size() < 2)
+            // Now the centroid of the room is the centroid of centroids of its walls
+            // std::vector<Eigen::Vector3d> wallCentroids;
+            // for (const auto &wall : existedRoom->getWalls())
+            //     wallCentroids.push_back(wall->getCentroid().cast<double>());
+            // Eigen::Vector3d roomCentroid = Utils::computeCentroidFromPoints(wallCentroids);
+            // existedRoom->setCentroid(roomCentroid);
+
+            // Get facing walls of the room
+            // std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> facingWalls =
+            //     Utils::getFacingPlanes(roomWalls);
+
+            // If there is only one wall, no need to check for a room/corridor
+            // if (facingWalls.size() < 1)
+            // {
+            //     existedRoom->setRoomVariant(Room::UNDEFINED);
             //     continue;
+            // } else {
+            //     if (facingWalls.size() >= 2)
+            //         existedRoom->setRoomVariant(Room::ROOM);
+            //     else
+            //         existedRoom->setRoomVariant(Room::CORRIDOR);
+            // }
 
             // // Get all the facing walls
             // std::vector<std::pair<Plane *, Plane *>> facingWalls =
-            //     Utils::getAllPlanesFacingEachOther(closestWalls);
+            //     Utils::getFacingPlanes(closestWalls);
 
             // // If no facing walls are found, continue to the next cluster
             // if (facingWalls.size() == 0)

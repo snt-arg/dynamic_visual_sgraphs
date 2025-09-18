@@ -93,7 +93,7 @@ namespace ORB_SLAM3
          * @brief Returns the planes that are facing each other from the given list
          * @param planes list of planes to be checked
          */
-        static std::vector<std::pair<Plane *, Plane *>> getAllPlanesFacingEachOther(const std::vector<Plane *> &planes);
+        static std::vector<std::pair<Plane *, Plane *>> getFacingPlanes(const std::vector<Plane *> &planes);
 
         /**
          * @brief Corrects the given plane equations to apply calculations

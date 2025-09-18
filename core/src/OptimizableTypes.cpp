@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #include "OptimizableTypes.h"
 
@@ -479,6 +479,26 @@ namespace ORB_SLAM3
     }
 
     bool EdgeVertex4PlaneProjectSE3Room::write(std::ostream &os) const
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); j++)
+                os << " " << information()(i, j);
+        return os.good();
+    }
+
+    bool EdgeVertexNPlaneProjectSE3Room::read(std::istream &is)
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); ++j)
+            {
+                is >> information()(i, j);
+                if (i != j)
+                    information()(j, i) = information()(i, j);
+            }
+        return true;
+    }
+
+    bool EdgeVertexNPlaneProjectSE3Room::write(std::ostream &os) const
     {
         for (int i = 0; i < information().rows(); i++)
             for (int j = i; j < information().cols(); j++)

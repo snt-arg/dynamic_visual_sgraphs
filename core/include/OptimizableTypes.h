@@ -1,13 +1,13 @@
 /**
  * This file is a modified version of a file from ORB-SLAM3.
- * 
+ *
  * Modifications Copyright (C) 2023-2025 SnT, University of Luxembourg
  * Ali Tourani, Saad Ejaz, Hriday Bavle, Jose Luis Sanchez-Lopez, and Holger Voos
- * 
+ *
  * Original Copyright (C) 2014-2021 University of Zaragoza:
  * Raúl Mur-Artal, Carlos Campos, Richard Elvira, Juan J. Gómez Rodríguez,
  * José M.M. Montiel, and Juan D. Tardós.
- * 
+ *
  * This file is part of vS-Graphs, which is free software: you can redistribute it
  * and/or modify it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
@@ -18,7 +18,7 @@
  *
  * You should have received a copy of the GNU General Public License along with this program.
  * If not, see <https://www.gnu.org/licenses/>.
-*/
+ */
 
 #ifndef ORB_SLAM3_OPTIMIZABLETYPES_H
 #define ORB_SLAM3_OPTIMIZABLETYPES_H
@@ -554,6 +554,67 @@ namespace ORB_SLAM3
 
     protected:
         virtual void correctPlaneDirection(Eigen::Vector4d &plane)
+        {
+            if (plane(3) > 0)
+                plane *= -1;
+        }
+    };
+
+    /**
+     * The edge used to connect an N-wall Room's center (SE3) to its Wall vertices (VertexPlane)
+     * [Note]: it creates constraint for three measurements, i.e., (x, y, z)
+     */
+    class EdgeVertexNPlaneProjectSE3Room : public g2o::BaseMultiEdge<3, Eigen::Vector3d>
+    {
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        virtual bool read(std::istream &is);
+        virtual bool write(std::ostream &os) const;
+        EdgeVertexNPlaneProjectSE3Room()
+        {
+            // Dynamically sized edge: at least one SE3 (room center) + N planes
+            resize(1);
+        }
+
+        void computeError() override
+        {
+            // First vertex is always the room pose (SE3)
+            const g2o::VertexSE3Expmap *vRoom = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+            Eigen::Vector3d roomPose = vRoom->estimate().translation();
+
+            // Remaining vertices are walls
+            std::vector<Eigen::Vector4d> walls;
+            for (size_t i = 1; i < _vertices.size(); ++i)
+            {
+                const g2o::VertexPlane *vWall = static_cast<const g2o::VertexPlane *>(_vertices[i]);
+                Eigen::Vector4d plane = vWall->estimate().coeffs();
+                correctPlaneDirection(plane);
+                walls.push_back(plane);
+            }
+
+            // Compute representative position from all walls enclosing the cluster
+            Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+            for (const auto &wall : walls)
+            {
+                // Each wall equation ax+by+cz+d=0 → normal = (a,b,c), offset = d
+                Eigen::Vector3d normal = wall.head<3>();
+                double d = wall(3);
+
+                // Approximate contribution: project along the normal
+                Eigen::Vector3d contrib = -d * normal;
+                centroid += contrib;
+            }
+
+            if (!walls.empty())
+                centroid /= static_cast<double>(walls.size());
+
+            // Final error
+            _error = roomPose - centroid;
+        }
+
+    protected:
+        void correctPlaneDirection(Eigen::Vector4d &plane)
         {
             if (plane(3) > 0)
                 plane *= -1;
