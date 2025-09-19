@@ -1118,6 +1118,7 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         {
             // Variables
             std::string floorName = floors[floorId]->getName();
+            geometry_msgs::msg::PointStamped floorPoint, floorPointTr;
             Eigen::Vector3d floorCentroid = floors[floorId]->getCentroid();
             visualization_msgs::msg::Marker floorMarker, floorLabel, floorRoomLine;
 
@@ -1185,28 +1186,47 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
             floorRoomLine.scale.z = 0.05;
             floorRoomLine.ns = "floorRoomEdges";
             floorRoomLine.header.stamp = msgTime;
-            floorRoomLine.header.frame_id = frameSE;
             floorRoomLine.action = floorRoomLine.ADD;
+            floorRoomLine.header.frame_id = frameWorld;
             floorRoomLine.lifetime = rclcpp::Duration::from_seconds(0);
             floorRoomLine.type = visualization_msgs::msg::Marker::LINE_LIST;
 
             // Create point for the floor centroid in the world frame
-            geometry_msgs::msg::PointStamped floorPoint, floorPointT;
             floorPoint.header.stamp = msgTime;
             floorPoint.header.frame_id = frameSE;
-            floorPoint.point.x = floorCentroid.x();
-            floorPoint.point.y = floorCentroid.y();
-            floorPoint.point.z = floorCentroid.z();
+            floorPoint.point.x = floorMarker.pose.position.x;
+            floorPoint.point.y = floorMarker.pose.position.y;
+            floorPoint.point.z = floorMarker.pose.position.z;
+
+            try
+            {
+                // Transform the room center point to the world frame
+                auto tfStamped = tfBuffer_->lookupTransform(
+                    frameWorld, frameSE, msgTime, rclcpp::Duration::from_seconds(0.1));
+                tf2::doTransform(floorPoint, floorPointTr, tfStamped);
+            }
+            catch (tf2::TransformException &ex)
+            {
+                RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Floor center transform failed: %s", ex.what());
+                floorPointTr = floorPoint;
+            }
 
             // Connect the floor to its rooms
             for (const auto room : floors[floorId]->getRooms())
             {
                 geometry_msgs::msg::Point pFloor, pRoom;
-                geometry_msgs::msg::PointStamped roomPoint, roomPointT;
+                geometry_msgs::msg::PointStamped roomPoint, roomPointTr;
 
-                pFloor.x = floorPoint.point.x;
-                pFloor.y = floorPoint.point.y;
-                pFloor.z = floorPoint.point.z;
+                pFloor.x = floorPointTr.point.x;
+                pFloor.y = floorPointTr.point.y;
+                pFloor.z = floorPointTr.point.z;
+
+                // Apply offset to the room centroid for better visualization
+                if (sensorType == ORB_SLAM3::System::IMU_RGBD)
+                    pFloor.z += floorToRoomOffset;
+                else
+                    pFloor.y += floorToRoomOffset;
+                
                 floorRoomLine.points.push_back(pFloor);
 
                 roomPoint.header.stamp = msgTime;
@@ -1215,15 +1235,22 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 roomPoint.point.y = room->getCentroid().y();
                 roomPoint.point.z = room->getCentroid().z();
 
-                pRoom.x = roomPoint.point.x;
-                pRoom.y = roomPoint.point.y;
-                pRoom.z = roomPoint.point.z;
+                try
+                {
+                    // Transform the room center point to the world frame
+                    auto tfStamped = tfBuffer_->lookupTransform(
+                        frameWorld, frameSE, msgTime, rclcpp::Duration::from_seconds(0.1));
+                    tf2::doTransform(roomPoint, roomPointTr, tfStamped);
+                }
+                catch (tf2::TransformException &ex)
+                {
+                    RCLCPP_WARN(rclcpp::get_logger("visual_sgraphs"), "Room centroid transform failed: %s", ex.what());
+                    roomPointTr = roomPoint;
+                }
 
-                // Apply offset to the room centroid for better visualization
-                if (sensorType == ORB_SLAM3::System::IMU_RGBD)
-                    pRoom.z += floorToRoomOffset;
-                else
-                    pRoom.y += floorToRoomOffset;
+                pRoom.x = roomPointTr.point.x;
+                pRoom.y = roomPointTr.point.y;
+                pRoom.z = roomPointTr.point.z;
 
                 floorRoomLine.points.push_back(pRoom);
             }
