@@ -106,6 +106,13 @@ namespace ORB_SLAM3
         ORB_SLAM3::Room *associateRooms(const Eigen::Vector3d givenRoomCentroid);
 
         /**
+         * @brief Checks for the existing of a room with particular walls close to a cluster.
+         * It returns the address of the existing room if found, otherwise returns nullptr.
+         * @param wallList the list of walls to be checked
+         */
+        ORB_SLAM3::Room *associateRooms(const std::vector<ORB_SLAM3::Plane *> &wallList);
+
+        /**
          * @brief Checks for the association of a given room
          * @param givenRoom the address of the given room
          * @param givenRoomList the list of rooms to be checked

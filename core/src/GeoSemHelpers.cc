@@ -300,7 +300,8 @@ namespace ORB_SLAM3
         givenRoom->setWalls(maxWallZ);
     }
 
-    void GeoSemHelpers::createBlankRoomCandidate(ORB_SLAM3::Atlas *mpAtlas, Eigen::Vector3d centroid)
+    ORB_SLAM3::Room *GeoSemHelpers::createBlankRoomCandidate(ORB_SLAM3::Atlas *mpAtlas,
+                                                             Eigen::Vector3d centroid)
     {
         // Variable
         int roomId = mpAtlas->GetAllRooms().size();
@@ -318,6 +319,8 @@ namespace ORB_SLAM3
 
         std::cout
             << "[GeoSemHelper] New room candidate detected: Room#" << newRoom->getId() << " (blank)" << std::endl;
+
+        return newRoom;
     }
 
     void GeoSemHelpers::createMapRoomCandidateByMarker(Atlas *mpAtlas, ORB_SLAM3::Room *matchedRoom,

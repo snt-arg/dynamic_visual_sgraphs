@@ -347,15 +347,6 @@ namespace ORB_SLAM3
             // Calculate the cluster centroid
             Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // Check if the room already exists in the map
-            ORB_SLAM3::Room *existedRoom = associateRooms(clusterCentroid);
-            if (existedRoom == nullptr)
-            {
-                // Create a new structural element (blank room) and exit the function
-                GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
-                continue;
-            }
-
             // Loop over all walls
             for (const auto &wall : allWalls)
             {
@@ -387,6 +378,15 @@ namespace ORB_SLAM3
                                    return normal.dot(direction) >= 0;
                                }),
                 closestWalls.end());
+
+            // If no closestWalls found, continue to the next cluster
+            if (closestWalls.empty())
+                continue;
+
+            // Check if the room already exists in the map
+            ORB_SLAM3::Room *existedRoom = associateRooms(closestWalls);
+            if (existedRoom == nullptr)
+                existedRoom = GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
 
             // Get the room's walls
             std::vector<ORB_SLAM3::Plane *> roomWalls = existedRoom->getWalls();
@@ -505,6 +505,48 @@ namespace ORB_SLAM3
                 // Connect all rooms to the floor
                 floor->setRooms(allRooms);
         }
+    }
+
+    ORB_SLAM3::Room *SemanticsManager::associateRooms(const std::vector<ORB_SLAM3::Plane *> &wallList)
+    {
+        // Variables
+        size_t maxMatches = 0;
+        ORB_SLAM3::Room *bestMatch = nullptr;
+
+        // Get all the rooms in the map
+        const auto &allRooms = mpAtlas->GetAllRooms();
+        if (allRooms.empty())
+            return nullptr;
+
+        // Search through all rooms to find the one with the most matching walls
+        for (const auto &mapRoom : allRooms)
+        {
+            size_t matches = 0;
+            // Get the walls of the map room
+            std::vector<ORB_SLAM3::Plane *> mapRoomWalls = mapRoom->getWalls();
+
+            if (mapRoomWalls.empty())
+                continue;
+
+            // Wall matching
+            for (auto *wall : wallList)
+                for (auto *roomWall : mapRoomWalls)
+                    if (wall->getId() == roomWall->getId())
+                        matches++;
+
+            // Update the best match if the current room has more matches
+            if (matches > maxMatches && matches > 0)
+            {
+                maxMatches = matches;
+                bestMatch = mapRoom;
+            }
+        }
+
+        // A minimum number of matches
+        if (maxMatches >= 0)
+            return bestMatch;
+        else
+            return nullptr;
     }
 
     ORB_SLAM3::Room *SemanticsManager::associateRooms(const Eigen::Vector3d givenRoomCentroid)

@@ -1220,13 +1220,6 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
                 pFloor.x = floorPointTr.point.x;
                 pFloor.y = floorPointTr.point.y;
                 pFloor.z = floorPointTr.point.z;
-
-                // Apply offset to the room centroid for better visualization
-                if (sensorType == ORB_SLAM3::System::IMU_RGBD)
-                    pFloor.z += floorToRoomOffset;
-                else
-                    pFloor.y += floorToRoomOffset;
-                
                 floorRoomLine.points.push_back(pFloor);
 
                 roomPoint.header.stamp = msgTime;

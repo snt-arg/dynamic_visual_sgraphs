@@ -105,7 +105,8 @@ namespace ORB_SLAM3
          * @param mpAtlas the current map in Atlas
          * @param centroid the centroid of the room (optional)
          */
-        static void createBlankRoomCandidate(Atlas *mpAtlas, Eigen::Vector3d centroid = Eigen::Vector3d::Zero());
+        static ORB_SLAM3::Room *createBlankRoomCandidate(Atlas *mpAtlas,
+                                                         Eigen::Vector3d centroid = Eigen::Vector3d::Zero());
 
         /**
          * @brief Creates a new room object (corridor or room) to be added to the map
