@@ -430,6 +430,8 @@ namespace ORB_SLAM3
         return os.good();
     }
 
+    // ------ Room-Wall Constraints ------
+
     EdgeVertex2PlaneProjectSE3Room::EdgeVertex2PlaneProjectSE3Room() : g2o::BaseMultiEdge<3, Eigen::Vector3d>()
     {
         resize(3);
@@ -505,6 +507,30 @@ namespace ORB_SLAM3
                 os << " " << information()(i, j);
         return os.good();
     }
+
+    // ------ Floor-Room Constraints ------
+
+    bool EdgeVertexNSE3RoomProjectSE3Floor::read(std::istream &is)
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); ++j)
+            {
+                is >> information()(i, j);
+                if (i != j)
+                    information()(j, i) = information()(i, j);
+            }
+        return true;
+    }
+
+    bool EdgeVertexNSE3RoomProjectSE3Floor::write(std::ostream &os) const
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); j++)
+                os << " " << information()(i, j);
+        return os.good();
+    }
+
+    // ----- Room-Marker Constraints (deprecated) ------
 
     EdgeVertexSE3RoomProjectSE3Marker::EdgeVertexSE3RoomProjectSE3Marker() : g2o::BaseBinaryEdge<4, Eigen::Vector4d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>() {}
 

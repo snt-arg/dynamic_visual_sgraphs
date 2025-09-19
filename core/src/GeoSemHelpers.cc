@@ -547,6 +547,8 @@ namespace ORB_SLAM3
         int floorId = mpAtlas->GetAllFloors().size();
 
         // Fill the floor entity
+        newMapFloor->setOpId(-1);
+        newMapFloor->setOpIdG(-1);
         newMapFloor->setId(floorId);
         newMapFloor->setCentroid(centroid);
         newMapFloor->setMap(mpAtlas->GetCurrentMap());

@@ -622,6 +622,51 @@ namespace ORB_SLAM3
     };
 
     /**
+     * The edge used to connect a Floor centroid (SE3) to its Room vertices (SE3)
+     * [Note]: it creates constraint for three measurements, i.e., (x, y, z)
+     */
+    class EdgeVertexNSE3RoomProjectSE3Floor : public g2o::BaseMultiEdge<3, Eigen::Vector3d>
+    {
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        virtual bool read(std::istream &is);
+        virtual bool write(std::ostream &os) const;
+        EdgeVertexNSE3RoomProjectSE3Floor()
+        {
+            // Dynamically sized edge: at least one SE3 (floor center) + N rooms
+            resize(1);
+        }
+
+        void computeError() override
+        {
+            // First vertex is always the floor pose (SE3)
+            const g2o::VertexSE3Expmap *vFloor = static_cast<const g2o::VertexSE3Expmap *>(_vertices[0]);
+            Eigen::Vector3d floorPose = vFloor->estimate().translation();
+
+            // Remaining vertices are rooms
+            std::vector<Eigen::Vector3d> rooms;
+            for (size_t i = 1; i < _vertices.size(); ++i)
+            {
+                const g2o::VertexSE3Expmap *vRoom = static_cast<const g2o::VertexSE3Expmap *>(_vertices[i]);
+                Eigen::Vector3d room = vRoom->estimate().translation();
+                rooms.push_back(room);
+            }
+
+            // Compute representative position from all rooms in the floor
+            Eigen::Vector3d centroid = Eigen::Vector3d::Zero();
+            for (const auto &room : rooms)
+                centroid += room;
+
+            if (!rooms.empty())
+                centroid /= static_cast<double>(rooms.size());
+
+            // Final error
+            _error = floorPose - centroid;
+        }
+    };
+
+    /**
      * The edge used to connect a Room's center (SE3) to a Marker vertex (SE3)
      * [Note]: it creates constraint for four measurements, i.e., (x, y, z, d)
      */

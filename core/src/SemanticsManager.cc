@@ -502,14 +502,8 @@ namespace ORB_SLAM3
 
             // Set all the detected rooms to the floor (assuming single floor)
             for (auto &floor : mpAtlas->GetAllFloors())
-            {
                 // Connect all rooms to the floor
                 floor->setRooms(allRooms);
-
-                // Update the centroid of the floor
-                Eigen::Vector3d floorCentroid = Utils::computeCentroidFromPoints(roomCentroids);
-                floor->setCentroid(floorCentroid);
-            }
         }
     }
 

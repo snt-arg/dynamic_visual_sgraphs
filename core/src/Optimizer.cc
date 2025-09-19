@@ -140,6 +140,7 @@ namespace ORB_SLAM3
         int nPlanes = 1;
         int nDoors = 1;
         int nRooms = 1;
+        int nFloors = 1;
         int maxOpId = 0;
         int nMarkers = 1;
 
@@ -430,7 +431,7 @@ namespace ORB_SLAM3
 
             // Initialize the room vertex (centroid estimate)
             vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                            pMapRoom->getCentroid().cast<double>()));
+                                               pMapRoom->getCentroid().cast<double>()));
             optimizer.addVertex(vrtxRoom);
 
             // Getting the walls opIds
@@ -453,7 +454,7 @@ namespace ORB_SLAM3
                 for (size_t i = 0; i < roomWallOpIds.size(); i++)
                     if (optimizer.vertex(roomWallOpIds[i]))
                         e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIds[i])));
-                
+
                 // Information matrix
                 e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
 
@@ -1476,6 +1477,7 @@ namespace ORB_SLAM3
         std::list<ORB_SLAM3::MapPoint *> localMapPointList;
         std::vector<ORB_SLAM3::KeyFrame *> neighborKeyFrameVec;
         std::vector<ORB_SLAM3::Room *> allRooms = pCurrentMap->GetAllRooms();
+        std::vector<ORB_SLAM3::Floor *> allFloors = pCurrentMap->GetAllFloors();
 
         // Unorderd maps to keep track of the local entities
         std::unordered_map<int, bool> mpLocalDoorId;
@@ -1857,6 +1859,7 @@ namespace ORB_SLAM3
 
         int nDoors = 1;
         int nRooms = 1;
+        int nFloors = 1;
         int nPlanes = 1;
         int nPoints = 0;
         int nMarkers = 1;
@@ -2182,7 +2185,7 @@ namespace ORB_SLAM3
 
             // Initialize the room vertex (centroid estimate)
             vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                            pMapRoom->getCentroid().cast<double>()));
+                                               pMapRoom->getCentroid().cast<double>()));
             optimizer.addVertex(vrtxRoom);
 
             // Getting the walls opIds
@@ -2205,7 +2208,7 @@ namespace ORB_SLAM3
                 for (size_t i = 0; i < roomWallOpIds.size(); i++)
                     if (optimizer.vertex(roomWallOpIds[i]))
                         e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIds[i])));
-                
+
                 // Information matrix
                 e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
 
@@ -2217,6 +2220,66 @@ namespace ORB_SLAM3
             }
         }
         maxOpId += nRooms;
+
+        // [LBA] Floors
+        for (const auto &pMapFloor : allFloors)
+        {
+            // Variables
+            std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
+
+            // No need to optimize if there are no rooms
+            if (rooms.empty() )
+            {
+                pMapFloor->setOpId(-1);
+                continue;
+            }
+
+            // Adding a vertex for each floor
+            g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
+
+            // Setting the local optimization ID for the floor
+            int opId = maxOpId + nFloors;
+            vrtxFloor->setId(opId);
+            pMapFloor->setOpId(opId);
+            nFloors++;
+
+            // Initialize the floor vertex (centroid estimate)
+            vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+                                                pMapFloor->getCentroid().cast<double>()));
+            optimizer.addVertex(vrtxFloor);
+
+            // Getting the rooms opIds
+            std::vector<int> floorRoomOpIds;
+            for (const auto &room : rooms)
+                floorRoomOpIds.push_back(room->getOpId());
+
+            // Adding a single edge connecting the floor to all its rooms
+            if (optimizer.vertex(opId))
+            {
+                ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
+
+                // Resize edge to fit: 1 (floor vertex) + n (rooms)
+                e->resize(1 + floorRoomOpIds.size());
+
+                // Set floor vertex
+                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
+
+                // Set room vertices
+                for (size_t i = 0; i < floorRoomOpIds.size(); i++)
+                    if (optimizer.vertex(floorRoomOpIds[i]))
+                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIds[i])));
+
+                // Information matrix
+                e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+
+                // Adding the edge to the optimizer
+                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                e->setRobustKernel(rk);
+                rk->setDelta(thHuberStereo);
+                optimizer.addEdge(e);
+            }
+        }
+        maxOpId += nFloors;
 
         // // Doors (Local Optimization)
         // for (list<Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
@@ -2437,6 +2500,34 @@ namespace ORB_SLAM3
                 pMapDoor->setGlobalPose(Tiw);
             }
         }
+
+        // Locally Optimized Floors
+        for (const auto &pMapFloor : allFloors)
+        {
+            int opId = pMapFloor->getOpId();
+
+            // If the opId is invalid, skip
+            if (opId < 0)
+                continue;
+
+            g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opId);
+            if (!vBase)
+            {
+                std::cerr << "[Warning] Floor vertex with opId='" << opId << "' not found in optimizer!" << std::endl;
+                continue;
+            }
+
+            // Safe downcast
+            g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
+            if (!vrtxFloor)
+            {
+                std::cerr << "[Warning] Vertex Floor with opId='" << opId << "' is not a VertexSE3Expmap!" << std::endl;
+                continue;
+            }
+
+            pMapFloor->setCentroid(vrtxFloor->estimate().translation());
+        }
+
         pMap->IncreaseChangeIndex();
     }
 
