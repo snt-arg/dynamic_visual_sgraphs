@@ -166,8 +166,7 @@ namespace ORB_SLAM3
 
                             mg2oMergeScw = mg2oMergeSlw;
 
-                            std::cout << "\n[Loop Closing]" << std::endl;
-                            std::cout << "- Map merge has been triggered ..." << std::endl;
+                            std::cout << "[LoopClosing] Map merge has been triggered ..." << std::endl;
 
 #ifdef REGISTER_TIMES
                             std::chrono::steady_clock::time_point time_StartMerge = std::chrono::steady_clock::now();
@@ -188,8 +187,7 @@ namespace ORB_SLAM3
                             vdMergeTotal_ms.push_back(timeMergeTotal);
 #endif
 
-                            std::cout << "\n[Loop Closing]" << std::endl;
-                            std::cout << "- Map merge has been finished." << std::endl;
+                            std::cout << "[LoopClosing] Map merge has been finished." << std::endl;
                         }
 
                         vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
@@ -220,13 +218,12 @@ namespace ORB_SLAM3
 
                     if (mbLoopDetected)
                     {
+                        std::cout << "[LoopClosing] Loop detected! Correcting the map ..." << std::endl;
+
                         bool bGoodLoop = true;
                         vdPR_CurrentTime.push_back(mpCurrentKF->mTimeStamp);
                         vdPR_MatchedTime.push_back(mpLoopMatchedKF->mTimeStamp);
                         vnPR_TypeRecogn.push_back(0);
-
-                        std::cout << "\n[Optimizer]" << std::endl;
-                        std::cout << "- Loop detected! Correcting the map ..." << std::endl;
 
                         mg2oLoopScw = mg2oLoopSlw;
                         if (mpCurrentKF->GetMap()->IsInertial())
@@ -251,7 +248,7 @@ namespace ORB_SLAM3
                             }
                             else
                             {
-                                std::cout << "- Bad Loop! Not taking action ..." << std::endl;
+                                std::cout << "[LoopClosing] The loop lacks sufficient overlap! Skipping correction ..." << std::endl;
                                 bGoodLoop = false;
                             }
                         }

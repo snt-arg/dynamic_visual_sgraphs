@@ -52,33 +52,39 @@ namespace ORB_SLAM3
     {
         std::vector<ORB_SLAM3::Door *> allDoors = pMap->GetAllDoors();
         std::vector<ORB_SLAM3::Room *> allRooms = pMap->GetAllRooms();
+        std::vector<ORB_SLAM3::Floor *> allFloors = pMap->GetAllFloors();
         std::vector<ORB_SLAM3::Plane *> allPlanes = pMap->GetAllPlanes();
         std::vector<ORB_SLAM3::Marker *> allMarkers = pMap->GetAllMarkers();
         std::vector<ORB_SLAM3::MapPoint *> allMapPoints = pMap->GetAllMapPoints();
         std::vector<ORB_SLAM3::KeyFrame *> allKeyFrames = pMap->GetAllKeyFrames();
 
         BundleAdjustment(allKeyFrames, allMapPoints, allMarkers, allPlanes, allDoors,
-                         allRooms, nIterations, pbStopFlag, nLoopKF, bRobust, markerImpact);
+                         allRooms, allFloors, nIterations, pbStopFlag, nLoopKF, bRobust, markerImpact);
     }
 
-    void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<MapPoint *> &vpMP,
-                                     const vector<Marker *> &allMarkersVec, const vector<Plane *> &allPlanesVec,
-                                     const vector<Door *> &allDoorsVec, const vector<Room *> &vpRooms, int nIterations,
-                                     bool *pbStopFlag, const unsigned long nLoopKF, const bool bRobust, double markerImpact)
+    void Optimizer::BundleAdjustment(const vector<ORB_SLAM3::KeyFrame *> &vpKFs,
+                                     const vector<ORB_SLAM3::MapPoint *> &vpMP,
+                                     const vector<ORB_SLAM3::Marker *> &allMarkersVec,
+                                     const vector<ORB_SLAM3::Plane *> &allPlanesVec,
+                                     const vector<ORB_SLAM3::Door *> &allDoorsVec,
+                                     const vector<ORB_SLAM3::Room *> &vpRooms,
+                                     const vector<ORB_SLAM3::Floor *> &vpFloors,
+                                     int nIterations, bool *pbStopFlag, const unsigned long nLoopKF,
+                                     const bool bRobust, double markerImpact)
     {
-        SystemParams *sysParams = SystemParams::GetParams();
-        vector<bool> vbNotIncludedMP;
+        // System parameters
+        ORB_SLAM3::SystemParams *sysParams = ORB_SLAM3::SystemParams::GetParams();
+
+        // Variables
+        std::vector<bool> vbNotIncludedMP;
         vbNotIncludedMP.resize(vpMP.size());
+        ORB_SLAM3::Map *pMap = vpKFs[0]->GetMap();
 
-        Map *pMap = vpKFs[0]->GetMap();
-
+        // Set up the solver
         g2o::SparseOptimizer optimizer;
         g2o::BlockSolverX::LinearSolverType *linearSolver;
-
         linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
-
         g2o::BlockSolverX *solver_ptr = new g2o::BlockSolverX(linearSolver);
-
         g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
         optimizer.setAlgorithm(solver);
         optimizer.setVerbose(false);
@@ -117,7 +123,7 @@ namespace ORB_SLAM3
         vector<MapPoint *> vpMapPointEdgeStereo;
         vpMapPointEdgeStereo.reserve(nExpectedSize);
 
-        // Set KeyFrame vertices (Global Optimization)
+        // [GBA] KeyFrames
         for (size_t i = 0; i < vpKFs.size(); i++)
         {
             KeyFrame *pKF = vpKFs[i];
@@ -144,7 +150,7 @@ namespace ORB_SLAM3
         int maxOpId = 0;
         int nMarkers = 1;
 
-        // Set MapPoint vertices (Global Optimization)
+        // [GBA] MapPoints
         for (size_t i = 0; i < vpMP.size(); i++)
         {
             MapPoint *pMP = vpMP[i];
@@ -291,7 +297,7 @@ namespace ORB_SLAM3
             }
         }
 
-        // Markers (Global Optimization)
+        // [GBA] Markers
         for (const auto &vpMarker : allMarkersVec)
         {
             // Adding a vertex for each marker
@@ -315,7 +321,7 @@ namespace ORB_SLAM3
 
         maxOpId += nMarkers;
 
-        // Planes (Global Optimization)
+        // [GBA] Planes
         for (const auto &vpPlane : allPlanesVec)
         {
             // Skip undefined planes (if not wall for now)
@@ -435,9 +441,9 @@ namespace ORB_SLAM3
             optimizer.addVertex(vrtxRoom);
 
             // Getting the walls opIds
-            std::vector<int> roomWallOpIds;
+            std::vector<int> roomWallOpIdGs;
             for (const auto &wall : walls)
-                roomWallOpIds.push_back(wall->getOpId());
+                roomWallOpIdGs.push_back(wall->getOpIdG());
 
             // Adding a single edge connecting the room to all its walls
             if (optimizer.vertex(opIdG))
@@ -445,15 +451,15 @@ namespace ORB_SLAM3
                 ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room *e = new ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room();
 
                 // Resize edge to fit: 1 (room vertex) + n (walls)
-                e->resize(1 + roomWallOpIds.size());
+                e->resize(1 + roomWallOpIdGs.size());
 
                 // Set room vertex
                 e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opIdG)));
 
                 // Set wall vertices
-                for (size_t i = 0; i < roomWallOpIds.size(); i++)
-                    if (optimizer.vertex(roomWallOpIds[i]))
-                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIds[i])));
+                for (size_t i = 0; i < roomWallOpIdGs.size(); i++)
+                    if (optimizer.vertex(roomWallOpIdGs[i]))
+                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIdGs[i])));
 
                 // Information matrix
                 e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
@@ -467,44 +473,62 @@ namespace ORB_SLAM3
         }
         maxOpId += nRooms;
 
-        // Set Door vertices (Global Optimization)
-        // for (const auto &vpRoom : vpRooms)
-        // {
-        //     vector<Door *> doors = vpRoom->getDoors();
-        //     for (const auto &door : doors)
-        //     {
-        //         // Adding a vertex for each door
-        //         g2o::VertexSE3Expmap *vDoor = new g2o::VertexSE3Expmap();
-        //         int opIdG = maxOpId + nDoors;
-        //         vDoor->setId(opIdG);
-        //         vDoor->setEstimate(g2o::SE3Quat(door->getGlobalPose().unit_quaternion().cast<double>(),
-        //                                         door->getGlobalPose().translation().cast<double>()));
-        //         optimizer.addVertex(vDoor);
-        //         nDoors++;
+        // [GBA] Floors
+        for (const auto &pMapFloor : vpFloors)
+        {
+            // Variables
+            std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
 
-        //         // Setting the local optimization ID for the door
-        //         door->setOpIdG(opIdG);
+            // No need to optimize if there are no rooms
+            if (rooms.empty())
+                continue;
 
-        //         // Adding an edge between the room and the door
-        //         ORB_SLAM3::EdgeSE3DoorProjectSE3Room *e = new ORB_SLAM3::EdgeSE3DoorProjectSE3Room();
-        //         e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opIdG)));
-        //         e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(door->getOpIdG())));
-        //         e->setInformation(Eigen::MatrixXd::Identity(6, 6));
+            // Adding a vertex for each floor
+            g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
 
-        //         Eigen::Isometry3d relativePose = Eigen::Isometry3d::Identity();
-        //         relativePose.matrix() = (dynamic_cast<g2o::VertexSE3Expmap *>((optimizer.vertex(vpRoom->getOpIdG())))->estimate().inverse() *
-        //                                  dynamic_cast<g2o::VertexSE3Expmap *>((optimizer.vertex(door->getOpIdG())))->estimate())
-        //                                     .to_homogeneous_matrix();
-        //         e->setMeasurement(relativePose);
+            // Setting the local optimization ID for the floor
+            int opIdG = maxOpId + nFloors;
+            vrtxFloor->setId(opIdG);
+            pMapFloor->setOpIdG(opIdG);
+            nFloors++;
 
-        //         g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-        //         e->setRobustKernel(rk);
-        //         rk->setDelta(thHuber2D);
-        //         optimizer.addEdge(e);
-        //     }
-        // }
+            // Initialize the floor vertex (centroid estimate)
+            vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+                                                pMapFloor->getCentroid().cast<double>()));
+            optimizer.addVertex(vrtxFloor);
 
-        // maxOpId += nDoors;
+            // Getting the rooms opIds
+            std::vector<int> floorRoomOpIdGs;
+            for (const auto &room : rooms)
+                floorRoomOpIdGs.push_back(room->getOpIdG());
+
+            // Adding a single edge connecting the floor to all its rooms
+            if (optimizer.vertex(opIdG))
+            {
+                ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
+
+                // Resize edge to fit: 1 (floor vertex) + n (rooms)
+                e->resize(1 + floorRoomOpIdGs.size());
+
+                // Set floor vertex
+                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opIdG)));
+
+                // Set room vertices
+                for (size_t i = 0; i < floorRoomOpIdGs.size(); i++)
+                    if (optimizer.vertex(floorRoomOpIdGs[i]))
+                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIdGs[i])));
+
+                // Information matrix
+                e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+
+                // Adding the edge to the optimizer
+                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                e->setRobustKernel(rk);
+                rk->setDelta(thHuber2D);
+                optimizer.addEdge(e);
+            }
+        }
+        maxOpId += nFloors;
 
         // Optimize!
         optimizer.setVerbose(true);
@@ -646,10 +670,50 @@ namespace ORB_SLAM3
             }
         }
 
-        // [TODO] - Add recovery of optimized data for Doors and Rooms
+        // Globally Optimized Rooms
+        for (const auto &vpRoom : vpRooms)
+        {
+            if (optimizer.vertex(vpRoom->getOpIdG()))
+            {
+                g2o::VertexSE3Expmap *vRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(vpRoom->getOpIdG()));
+                g2o::SE3Quat SE3quat = vRoom->estimate();
+                vpRoom->setCentroid(SE3quat.translation());
+            }
+        }
+
+        // Globally Optimized Floors
+        for (const auto &vpFloor : vpFloors)
+        {
+            // Variables
+            int opIdG = vpFloor->getOpIdG();
+
+            // If the opId is invalid, skip
+            if (opIdG < 0)
+                continue;
+
+            g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opIdG);
+            if (!vBase)
+            {
+                std::cerr << "[Warning] Floor vertex with opIdG='" << opIdG << "' not found in optimizer!" << std::endl;
+                continue;
+            }
+
+            // Safe downcast
+            g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
+            if (!vrtxFloor)
+            {
+                std::cerr << "[Warning] Vertex Floor with opIdG='" << opIdG << "' is not a VertexSE3Expmap!" << std::endl;
+                continue;
+            }
+
+            vpFloor->setCentroid(vrtxFloor->estimate().translation());
+        }
     }
 
-    void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal, const long unsigned int nLoopId, bool *pbStopFlag, bool bInit, float priorG, float priorA, Eigen::VectorXd *vSingVal, bool *bHess)
+    void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal,
+                                   const long unsigned int nLoopId, bool *pbStopFlag,
+                                   bool bInit, float priorG, float priorA, Eigen::VectorXd *vSingVal,
+                                   bool *bHess)
     {
         long unsigned int maxKFid = pMap->GetMaxKFid();
         const vector<KeyFrame *> vpKFs = pMap->GetAllKeyFrames();
@@ -2228,7 +2292,7 @@ namespace ORB_SLAM3
             std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
 
             // No need to optimize if there are no rooms
-            if (rooms.empty() )
+            if (rooms.empty())
             {
                 pMapFloor->setOpId(-1);
                 continue;
@@ -2280,48 +2344,6 @@ namespace ORB_SLAM3
             }
         }
         maxOpId += nFloors;
-
-        // // Doors (Local Optimization)
-        // for (list<Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
-        // {
-        //     Room *pMapRoom = *idx;
-        //     vector<Door *> doors = pMapRoom->getDoors();
-        //     for (const auto &door : doors)
-        //     {
-        //         // Adding a vertex for each door
-        //         g2o::VertexSE3Expmap *vDoor = new g2o::VertexSE3Expmap();
-        //         int opId = maxOpId + nDoors;
-        //         vDoor->setId(opId);
-        //         vDoor->setEstimate(g2o::SE3Quat(door->getGlobalPose().unit_quaternion().cast<double>(),
-        //                                         door->getGlobalPose().translation().cast<double>()));
-        //         optimizer.addVertex(vDoor);
-        //         nDoors++;
-
-        //         // Setting the local optimization ID for the door
-        //         door->setOpId(opId);
-
-        //         if (optimizer.vertex(opId) && optimizer.vertex(door->getOpId()))
-        //         {
-        //             // Adding an edge between the room and the door
-        //             ORB_SLAM3::EdgeSE3DoorProjectSE3Room *e = new ORB_SLAM3::EdgeSE3DoorProjectSE3Room();
-        //             e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
-        //             e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(door->getOpId())));
-        //             e->setInformation(Eigen::MatrixXd::Identity(6, 6));
-
-        //             Eigen::Isometry3d relativePose = Eigen::Isometry3d::Identity();
-        //             relativePose.matrix() = (dynamic_cast<g2o::VertexSE3Expmap *>((optimizer.vertex(pMapRoom->getOpId())))->estimate().inverse() *
-        //                                      dynamic_cast<g2o::VertexSE3Expmap *>((optimizer.vertex(door->getOpId())))->estimate())
-        //                                         .to_homogeneous_matrix();
-        //             e->setMeasurement(relativePose);
-
-        //             g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-        //             e->setRobustKernel(rk);
-        //             rk->setDelta(thHuberMono);
-        //             optimizer.addEdge(e);
-        //         }
-        //     }
-        // }
-        // maxOpId += nDoors;
 
         // abort if no edges
         if (nEdges == 0)

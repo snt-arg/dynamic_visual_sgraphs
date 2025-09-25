@@ -49,9 +49,13 @@ namespace ORB_SLAM3
     class Optimizer
     {
     public:
-        void static BundleAdjustment(const std::vector<KeyFrame *> &vpKF, const std::vector<MapPoint *> &vpMP,
-                                     const std::vector<Marker *> &vpMarkers, const std::vector<Plane *> &vpPlanes,
-                                     const std::vector<Door *> &vpDoors, const std::vector<Room *> &vpRooms,
+        void static BundleAdjustment(const std::vector<ORB_SLAM3::KeyFrame *> &vpKF,
+                                     const std::vector<ORB_SLAM3::MapPoint *> &vpMP,
+                                     const std::vector<ORB_SLAM3::Marker *> &vpMarkers,
+                                     const std::vector<ORB_SLAM3::Plane *> &vpPlanes,
+                                     const std::vector<ORB_SLAM3::Door *> &vpDoors,
+                                     const std::vector<ORB_SLAM3::Room *> &vpRooms,
+                                     const std::vector<ORB_SLAM3::Floor *> &vpFloors,
                                      int nIterations = 5, bool *pbStopFlag = NULL, const unsigned long nLoopKF = 0,
                                      const bool bRobust = true, double markerImpact = 0.1);
 
