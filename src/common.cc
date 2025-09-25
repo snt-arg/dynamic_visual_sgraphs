@@ -1116,6 +1116,10 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         // Loop through all the floors
         for (int floorId = 0; floorId < numFloors; floorId++)
         {
+            // If the floor has no rooms, skip it
+            if (floors[floorId]->getRooms().size() == 0)
+                continue;
+            
             // Variables
             std::string floorName = floors[floorId]->getName();
             geometry_msgs::msg::PointStamped floorPoint, floorPointTr;
