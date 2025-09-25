@@ -311,7 +311,7 @@ namespace ORB_SLAM3
         newRoom->setId(roomId);
         newRoom->setCentroid(centroid);
         newRoom->setMap(mpAtlas->GetCurrentMap());
-        newRoom->setName("Room#" + std::to_string(roomId));
+        newRoom->setName("StEl#" + std::to_string(roomId));
         newRoom->setRoomVariant(ORB_SLAM3::Room::roomVariant::UNDEFINED);
 
         // Add the room to the map

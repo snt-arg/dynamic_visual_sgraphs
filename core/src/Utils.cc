@@ -72,18 +72,11 @@ namespace ORB_SLAM3
         {
             // Calculate the perpendicular distance between the planes
             double distance = std::abs(v1(3) - v2(3)) / normal1.norm();
-
-            // Print distance and threshold
-            // std::cout << "- Distance between walls #" << plane1->getId() << " and #" << plane2->getId() << ": "
-            //           << distance << std::endl;
-
-            // Check if the calculated distance is greater than the threshold
             return distance > threshold;
         }
         else
         {
             // Planes are not parallel (they intersect), so return false
-            std::cout << "- Planes #" << plane1->getId() << " and #" << plane2->getId() << " are not parallel." << std::endl;
             return false;
         }
     }
@@ -102,21 +95,21 @@ namespace ORB_SLAM3
         return std::abs(angle - M_PI / 2.0) < threshold;
     }
 
-    std::vector<std::pair<Plane *, Plane *>> Utils::getFacingPlanes(const std::vector<Plane *> &planes)
+    std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> Utils::getFacingPlanes(const std::vector<ORB_SLAM3::Plane *> &planes)
     {
         // Variables
-        SystemParams *sysParams = SystemParams::GetParams();
-        std::vector<std::pair<Plane *, Plane *>> facingPlanes;
+        ORB_SLAM3::SystemParams *sysParams = ORB_SLAM3::SystemParams::GetParams();
+        std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> facingPlanes;
         double minValidSpace = sysParams->room_seg.min_wall_distance_thresh;
 
         // Loop through all the planes
         for (size_t idx1 = 0; idx1 < planes.size(); ++idx1)
         {
-            Plane *plane1 = planes[idx1];
+            ORB_SLAM3::Plane *plane1 = planes[idx1];
             for (size_t idx2 = idx1 + 1; idx2 < planes.size(); ++idx2)
             {
                 // Variables
-                Plane *plane2 = planes[idx2];
+                ORB_SLAM3::Plane *plane2 = planes[idx2];
                 // Check if the planes are facing each other
                 bool isFacing = Utils::arePlanesFacingEachOther(plane1, plane2);
                 if (isFacing)
@@ -629,7 +622,7 @@ namespace ORB_SLAM3
 
                 // Reset the smaller plane semantics
                 smallPlane->resetPlaneSemantics();
-                
+
                 // Set the smaller plane as bad
                 smallPlane->setBad();
 

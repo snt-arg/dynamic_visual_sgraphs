@@ -399,28 +399,76 @@ namespace ORB_SLAM3
                     existedRoom->setWalls(wall);
             }
 
-            // Now the centroid of the room is the centroid of centroids of its walls
-            // std::vector<Eigen::Vector3d> wallCentroids;
-            // for (const auto &wall : existedRoom->getWalls())
-            //     wallCentroids.push_back(wall->getCentroid().cast<double>());
-            // Eigen::Vector3d roomCentroid = Utils::computeCentroidFromPoints(wallCentroids);
-            // existedRoom->setCentroid(roomCentroid);
+            // Check room layout (corridor or room) based on the walls
+            // [Hint] A corridor has exactly two facing walls, parallel to each other.
+            // [Hint] A room has at least three walls, with normals perpendicular to each other.
+            if (roomWalls.size() < 2)
+                existedRoom->setRoomVariant(Room::UNDEFINED);
+            else
+            {
+                // Get pairs of facing planes
+                std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> facingWalls =
+                    Utils::getFacingPlanes(roomWalls);
+                // If no facing planes, skip
+                if (facingWalls.empty())
+                    continue;
+                if (facingWalls.size() == 1)
+                {
+                    existedRoom->setRoomVariant(ORB_SLAM3::Room::CORRIDOR);
+                    existedRoom->setName("Corridor#" + std::to_string(existedRoom->getId()));
+                    std::cout << "[SemMgr] Structural Element #" << existedRoom->getId() << " got classified as a Corridor." << std::endl;
+                }
+                else
+                {
+                    // Variables
+                    bool isRoom = false;
 
-            // Get facing walls of the room
-            // std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> facingWalls =
-            //     Utils::getFacingPlanes(roomWalls);
+                    // Get a perpendicularity value (degrees to radians)
+                    double perpThresh =
+                        sysParams->room_seg.walls_perpendicularity_thresh * ORB_SLAM3::Utils::DEG_TO_RAD;
 
-            // If there is only one wall, no need to check for a room/corridor
-            // if (facingWalls.size() < 1)
-            // {
-            //     existedRoom->setRoomVariant(Room::UNDEFINED);
-            //     continue;
-            // } else {
-            //     if (facingWalls.size() >= 2)
-            //         existedRoom->setRoomVariant(Room::ROOM);
-            //     else
-            //         existedRoom->setRoomVariant(Room::CORRIDOR);
-            // }
+                    // Iterate through each pair of facing walls
+                    for (size_t idx1 = 0; idx1 < facingWalls.size(); ++idx1)
+                    {
+                        for (size_t idx2 = idx1 + 1; idx2 < facingWalls.size(); ++idx2)
+                        {
+                            // Variables
+                            int perpCount = 0;
+
+                            // Get the walls
+                            ORB_SLAM3::Plane *wall1P1 = facingWalls[idx1].first;
+                            ORB_SLAM3::Plane *wall2P1 = facingWalls[idx1].second;
+                            ORB_SLAM3::Plane *wall1P2 = facingWalls[idx2].first;
+                            ORB_SLAM3::Plane *wall2P2 = facingWalls[idx2].second;
+
+                            // Check if wall pairs form a square, considering the perpendicularity threshold
+                            if (Utils::arePlanesPerpendicular(wall1P1, wall1P2, perpThresh))
+                                perpCount++;
+                            if (Utils::arePlanesPerpendicular(wall1P1, wall2P2, perpThresh))
+                                perpCount++;
+                            if (Utils::arePlanesPerpendicular(wall2P1, wall1P2, perpThresh))
+                                perpCount++;
+                            if (Utils::arePlanesPerpendicular(wall2P1, wall2P2, perpThresh))
+                                perpCount++;
+
+                            if (perpCount >= 2)
+                            {
+                                isRoom = true;
+                                break;
+                            }
+                        }
+                        if (isRoom) break;
+                    }
+
+                    // If the flag is true, it is a room
+                    if (isRoom)
+                    {
+                        existedRoom->setRoomVariant(ORB_SLAM3::Room::ROOM);
+                        existedRoom->setName("Room#" + std::to_string(existedRoom->getId()));
+                        std::cout << "[SemMgr] Structural Element #" << existedRoom->getId() << " got classified as a Room." << std::endl;
+                    }
+                }
+            }
 
             // // Get all the facing walls
             // std::vector<std::pair<Plane *, Plane *>> facingWalls =
