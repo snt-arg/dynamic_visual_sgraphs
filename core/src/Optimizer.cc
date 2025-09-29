@@ -349,7 +349,7 @@ namespace ORB_SLAM3
 
                 if (pKFi->isBad())
                 {
-                    std::cout << "KF is bad" << std::endl;
+                    std::cout << "[Optimizer] Bad KeyFrame detected for GBA! Skipping..." << std::endl;
                     vpPlane->eraseObservation(pKFi);
                     continue;
                 }
@@ -1688,23 +1688,7 @@ namespace ORB_SLAM3
             }
         }
 
-        // Loop through the recently added planes, get all the map points and add them
-        // list<MapPoint *> lRecentLocalMapPoints;
-        // for (list<Plane *>::iterator idx = lRecentLocalMapPlanes.begin(), vend = lRecentLocalMapPlanes.end(); idx != vend; idx++)
-        // {
-        //     set<MapPoint *> mapPoints = (*idx)->getMapPoints();
-        //     for (const auto &mapPoint : mapPoints)
-        //     {
-        //         if (mpLocalMapPointId.find(mapPoint->mnId) == mpLocalMapPointId.end())
-        //         {
-        //             localMapPointList.push_back(mapPoint);
-        //             lRecentLocalMapPoints.push_back(mapPoint);
-        //             mpLocalMapPointId[mapPoint->mnId] = true;
-        //         }
-        //     }
-        // }
-
-        // Loop through the recently added planes, get all the keyframes and add them
+        // [LBA] Loop through the recently added planes, get all the keyframes and add them
         std::list<ORB_SLAM3::KeyFrame *> lRecentLocalMapKeyFrames;
         for (list<ORB_SLAM3::Plane *>::iterator idx = lRecentLocalMapPlanes.begin(), vend = lRecentLocalMapPlanes.end(); idx != vend; idx++)
         {
@@ -1725,7 +1709,7 @@ namespace ORB_SLAM3
             }
         }
 
-        // Loop through the recently added keyframes, get all the map points and add them
+        // [LBA] Loop through the recently added keyframes, get all the map points and add them
         for (list<KeyFrame *>::iterator idx = lRecentLocalMapKeyFrames.begin(), vend = lRecentLocalMapKeyFrames.end(); idx != vend; idx++)
         {
             vector<MapPoint *> vpMPs = (*idx)->GetMapPointMatches();
@@ -1745,21 +1729,7 @@ namespace ORB_SLAM3
             }
         }
 
-        // Loop through the recently added map points, get all the keyframes and add them
-        // for (list<MapPoint *>::iterator idx = lRecentLocalMapPoints.begin(), vend = lRecentLocalMapPoints.end(); idx != vend; idx++)
-        // {
-        //     std::map<KeyFrame *, std::tuple<int, int>> mapPointObservations = (*idx)->GetObservations();
-        //     for (std::map<KeyFrame *, std::tuple<int, int>>::const_iterator obsId = mapPointObservations.begin(), obLast = mapPointObservations.end(); obsId != obLast; obsId++)
-        //     {
-        //         if (mpLocalKeyFrameId.find(obsId->first->mnId) == mpLocalKeyFrameId.end())
-        //         {
-        //             localKeyFrameList.push_back(obsId->first);
-        //             mpLocalKeyFrameId[obsId->first->mnId] = true;
-        //         }
-        //     }
-        // }
-
-        // Fixed Keyframes for MPs (Keyframes that see Local MapPoints but that are not Local Keyframes)
+        // [LBA] Fixed Keyframes for MPs (Keyframes that see Local MapPoints but that are not Local Keyframes)
         list<KeyFrame *> lFixedCameras;
         for (list<MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
         {
@@ -1776,32 +1746,6 @@ namespace ORB_SLAM3
                 }
             }
         }
-
-        // const size_t maxNewFixed = 5;
-        // // Fixed KeyFrames for Planes (Keyframes that see Local Planes but that are not Local Keyframes)
-        // for (list<Plane *>::iterator lit = localPlaneList.begin(), lend = localPlaneList.end(); lit != lend; lit++)
-        // {
-        //     size_t newFixed = 0;
-        //     map<KeyFrame *, ORB_SLAM3::Plane::Observation> observations = (*lit)->getObservations();
-        //     for (map<KeyFrame *, ORB_SLAM3::Plane::Observation>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
-        //     {
-        //         KeyFrame *pKFi = mit->first;
-
-        //         if (pKFi->mnBALocalForKF != pKF->mnId && pKFi->mnBAFixedForKF != pKF->mnId)
-        //         {
-        //             pKFi->mnBAFixedForKF = pKF->mnId;
-        //             if (!pKFi->isBad() && pKFi->GetMap() == pCurrentMap)
-        //             {
-        //                 lFixedCameras.push_back(pKFi);
-        //                 newFixed++;
-        //             }
-        //             if (newFixed >= maxNewFixed)
-        //                 break;
-        //         }
-        //     }
-        //     if (newFixed >= maxNewFixed)
-        //         break;
-        // }
 
         countFixedKF = lFixedCameras.size() + countFixedKF;
 
@@ -2067,7 +2011,7 @@ namespace ORB_SLAM3
         }
         num_edges = nEdges;
 
-        // Markers (Local Optimization)
+        // [LBA] Markers
         for (list<Marker *>::iterator idx = localMarkerList.begin(), lend = localMarkerList.end(); idx != lend; idx++)
         {
             // Adding a vertex for each marker
@@ -2090,16 +2034,20 @@ namespace ORB_SLAM3
 
         maxOpId += nMarkers;
 
-        // Planes (Local Optimization)
-        for (list<Plane *>::iterator idx = localPlaneList.begin(), lend = localPlaneList.end(); idx != lend; idx++)
+        // [LBA] Planes
+        for (std::list<ORB_SLAM3::Plane *>::iterator idx = localPlaneList.begin(), lend = localPlaneList.end(); idx != lend; idx++)
         {
-            // Adding a vertex for each plane
-            Plane *pMapPlane = *idx;
+            // Variables
+            ORB_SLAM3::Plane *pMapPlane = *idx;
             g2o::VertexPlane *vPlane = new g2o::VertexPlane();
+
+            // Adding a vertex for each plane
             int opId = maxOpId + nPlanes;
             vPlane->setId(opId);
+
             if (sysParams->optimization.marginalize_planes)
                 vPlane->setMarginalized(true);
+
             g2o::Plane3D planeGlobalEquation = pMapPlane->getGlobalEquation();
             vPlane->setEstimate(planeGlobalEquation);
             optimizer.addVertex(vPlane);
@@ -2144,14 +2092,14 @@ namespace ORB_SLAM3
 
                 if (pKFi->isBad())
                 {
-                    std::cout << "KF is bad" << std::endl;
+                    std::cout << "[Optimizer] Bad KeyFrame detected for LBA! Skipping..." << std::endl;
                     pMapPlane->eraseObservation(pKFi);
                     continue;
                 }
 
                 if (pKFi->GetMap() != pCurrentMap)
                 {
-                    std::cout << "KF is not in the current map" << std::endl;
+                    std::cout << "[Optimizer] KeyFrame is not in the current map! Skipping..." << std::endl;
                     continue;
                 }
 
@@ -2203,26 +2151,6 @@ namespace ORB_SLAM3
                     }
                 }
             }
-
-            // 🚧 [vS-Graphs v.2.0] in contrast with the first version of visual S-Graphs, where there was an edge between
-            // Markers and Planes, in this version we removed that edge
-            // vector<Marker *> attachedMarkers = pMapPlane->getMarkers();
-            // for (const auto &planeMarker : attachedMarkers)
-            // {
-            //     if (optimizer.vertex(opId) && optimizer.vertex(planeMarker->getOpId()))
-            //     {
-            //         // Adding an edge between the Plane and the Marker
-            //         ORB_SLAM3::EdgeVertexPlaneProjectSE3M *e = new ORB_SLAM3::EdgeVertexPlaneProjectSE3M();
-            //         e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
-            //         e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(planeMarker->getOpId())));
-            //         e->setInformation(Eigen::Matrix<double, 4, 4>::Identity());
-
-            //         g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-            //         e->setRobustKernel(rk);
-            //         rk->setDelta(thHuberMono);
-            //         optimizer.addEdge(e);
-            //     }
-            // }
         }
 
         maxOpId += nPlanes;
@@ -2230,119 +2158,152 @@ namespace ORB_SLAM3
         // [LBA] Rooms
         for (std::list<ORB_SLAM3::Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
         {
-            // Variables
-            ORB_SLAM3::Room *pMapRoom = *idx;
-            std::vector<ORB_SLAM3::Plane *> walls = pMapRoom->getWalls();
-
-            // No need to optimize if there are no walls
-            if (walls.empty())
-                continue;
-
-            // Adding a vertex for each room
-            g2o::VertexSE3Expmap *vrtxRoom = new g2o::VertexSE3Expmap();
-
-            // Setting the local optimization ID for the room
-            int opId = maxOpId + nRooms;
-            vrtxRoom->setId(opId);
-            pMapRoom->setOpId(opId);
-            nRooms++;
-
-            // Initialize the room vertex (centroid estimate)
-            vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                               pMapRoom->getCentroid().cast<double>()));
-            optimizer.addVertex(vrtxRoom);
-
-            // Getting the walls opIds
-            std::vector<int> roomWallOpIds;
-            for (const auto &wall : walls)
-                roomWallOpIds.push_back(wall->getOpId());
-
-            // Adding a single edge connecting the room to all its walls
-            if (optimizer.vertex(opId))
+            try
             {
-                ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room *e = new ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room();
+                // Variables
+                bool allWallsExist = true;
+                ORB_SLAM3::Room *pMapRoom = *idx;
+                std::vector<ORB_SLAM3::Plane *> walls = pMapRoom->getWalls();
 
-                // Resize edge to fit: 1 (room vertex) + n (walls)
-                e->resize(1 + roomWallOpIds.size());
+                // No need to optimize if there are no walls
+                if (walls.empty())
+                    continue;
 
-                // Set room vertex
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
+                // Adding a vertex for each room
+                g2o::VertexSE3Expmap *vrtxRoom = new g2o::VertexSE3Expmap();
 
-                // Set wall vertices
-                for (size_t i = 0; i < roomWallOpIds.size(); i++)
-                    if (optimizer.vertex(roomWallOpIds[i]))
-                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIds[i])));
+                // Setting the local optimization ID for the room
+                int opId = maxOpId + nRooms;
+                vrtxRoom->setId(opId);
+                pMapRoom->setOpId(opId);
+                nRooms++;
 
-                // Information matrix
-                e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+                // Initialize the room vertex (centroid estimate)
+                vrtxRoom->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+                                                   pMapRoom->getCentroid().cast<double>()));
+                optimizer.addVertex(vrtxRoom);
 
-                // Adding the edge to the optimizer
-                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk);
-                rk->setDelta(thHuberStereo);
-                optimizer.addEdge(e);
+                // Getting the walls opIds
+                std::vector<int> roomWallOpIds;
+                for (const auto &wall : walls)
+                    roomWallOpIds.push_back(wall->getOpId());
+                
+                for (int wallOpId : roomWallOpIds) {
+                    if (!optimizer.vertex(wallOpId)) {
+                        allWallsExist = false;
+                        std::cerr << "[Optimizer] Room wall vertex with opId=" << wallOpId << " not found, skipping room edge." << std::endl;
+                        break;
+                    }
+                }
+
+                // Adding a single edge connecting the room to all its walls
+                if (optimizer.vertex(opId) && allWallsExist && roomWallOpIds.size() >= 1)
+                {
+                    ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room *e = new ORB_SLAM3::EdgeVertexNPlaneProjectSE3Room();
+
+                    // Resize edge to fit: 1 (room vertex) + n (walls)
+                    e->resize(1 + roomWallOpIds.size());
+
+                    // Set room vertex
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
+
+                    // Set wall vertices
+                    for (size_t i = 0; i < roomWallOpIds.size(); i++)
+                        if (optimizer.vertex(roomWallOpIds[i]))
+                            e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(roomWallOpIds[i])));
+
+                    // Information matrix
+                    e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+
+                    // Adding the edge to the optimizer
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(thHuberStereo);
+                    optimizer.addEdge(e);
+                }
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally optimizing room: " << e.what() << std::endl;
+                continue;
             }
         }
+
         maxOpId += nRooms;
 
         // [LBA] Floors
         for (const auto &pMapFloor : allFloors)
         {
-            // Variables
-            std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
-
-            // No need to optimize if there are no rooms
-            if (rooms.empty())
+            try
             {
-                pMapFloor->setOpId(-1);
+                // Variables
+                bool allRoomsExist = true;
+                std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
+
+                // No need to optimize if there are no rooms
+                if (rooms.empty())
+                    continue;
+
+                // Adding a vertex for each floor
+                g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
+
+                // Setting the local optimization ID for the floor
+                int opId = maxOpId + nFloors;
+                vrtxFloor->setId(opId);
+                pMapFloor->setOpId(opId);
+                nFloors++;
+
+                // Initialize the floor vertex (centroid estimate)
+                vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+                                                    pMapFloor->getCentroid().cast<double>()));
+                optimizer.addVertex(vrtxFloor);
+
+                // Getting the rooms opIds
+                std::vector<int> floorRoomOpIds;
+                for (const auto &room : rooms)
+                    floorRoomOpIds.push_back(room->getOpId());
+                
+                for (int roomOpId : floorRoomOpIds) {
+                    if (!optimizer.vertex(roomOpId)) {
+                        allRoomsExist = false;
+                        std::cerr << "[Optimizer] Floor room vertex with opId=" << roomOpId << " not found, skipping floor edge." << std::endl;
+                        break;
+                    }
+                }
+
+                // Adding a single edge connecting the floor to all its rooms
+                if (optimizer.vertex(opId) && allRoomsExist && floorRoomOpIds.size() >= 1)
+                {
+                    ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
+
+                    // Resize edge to fit: 1 (floor vertex) + n (rooms)
+                    e->resize(1 + floorRoomOpIds.size());
+
+                    // Set floor vertex
+                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
+
+                    // Set room vertices
+                    for (size_t i = 0; i < floorRoomOpIds.size(); i++)
+                        if (optimizer.vertex(floorRoomOpIds[i]))
+                            e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIds[i])));
+
+                    // Information matrix
+                    e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+
+                    // Adding the edge to the optimizer
+                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                    e->setRobustKernel(rk);
+                    rk->setDelta(thHuberStereo);
+                    optimizer.addEdge(e);
+                }
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally optimizing floor: " << e.what() << std::endl;
                 continue;
             }
-
-            // Adding a vertex for each floor
-            g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
-
-            // Setting the local optimization ID for the floor
-            int opId = maxOpId + nFloors;
-            vrtxFloor->setId(opId);
-            pMapFloor->setOpId(opId);
-            nFloors++;
-
-            // Initialize the floor vertex (centroid estimate)
-            vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                                pMapFloor->getCentroid().cast<double>()));
-            optimizer.addVertex(vrtxFloor);
-
-            // Getting the rooms opIds
-            std::vector<int> floorRoomOpIds;
-            for (const auto &room : rooms)
-                floorRoomOpIds.push_back(room->getOpId());
-
-            // Adding a single edge connecting the floor to all its rooms
-            if (optimizer.vertex(opId))
-            {
-                ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
-
-                // Resize edge to fit: 1 (floor vertex) + n (rooms)
-                e->resize(1 + floorRoomOpIds.size());
-
-                // Set floor vertex
-                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
-
-                // Set room vertices
-                for (size_t i = 0; i < floorRoomOpIds.size(); i++)
-                    if (optimizer.vertex(floorRoomOpIds[i]))
-                        e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIds[i])));
-
-                // Information matrix
-                e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
-
-                // Adding the edge to the optimizer
-                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-                e->setRobustKernel(rk);
-                rk->setDelta(thHuberStereo);
-                optimizer.addEdge(e);
-            }
         }
+
         maxOpId += nFloors;
 
         // abort if no edges
@@ -2465,89 +2426,135 @@ namespace ORB_SLAM3
             }
         }
 
-        // Recovering optimized data (Local Optimization)
-        // Locally Optimized Keyframes
+        // [LBA] Locally optimized KeyFrames
         for (list<KeyFrame *>::iterator lit = localKeyFrameList.begin(), lend = localKeyFrameList.end(); lit != lend; lit++)
         {
-            KeyFrame *pKFi = *lit;
-            g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKFi->mnId));
-            g2o::SE3Quat SE3quat = vSE3->estimate();
-            Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
-            pKFi->SetPose(Tiw);
+            try
+            {
+                KeyFrame *pKFi = *lit;
+                g2o::VertexSE3Expmap *vSE3 = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pKFi->mnId));
+                g2o::SE3Quat SE3quat = vSE3->estimate();
+                Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
+                pKFi->SetPose(Tiw);
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized KeyFrame: " << e.what() << std::endl;
+                continue;
+            }
         }
 
-        // Locally Optimized Points
+        // [LBA] Locally optimized MapPoints
         for (list<MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
         {
-            MapPoint *pMP = *lit;
-            g2o::VertexSBAPointXYZ *vPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pMP->mnId + maxKFid + 1));
-            pMP->SetWorldPos(vPoint->estimate().cast<float>());
-            pMP->UpdateNormalAndDepth();
+            try
+            {
+                MapPoint *pMP = *lit;
+                g2o::VertexSBAPointXYZ *vPoint = static_cast<g2o::VertexSBAPointXYZ *>(optimizer.vertex(pMP->mnId + maxKFid + 1));
+                pMP->SetWorldPos(vPoint->estimate().cast<float>());
+                pMP->UpdateNormalAndDepth();
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized MapPoint: " << e.what() << std::endl;
+                continue;
+            }
         }
 
-        // Locally Optimized Markers
+        // [LBA] Locally optimized markers
         for (list<Marker *>::iterator idx = localMarkerList.begin(), lend = localMarkerList.end(); idx != lend; idx++)
         {
-            Marker *pMapMarker = *idx;
-            g2o::VertexSE3Expmap *vMarker = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapMarker->getOpId()));
-            g2o::SE3Quat SE3quat = vMarker->estimate();
-            Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
-            pMapMarker->setGlobalPose(Tiw);
-        }
-
-        // Locally Optimized Planes
-        for (list<Plane *>::iterator idx = localPlaneList.begin(), lend = localPlaneList.end(); idx != lend; idx++)
-        {
-            Plane *pMapPlane = *idx;
-            g2o::VertexPlane *vPlane = static_cast<g2o::VertexPlane *>(optimizer.vertex(pMapPlane->getOpId()));
-            g2o::Plane3D planePlane = vPlane->estimate();
-            pMapPlane->setGlobalEquation(planePlane);
-        }
-
-        // Locally Optimized Rooms
-        for (list<Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
-        {
-            Room *pMapRoom = *idx;
-            g2o::VertexSE3Expmap *vrtxRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapRoom->getOpId()));
-            g2o::SE3Quat SE3quat = vrtxRoom->estimate();
-            pMapRoom->setCentroid(SE3quat.translation());
-
-            // Locally Optimized Doors
-            for (const auto door : pMapRoom->getDoors())
+            try
             {
-                Door *pMapDoor = door;
-                g2o::VertexSE3Expmap *vDoor = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapDoor->getOpId()));
-                g2o::SE3Quat SE3quat = vDoor->estimate();
+                Marker *pMapMarker = *idx;
+                g2o::VertexSE3Expmap *vMarker = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapMarker->getOpId()));
+                g2o::SE3Quat SE3quat = vMarker->estimate();
                 Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
-                pMapDoor->setGlobalPose(Tiw);
+                pMapMarker->setGlobalPose(Tiw);
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized marker: " << e.what() << std::endl;
+                continue;
             }
         }
 
-        // Locally Optimized Floors
+        // [LBA] Locally optimized planes
+        for (std::list<ORB_SLAM3::Plane *>::iterator idx = localPlaneList.begin(), lend = localPlaneList.end(); idx != lend; idx++)
+        {
+            try
+            {
+                ORB_SLAM3::Plane *pMapPlane = *idx;
+                g2o::VertexPlane *vPlane = static_cast<g2o::VertexPlane *>(optimizer.vertex(pMapPlane->getOpId()));
+                g2o::Plane3D planePlane = vPlane->estimate();
+                pMapPlane->setGlobalEquation(planePlane);
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized plane: " << e.what() << std::endl;
+                continue;
+            }
+        }
+
+        // [LBA] Update optimized rooms
+        for (std::list<ORB_SLAM3::Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
+        {
+            try
+            {
+                ORB_SLAM3::Room *pMapRoom = *idx;
+                g2o::VertexSE3Expmap *vrtxRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapRoom->getOpId()));
+                g2o::SE3Quat SE3quat = vrtxRoom->estimate();
+                pMapRoom->setCentroid(SE3quat.translation());
+
+                // Locally Optimized Doors
+                // for (const auto door : pMapRoom->getDoors())
+                // {
+                //     ORB_SLAM3::Door *pMapDoor = door;
+                //     g2o::VertexSE3Expmap *vDoor = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapDoor->getOpId()));
+                //     g2o::SE3Quat SE3quat = vDoor->estimate();
+                //     Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
+                //     pMapDoor->setGlobalPose(Tiw);
+                // }
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized room: " << e.what() << std::endl;
+                continue;
+            }
+        }
+
+        // [LBA] Update optimized floors
         for (const auto &pMapFloor : allFloors)
         {
-            int opId = pMapFloor->getOpId();
-
-            // If the opId is invalid, skip
-            if (opId < 0)
-                continue;
-
-            g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opId);
-            if (!vBase)
+            try
             {
-                std::cerr << "[Warning] Floor vertex with opId='" << opId << "' not found in optimizer!" << std::endl;
+                int opId = pMapFloor->getOpId();
+
+                if (opId < 0)
+                    continue;
+
+                g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opId);
+                if (!vBase)
+                {
+                    std::cerr << "[Warning] Floor vertex with opId='" << opId << "' not found in optimizer!" << std::endl;
+                    continue;
+                }
+
+                // Safe downcast
+                g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
+                if (!vrtxFloor)
+                {
+                    std::cerr << "[Warning] Vertex Floor with opId='" << opId << "' is not a VertexSE3Expmap!" << std::endl;
+                    continue;
+                }
+
+                pMapFloor->setCentroid(vrtxFloor->estimate().translation());
+            }
+            catch (std::exception &e)
+            {
+                std::cerr << "[Optimizer] Error while locally updating optimized floor: " << e.what() << std::endl;
                 continue;
             }
-
-            // Safe downcast
-            g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
-            if (!vrtxFloor)
-            {
-                std::cerr << "[Warning] Vertex Floor with opId='" << opId << "' is not a VertexSE3Expmap!" << std::endl;
-                continue;
-            }
-
-            pMapFloor->setCentroid(vrtxFloor->estimate().translation());
         }
 
         pMap->IncreaseChangeIndex();

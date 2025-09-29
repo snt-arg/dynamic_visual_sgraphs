@@ -2189,7 +2189,7 @@ namespace ORB_SLAM3
                 if (bOK)
                     bOK = TrackLocalMap();
                 else
-                    std::cout << "- Tracking failed ..." << std::endl;
+                    std::cout << "[Tracking] Failed to track the features ..." << std::endl;
             }
             else
             {
