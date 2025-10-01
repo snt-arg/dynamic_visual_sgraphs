@@ -209,7 +209,7 @@ void ImageGrabber::GrabRGBD(const sensor_msgs::msg::Image::ConstSharedPtr &msgRG
     }
 
     rclcpp::Time msgTime = cv_ptrRGB->header.stamp;
-    publishTopics(msgTime);
+    publishTopics(msgTime, Eigen::Vector3f::Zero(), msgPC);
 }
 
 /**

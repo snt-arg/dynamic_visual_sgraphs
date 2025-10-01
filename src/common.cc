@@ -56,6 +56,7 @@ rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubPlaneLabel;
 rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls_new;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
+rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubWorldFramePointCloud;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubFiducialMarker;
@@ -132,6 +133,7 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubCameraPose = node->create_publisher<geometry_msgs::msg::PoseStamped>(node_name + "/camera_pose", 1);
     pubKFImage = node->create_publisher<segmenter_ros::msg::VSGraphDataMsg>(node_name + "/keyframe_image", 50);
     pubTrackedMappoints = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/tracked_points", 1);
+    pubWorldFramePointCloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/points_map", 1);
     pubKeyFrameMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/kf_markers", 1);
     pubFreespaceCluster = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/freespace_clusters", 1);
     pubCameraPoseVis = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/camera_pose_vis", 1);
@@ -162,7 +164,7 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     tfListener_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);
 }
 
-void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
+void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb, const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPCL)
 {
     Sophus::SE3f Twc = pSLAM->GetCamTwc();
 
@@ -173,6 +175,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb)
     // Common topics
     publishCameraPose(Twc, msgTime);
     publishTFTransform(Twc, frameWorld, frameCamera, msgTime);
+    publishFramePointCloud(Twc, msgPCL, msgTime);
 
     // Set a static transform between the world and map frame
     if (pubStaticTransform)
@@ -591,6 +594,29 @@ void publishTrackedPoints(std::vector<ORB_SLAM3::MapPoint *> trackedMapPoints, r
 {
     sensor_msgs::msg::PointCloud2 cloud = mapPointToPointcloud(trackedMapPoints, msgTime);
     pubTrackedMappoints->publish(cloud);
+}
+
+void publishFramePointCloud(Sophus::SE3f Twc, const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPCL, rclcpp::Time msgTime)
+{
+    if (!msgPCL)
+        return;
+
+    // Transform the point cloud to the world frame
+    sensor_msgs::msg::PointCloud2 cloudMsg;
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::fromROSMsg(*msgPCL, *cloud);
+
+    // Transform the point cloud to the world frame
+    Eigen::Matrix4f Twc_eigen = Twc.matrix().cast<float>();
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr transformedCloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+    pcl::transformPointCloud(*cloud, *transformedCloud, Twc_eigen);
+
+    pcl::toROSMsg(*transformedCloud, cloudMsg);
+
+    cloudMsg.header.stamp = msgTime;
+    cloudMsg.header.frame_id = frameWorld;
+
+    pubWorldFramePointCloud->publish(cloudMsg);
 }
 
 void publishAllPoints(std::vector<ORB_SLAM3::MapPoint *> allMapPoints, rclcpp::Time msgTime)

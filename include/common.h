@@ -150,6 +150,7 @@ extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPo
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubSegmentedPointcloud;
+extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubWorldFramePointCloud;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubCameraPoseVis;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubKeyFrameMarker;
 extern rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubStructuralElements;
@@ -162,8 +163,8 @@ class MapPointStruct
 };
 
 void setupServices(std::shared_ptr<rclcpp::Node>, const std::string &);
-void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero());
-
+void publishFramePointCloud(Sophus::SE3f, const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPCL, rclcpp::Time);
+void publishTopics(rclcpp::Time, Eigen::Vector3f = Eigen::Vector3f::Zero(), const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPCL = nullptr);
 void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name);
 
 void publishTrackingImage(cv::Mat, rclcpp::Time);
