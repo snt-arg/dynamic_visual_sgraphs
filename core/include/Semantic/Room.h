@@ -39,6 +39,7 @@ namespace ORB_SLAM3
         int id;                         // The room's identifier
         int opId;                       // The room's identifier in the local optimizer
         int opIdG;                      // The room's identifier in the global optimizer
+        bool mbBad;                     // Marks the room as bad (if true, the room will not be used)
         int metaMarkerId;               // The identifier of the room's meta-marker (containing information about the room)
         std::string name;               // The name devoted for each room (optional)
         bool hasKnownLabel;             // Checks if it is a candidate room (meta-marker detected) or not
@@ -62,6 +63,9 @@ namespace ORB_SLAM3
 
         int getOpIdG() const;
         void setOpIdG(int value);
+
+        bool isBad();
+        void setBad();
 
         roomVariant getRoomVariant();
         void setRoomVariant(roomVariant value);

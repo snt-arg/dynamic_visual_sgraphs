@@ -53,6 +53,18 @@ namespace ORB_SLAM3
         opIdG = value;
     }
 
+    void Room::setBad()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mbBad = true;
+    }
+
+    bool Room::isBad()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        return mbBad;
+    }
+
     int Room::getMetaMarkerId() const
     {
         return metaMarkerId;

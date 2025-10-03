@@ -991,6 +991,10 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
     {
         for (int idx = 0; idx < numRooms; idx++)
         {
+            // Skip if the room is bad
+            if (rooms[idx]->isBad())
+                continue;
+            
             // Variables
             std::string roomName = rooms[idx]->getName();
             geometry_msgs::msg::PointStamped roomPoint, roomPointTr;

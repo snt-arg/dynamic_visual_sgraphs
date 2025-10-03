@@ -106,6 +106,11 @@ namespace ORB_SLAM3
          */
         ORB_SLAM3::Room *associateRooms(const Eigen::Vector3d clusterCentroid,
             const std::vector<ORB_SLAM3::Plane *> &wallList);
+        
+        /**
+         * @brief Re-associates rooms based on fixed time intervals to avoid duplicates
+         */
+        void reAssociateRooms();
 
         /**
          * @brief Converts mapped room candidates to rooms using geometric constraints

@@ -55,6 +55,9 @@ namespace ORB_SLAM3
             else if (sysParams->room_seg.method == SystemParams::room_seg::Method::GNN)
                 detectRoom_GNN();
 
+            // Re-associate rooms based on walls and clusters
+            reAssociateRooms();
+
             // Check detected floors
             getUpdatedFloors();
 
@@ -508,6 +511,13 @@ namespace ORB_SLAM3
             // Update the existing floor object to cotain all rooms
             std::vector<ORB_SLAM3::Room *> allRooms = mpAtlas->GetAllRooms();
 
+            // If the room is bad, remove it from the list
+            allRooms.erase(
+                std::remove_if(allRooms.begin(), allRooms.end(),
+                               [](ORB_SLAM3::Room *room)
+                               { return room->isBad(); }),
+                allRooms.end());
+
             // Get the centroid of each room
             std::vector<Eigen::Vector3d> roomCentroids;
             for (auto &room : allRooms)
@@ -580,5 +590,56 @@ namespace ORB_SLAM3
 
         // A minimum number of matches
         return (maxMatches > 0) ? bestMatch : nullptr;
+    }
+
+    void SemanticsManager::reAssociateRooms()
+    {
+        // Variables
+        double distanceThresh = sysParams->room_seg.center_distance_thresh;
+        auto allRooms = mpAtlas->GetAllRooms();
+
+        // Loop over all rooms to find duplicates
+        for (size_t i = 0; i < allRooms.size(); ++i)
+        {
+            ORB_SLAM3::Room *room1 = allRooms[i];
+            if (!room1 || room1->isBad())
+                continue;
+
+            for (size_t j = i + 1; j < allRooms.size(); ++j)
+            {
+                ORB_SLAM3::Room *room2 = allRooms[j];
+                if (!room2 || room2->isBad())
+                    continue;
+
+                double distance = (room1->getCentroid() - room2->getCentroid()).norm();
+                if (distance < distanceThresh)
+                {
+                    // Take all walls from room2 that are not already in room1
+                    for (auto *wall : room2->getWalls())
+                    {
+                        bool exists = false;
+                        for (auto *w : room1->getWalls())
+                        {
+                            if (wall->getId() == w->getId())
+                            {
+                                exists = true;
+                                break;
+                            }
+                        }
+                        if (!exists)
+                            room1->setWalls(wall);
+                    }
+
+                    // Merge room2 into room1
+                    room2->setBad();
+                    room1->setRoomVariant(ORB_SLAM3::Room::ROOM);
+                    room1->setName("Room#" + std::to_string(room1->getId()));
+
+                    std::cout << "[SemMgr] Merging Room #" << room2->getId()
+                              << " into Room #" << room1->getId()
+                              << " due to proximity." << std::endl;
+                }
+            }
+        }
     }
 }
