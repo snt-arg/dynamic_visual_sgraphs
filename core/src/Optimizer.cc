@@ -453,7 +453,7 @@ namespace ORB_SLAM3
                     if (!optimizer.vertex(wallOpId))
                     {
                         allWallsExist = false;
-                        std::cerr << "[Optimizer] Room wall vertex with opId=" << wallOpId << " not found globally, skipping room edge." << std::endl;
+                        std::cerr << "[Optimizer] Wall vertex with opId=" << wallOpId << " not found globally, skipping room-wall edge." << std::endl;
                         break;
                     }
                 }
@@ -494,81 +494,83 @@ namespace ORB_SLAM3
         maxOpId += nRooms;
 
         // [GBA] Floors
-        for (const auto &pMapFloor : vpFloors)
-        {
-            try
-            {
-                // Variables
-                bool allRoomsExist = true;
-                std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
+        // 🚧 Temporarily disabled to be synced with LBA: We moved the floor optimization to the the front-end (SemanticsManager)
+        // as some rooms may not be available in the local optimizer, causing wrong floor optimization
+        // for (const auto &pMapFloor : vpFloors)
+        // {
+        //     try
+        //     {
+        //         // Variables
+        //         bool allRoomsExist = true;
+        //         std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
 
-                // No need to optimize if there are no rooms
-                if (rooms.empty())
-                    continue;
+        //         // No need to optimize if there are no rooms
+        //         if (rooms.empty())
+        //             continue;
 
-                // Adding a vertex for each floor
-                g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
+        //         // Adding a vertex for each floor
+        //         g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
 
-                // Setting the local optimization ID for the floor
-                int opIdG = maxOpId + nFloors;
-                vrtxFloor->setId(opIdG);
-                pMapFloor->setOpIdG(opIdG);
-                nFloors++;
+        //         // Setting the local optimization ID for the floor
+        //         int opIdG = maxOpId + nFloors;
+        //         vrtxFloor->setId(opIdG);
+        //         pMapFloor->setOpIdG(opIdG);
+        //         nFloors++;
 
-                // Initialize the floor vertex (centroid estimate)
-                vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                                    pMapFloor->getCentroid().cast<double>()));
-                optimizer.addVertex(vrtxFloor);
+        //         // Initialize the floor vertex (centroid estimate)
+        //         vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+        //                                             pMapFloor->getCentroid().cast<double>()));
+        //         optimizer.addVertex(vrtxFloor);
 
-                // Getting the rooms opIds
-                std::vector<int> floorRoomOpIdGs;
-                for (const auto &room : rooms)
-                    floorRoomOpIdGs.push_back(room->getOpIdG());
+        //         // Getting the rooms opIds
+        //         std::vector<int> floorRoomOpIdGs;
+        //         for (const auto &room : rooms)
+        //             floorRoomOpIdGs.push_back(room->getOpIdG());
 
-                for (int roomOpId : floorRoomOpIdGs)
-                {
-                    if (!optimizer.vertex(roomOpId))
-                    {
-                        allRoomsExist = false;
-                        std::cerr << "[Optimizer] Floor room vertex with opId=" << roomOpId << " not found, skipping floor edge." << std::endl;
-                        break;
-                    }
-                }
+        //         for (int roomOpId : floorRoomOpIdGs)
+        //         {
+        //             if (!optimizer.vertex(roomOpId))
+        //             {
+        //                 allRoomsExist = false;
+        //                 std::cerr << "[Optimizer] Room vertex with opId=" << roomOpId << " not found globally, skipping floor-room edge." << std::endl;
+        //                 break;
+        //             }
+        //         }
 
-                // Adding a single edge connecting the floor to all its rooms
-                if (optimizer.vertex(opIdG) && allRoomsExist && floorRoomOpIdGs.size() >= 1)
-                {
-                    ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
+        //         // Adding a single edge connecting the floor to all its rooms
+        //         if (optimizer.vertex(opIdG) && allRoomsExist && floorRoomOpIdGs.size() >= 1)
+        //         {
+        //             ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
 
-                    // Resize edge to fit: 1 (floor vertex) + n (rooms)
-                    e->resize(1 + floorRoomOpIdGs.size());
+        //             // Resize edge to fit: 1 (floor vertex) + n (rooms)
+        //             e->resize(1 + floorRoomOpIdGs.size());
 
-                    // Set floor vertex
-                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opIdG)));
+        //             // Set floor vertex
+        //             e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opIdG)));
 
-                    // Set room vertices
-                    for (size_t i = 0; i < floorRoomOpIdGs.size(); i++)
-                        if (optimizer.vertex(floorRoomOpIdGs[i]))
-                            e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIdGs[i])));
+        //             // Set room vertices
+        //             for (size_t i = 0; i < floorRoomOpIdGs.size(); i++)
+        //                 if (optimizer.vertex(floorRoomOpIdGs[i]))
+        //                     e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIdGs[i])));
 
-                    // Information matrix
-                    e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+        //             // Information matrix
+        //             e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
 
-                    // Adding the edge to the optimizer
-                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-                    e->setRobustKernel(rk);
-                    rk->setDelta(thHuber2D);
-                    optimizer.addEdge(e);
-                }
-            }
-            catch (std::exception &e)
-            {
-                std::cerr << "[Optimizer] Error while globally optimizing floor: " << e.what() << std::endl;
-                continue;
-            }
-        }
+        //             // Adding the edge to the optimizer
+        //             g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+        //             e->setRobustKernel(rk);
+        //             rk->setDelta(thHuber2D);
+        //             optimizer.addEdge(e);
+        //         }
+        //     }
+        //     catch (std::exception &e)
+        //     {
+        //         std::cerr << "[Optimizer] Error while globally optimizing floor: " << e.what() << std::endl;
+        //         continue;
+        //     }
+        // }
 
-        maxOpId += nFloors;
+        // maxOpId += nFloors;
 
         // Optimize!
         optimizer.setVerbose(true);
@@ -729,40 +731,42 @@ namespace ORB_SLAM3
         }
 
         // [GBA] Globally optimized floors
-        for (const auto &vpFloor : vpFloors)
-        {
-            try
-            {
-                // Variables
-                int opIdG = vpFloor->getOpIdG();
+        // 🚧 Temporarily disabled to be synced with LBA: We moved the floor optimization to the the front-end (SemanticsManager)
+        // as some rooms may not be available in the local optimizer, causing wrong floor optimization
+        // for (const auto &vpFloor : vpFloors)
+        // {
+        //     try
+        //     {
+        //         // Variables
+        //         int opIdG = vpFloor->getOpIdG();
 
-                // If the opId is invalid, skip
-                if (opIdG < 0)
-                    continue;
+        //         // If the opId is invalid, skip
+        //         if (opIdG < 0)
+        //             continue;
 
-                g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opIdG);
-                if (!vBase)
-                {
-                    std::cerr << "[Warning] Floor vertex with opIdG='" << opIdG << "' not found in optimizer!" << std::endl;
-                    continue;
-                }
+        //         g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opIdG);
+        //         if (!vBase)
+        //         {
+        //             std::cerr << "[Warning] Floor vertex with opIdG='" << opIdG << "' not found in optimizer!" << std::endl;
+        //             continue;
+        //         }
 
-                // Safe downcast
-                g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
-                if (!vrtxFloor)
-                {
-                    std::cerr << "[Warning] Vertex Floor with opIdG='" << opIdG << "' is not a VertexSE3Expmap!" << std::endl;
-                    continue;
-                }
+        //         // Safe downcast
+        //         g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
+        //         if (!vrtxFloor)
+        //         {
+        //             std::cerr << "[Warning] Vertex Floor with opIdG='" << opIdG << "' is not a VertexSE3Expmap!" << std::endl;
+        //             continue;
+        //         }
 
-                vpFloor->setCentroid(vrtxFloor->estimate().translation());
-            }
-            catch (std::exception &e)
-            {
-                std::cerr << "[Optimizer] Error while locally updating optimized floor: " << e.what() << std::endl;
-                continue;
-            }
-        }
+        //         vpFloor->setCentroid(vrtxFloor->estimate().translation());
+        //     }
+        //     catch (std::exception &e)
+        //     {
+        //         std::cerr << "[Optimizer] Error while locally updating optimized floor: " << e.what() << std::endl;
+        //         continue;
+        //     }
+        // }
     }
 
     void Optimizer::FullInertialBA(Map *pMap, int its, const bool bFixLocal,
@@ -2248,7 +2252,7 @@ namespace ORB_SLAM3
                     if (!optimizer.vertex(wallOpId))
                     {
                         allWallsExist = false;
-                        std::cerr << "[Optimizer] Room wall vertex with opId=" << wallOpId << " not found locally, skipping room edge." << std::endl;
+                        std::cerr << "[Optimizer] Wall vertex with opId=" << wallOpId << " not found locally, skipping room-wall edge." << std::endl;
                         break;
                     }
                 }
@@ -2289,81 +2293,83 @@ namespace ORB_SLAM3
         maxOpId += nRooms;
 
         // [LBA] Floors
-        for (const auto &pMapFloor : allFloors)
-        {
-            try
-            {
-                // Variables
-                bool allRoomsExist = true;
-                std::vector<ORB_SLAM3::Room *> rooms = pMapFloor->getRooms();
+        // 🚧 Temporarily disabled: We moved the floor optimization to the the front-end (SemanticsManager)
+        // as some rooms may not be available in the local optimizer, causing wrong floor optimization
+        // for (const auto &pMapFloor : allFloors)
+        // {
+        //     try
+        //     {
+        //         // Variables
+        //         bool allRoomsExist = true;
+        //         std::vector<ORB_SLAM3::Room *> floorRooms = pMapFloor->getRooms();
 
-                // No need to optimize if there are no rooms
-                if (rooms.empty())
-                    continue;
+        //         // No need to optimize if there are no rooms
+        //         if (floorRooms.empty())
+        //             continue;
 
-                // Adding a vertex for each floor
-                g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
+        //         // Adding a vertex for each floor
+        //         g2o::VertexSE3Expmap *vrtxFloor = new g2o::VertexSE3Expmap();
 
-                // Setting the local optimization ID for the floor
-                int opId = maxOpId + nFloors;
-                vrtxFloor->setId(opId);
-                pMapFloor->setOpId(opId);
-                nFloors++;
+        //         // Setting the local optimization ID for the floor
+        //         int opId = maxOpId + nFloors;
+        //         vrtxFloor->setId(opId);
+        //         pMapFloor->setOpId(opId);
+        //         nFloors++;
 
-                // Initialize the floor vertex (centroid estimate)
-                vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
-                                                    pMapFloor->getCentroid().cast<double>()));
-                optimizer.addVertex(vrtxFloor);
+        //         // Initialize the floor vertex (centroid estimate)
+        //         vrtxFloor->setEstimate(g2o::SE3Quat(Eigen::Quaterniond::Identity(),
+        //                                             pMapFloor->getCentroid().cast<double>()));
+        //         optimizer.addVertex(vrtxFloor);
 
-                // Getting the rooms opIds
-                std::vector<int> floorRoomOpIds;
-                for (const auto &room : rooms)
-                    floorRoomOpIds.push_back(room->getOpId());
+        //         // Getting the rooms opIds
+        //         std::vector<int> floorRoomOpIds;
+        //         for (const auto &room : floorRooms)
+        //             floorRoomOpIds.push_back(room->getOpId());
 
-                for (int roomOpId : floorRoomOpIds)
-                {
-                    if (!optimizer.vertex(roomOpId))
-                    {
-                        allRoomsExist = false;
-                        std::cerr << "[Optimizer] Floor room vertex with opId=" << roomOpId << " not found, skipping floor edge." << std::endl;
-                        break;
-                    }
-                }
+        //         for (int roomOpId : floorRoomOpIds)
+        //         {
+        //             if (!optimizer.vertex(roomOpId))
+        //             {
+        //                 allRoomsExist = false;
+        //                 std::cerr << "[Optimizer] Room vertex with opId=" << roomOpId << " not found locally, skipping floor-room edge." << std::endl;
+        //                 break;
+        //             }
+        //         }
 
-                // Adding a single edge connecting the floor to all its rooms
-                if (optimizer.vertex(opId) && allRoomsExist && floorRoomOpIds.size() >= 1)
-                {
-                    ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
+        //         // Adding a single edge connecting the floor to all its rooms
+        //         if (optimizer.vertex(opId) && allRoomsExist && floorRoomOpIds.size() >= 1)
+        //         {
+        //             ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor *e = new ORB_SLAM3::EdgeVertexNSE3RoomProjectSE3Floor();
 
-                    // Resize edge to fit: 1 (floor vertex) + n (rooms)
-                    e->resize(1 + floorRoomOpIds.size());
+        //             // Resize edge to fit: 1 (floor vertex) + n (rooms)
+        //             e->resize(1 + floorRoomOpIds.size());
 
-                    // Set floor vertex
-                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
+        //             // Set floor vertex
+        //             e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
 
-                    // Set room vertices
-                    for (size_t i = 0; i < floorRoomOpIds.size(); i++)
-                        if (optimizer.vertex(floorRoomOpIds[i]))
-                            e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIds[i])));
+        //             // Set room vertices
+        //             for (size_t i = 0; i < floorRoomOpIds.size(); i++)
+        //                 if (optimizer.vertex(floorRoomOpIds[i]))
+        //                     e->setVertex(i + 1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(floorRoomOpIds[i])));
 
-                    // Information matrix
-                    e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
+        //             // Information matrix
+        //             e->setInformation(Eigen::Matrix<double, 3, 3>::Identity());
 
-                    // Adding the edge to the optimizer
-                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
-                    e->setRobustKernel(rk);
-                    rk->setDelta(thHuberStereo);
-                    optimizer.addEdge(e);
-                }
-            }
-            catch (std::exception &e)
-            {
-                std::cerr << "[Optimizer] Error while locally optimizing floor: " << e.what() << std::endl;
-                continue;
-            }
-        }
+        //             // Adding the edge to the optimizer
+        //             g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+        //             e->setRobustKernel(rk);
+        //             rk->setDelta(thHuberStereo);
+        //             optimizer.addEdge(e);
+        //         }
+        //     }
+        //     catch (std::exception &e)
+        //     {
+        //         std::cerr << "[Optimizer] Error while locally optimizing floor: " << e.what() << std::endl;
+        //         continue;
+        //     }
+        // }
 
-        maxOpId += nFloors;
+        // maxOpId += nFloors;
 
         // abort if no edges
         if (nEdges == 0)
@@ -2583,38 +2589,40 @@ namespace ORB_SLAM3
         }
 
         // [LBA] Locally optimized floors
-        for (const auto &pMapFloor : allFloors)
-        {
-            try
-            {
-                int opId = pMapFloor->getOpId();
+        // 🚧 Temporarily disabled: We moved the floor optimization to the the front-end (SemanticsManager)
+        // as some rooms may not be available in the local optimizer, causing wrong floor optimization
+        // for (const auto &pMapFloor : allFloors)
+        // {
+        //     try
+        //     {
+        //         int opId = pMapFloor->getOpId();
 
-                if (opId < 0)
-                    continue;
+        //         if (opId < 0)
+        //             continue;
 
-                g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opId);
-                if (!vBase)
-                {
-                    std::cerr << "[Warning] Floor vertex with opId='" << opId << "' not found in optimizer!" << std::endl;
-                    continue;
-                }
+        //         g2o::OptimizableGraph::Vertex *vBase = optimizer.vertex(opId);
+        //         if (!vBase)
+        //         {
+        //             std::cerr << "[Warning] Floor vertex with opId='" << opId << "' not found in optimizer!" << std::endl;
+        //             continue;
+        //         }
 
-                // Safe downcast
-                g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
-                if (!vrtxFloor)
-                {
-                    std::cerr << "[Warning] Vertex Floor with opId='" << opId << "' is not a VertexSE3Expmap!" << std::endl;
-                    continue;
-                }
+        //         // Safe downcast
+        //         g2o::VertexSE3Expmap *vrtxFloor = dynamic_cast<g2o::VertexSE3Expmap *>(vBase);
+        //         if (!vrtxFloor)
+        //         {
+        //             std::cerr << "[Warning] Vertex Floor with opId='" << opId << "' is not a VertexSE3Expmap!" << std::endl;
+        //             continue;
+        //         }
 
-                pMapFloor->setCentroid(vrtxFloor->estimate().translation());
-            }
-            catch (std::exception &e)
-            {
-                std::cerr << "[Optimizer] Error while locally updating optimized floor: " << e.what() << std::endl;
-                continue;
-            }
-        }
+        //         pMapFloor->setCentroid(vrtxFloor->estimate().translation());
+        //     }
+        //     catch (std::exception &e)
+        //     {
+        //         std::cerr << "[Optimizer] Error while locally updating optimized floor: " << e.what() << std::endl;
+        //         continue;
+        //     }
+        // }
 
         pMap->IncreaseChangeIndex();
     }
