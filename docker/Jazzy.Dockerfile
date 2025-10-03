@@ -68,6 +68,8 @@ RUN pip3 install networkx==3.1
 RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu121 \
     torch \
     torchvision
+RUN apt remove --purge python3-typing-extensions -y
+RUN pip3 install typing-extensions==4.11.0
 
 # --- CLIP and Detectron2 setup ---
 ARG TORCH_CUDA_ARCH_LIST="7.5;7.0+PTX"

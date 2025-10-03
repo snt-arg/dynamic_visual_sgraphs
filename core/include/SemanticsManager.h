@@ -99,25 +99,11 @@ namespace ORB_SLAM3
                                 double perpThreshDeg = 5.0);
 
         /**
-         * @brief Checks for the existing of a room within a certain distance from the given room centroid.
-         * It returns the address of the existing room if found, otherwise returns nullptr.
-         * @param givenRoomCentroid the centroid of the given room
-         */
-        ORB_SLAM3::Room *associateRooms(const Eigen::Vector3d givenRoomCentroid);
-
-        /**
          * @brief Checks for the existing of a room with particular walls close to a cluster.
          * It returns the address of the existing room if found, otherwise returns nullptr.
          * @param wallList the list of walls to be checked
          */
         ORB_SLAM3::Room *associateRooms(const std::vector<ORB_SLAM3::Plane *> &wallList);
-
-        /**
-         * @brief Checks for the association of a given room
-         * @param givenRoom the address of the given room
-         * @param givenRoomList the list of rooms to be checked
-         */
-        ORB_SLAM3::Room *associateRooms(const ORB_SLAM3::Room *givenRoom, const vector<Room *> &givenRoomList);
 
         /**
          * @brief Converts mapped room candidates to rooms using geometric constraints
@@ -129,12 +115,12 @@ namespace ORB_SLAM3
         /**
          * @brief Processes the latest skeleton cluster to detect rooms based on free space clustering
          */
-        void detectRoomCandidate_FreeSpaceCluster();
+        void detectRoom_FreeSpaceCluster();
 
         /**
          * @brief Gets the rooms detected by the GNN module
          */
-        void detectMapRoomCandidateGNN();
+        void detectRoom_GNN();
 
         /**
          * @brief Gets the updated floors containing rooms and corridors

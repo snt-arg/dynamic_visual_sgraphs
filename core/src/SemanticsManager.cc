@@ -51,9 +51,9 @@ namespace ORB_SLAM3
 
             // Check for possible room candidates
             if (sysParams->room_seg.method == SystemParams::room_seg::Method::FREE_SPACE)
-                detectRoomCandidate_FreeSpaceCluster();
+                detectRoom_FreeSpaceCluster();
             else if (sysParams->room_seg.method == SystemParams::room_seg::Method::GNN)
-                detectMapRoomCandidateGNN();
+                detectRoom_GNN();
 
             // Check detected floors
             getUpdatedFloors();
@@ -312,7 +312,7 @@ namespace ORB_SLAM3
             }
     }
 
-    void SemanticsManager::detectRoomCandidate_FreeSpaceCluster()
+    void SemanticsManager::detectRoom_FreeSpaceCluster()
     {
         // Variables
         std::vector<ORB_SLAM3::Plane *> allWalls;
@@ -342,27 +342,23 @@ namespace ORB_SLAM3
 
             // Initializations
             std::vector<ORB_SLAM3::Plane *> closestWalls;
-            std::pair<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>, std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> rectangularRoom;
 
             // Calculate the cluster centroid
             Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // Loop over all walls
+            // Check the minimum wall to all cluster points distance, and only add if that minimum is below the threshold
             for (const auto &wall : allWalls)
             {
-                // Loop over all cluster points
+                int closeCount = 0;
                 for (const auto &point : cluster)
                 {
-                    // Calculate distance between wall centroid and cluster centroid
                     const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
-                    // If the distance is smaller than the threshold, add the wall to closestWalls
                     if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
-                    {
-                        // Add the wall to closestWalls
-                        closestWalls.push_back(wall);
-                        break;
-                    }
+                        closeCount++;
                 }
+                // Require at least 30% of cluster points to be close to the wall
+                if (closeCount >= static_cast<int>(0.3 * cluster.size()))
+                    closestWalls.push_back(wall);
             }
 
             // Filter out closest walls with normals pointing away from the cluster
@@ -378,6 +374,10 @@ namespace ORB_SLAM3
                                    return normal.dot(direction) >= 0;
                                }),
                 closestWalls.end());
+            
+            // Remove duplicate walls
+            std::sort(closestWalls.begin(), closestWalls.end());
+            closestWalls.erase(std::unique(closestWalls.begin(), closestWalls.end()), closestWalls.end());
 
             // If no closestWalls found, continue to the next cluster
             if (closestWalls.empty())
@@ -482,7 +482,7 @@ namespace ORB_SLAM3
         }
     }
 
-    void SemanticsManager::detectMapRoomCandidateGNN()
+    void SemanticsManager::detectRoom_GNN()
     {
         // [TODO] Needs to be implemented
     }
@@ -551,96 +551,5 @@ namespace ORB_SLAM3
             return bestMatch;
         else
             return nullptr;
-    }
-
-    ORB_SLAM3::Room *SemanticsManager::associateRooms(const Eigen::Vector3d givenRoomCentroid)
-    {
-        // Variables
-        ORB_SLAM3::Room *closestRoom = nullptr;
-        double distanceThresh = sysParams->room_seg.center_distance_thresh;
-
-        const auto &allRooms = mpAtlas->GetAllRooms();
-        if (allRooms.empty())
-            return nullptr;
-
-        for (const auto &mapRoom : allRooms)
-        {
-            Eigen::Vector3d mapRoomCentroid = mapRoom->getCentroid();
-            double distance = (givenRoomCentroid - mapRoomCentroid).norm();
-
-            if (distance < distanceThresh)
-            {
-                distanceThresh = distance;
-                closestRoom = mapRoom;
-            }
-        }
-
-        return closestRoom;
-    }
-
-    ORB_SLAM3::Room *SemanticsManager::associateRooms(const ORB_SLAM3::Room *givenRoom,
-                                                      const vector<Room *> &givenRoomList)
-    {
-        // Variables
-        ORB_SLAM3::Room *foundMappedRoom = nullptr;
-        double minDistance = sysParams->room_seg.center_distance_thresh;
-
-        if (givenRoomList.empty())
-            return nullptr;
-
-        // Get the walls of the given room
-        std::vector<Plane *> givenRoomWalls = givenRoom->getWalls();
-
-        // Search through all givenRoomList to find the same walls
-        for (const auto &mapRoom : givenRoomList)
-        {
-            // Get the walls of the map room
-            std::vector<Plane *> mapRoomWalls = mapRoom->getWalls();
-
-            // Check if the given room walls are the same as the map room walls
-            if (givenRoomWalls.size() <= mapRoomWalls.size())
-            {
-                bool isTheSameRoom = true;
-                for (size_t i = 0; i < givenRoomWalls.size(); ++i)
-                {
-                    bool isTheSameWall = false;
-                    for (size_t j = 0; j < mapRoomWalls.size(); ++j)
-                    {
-                        if (givenRoomWalls[i]->getId() == mapRoomWalls[j]->getId())
-                        {
-                            isTheSameWall = true;
-                            break;
-                        }
-                    }
-                    if (!isTheSameWall)
-                    {
-                        isTheSameRoom = false;
-                        break;
-                    }
-                }
-
-                // If the rooms are the same, return the map room
-                if (isTheSameRoom)
-                    return mapRoom;
-            }
-        }
-
-        // Get the given room center
-        Eigen::Vector3d detetedRoomCenter = givenRoom->getCentroid();
-
-        // Check to find the room with the minimum distance from the center
-        for (const auto &mapRoom : givenRoomList)
-        {
-            Eigen::Vector3d mapRoomCenter = mapRoom->getCentroid();
-            double distance = (detetedRoomCenter - mapRoomCenter).norm();
-
-            if (distance < minDistance)
-            {
-                minDistance = distance;
-                foundMappedRoom = mapRoom;
-            }
-        }
-
-        return foundMappedRoom;
     }
 }
