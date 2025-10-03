@@ -315,10 +315,7 @@ namespace ORB_SLAM3
         newRoom->setRoomVariant(ORB_SLAM3::Room::roomVariant::UNDEFINED);
 
         // Add the room to the map
-        mpAtlas->AddCandidateMapRoom(newRoom);
-
-        std::cout
-            << "[GeoSemHelper] New room candidate detected: Room#" << newRoom->getId() << " (blank)" << std::endl;
+        // mpAtlas->AddCandidateMapRoom(newRoom);
 
         return newRoom;
     }

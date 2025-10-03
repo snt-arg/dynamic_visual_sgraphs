@@ -374,7 +374,7 @@ namespace ORB_SLAM3
                                    return normal.dot(direction) >= 0;
                                }),
                 closestWalls.end());
-            
+
             // Remove duplicate walls
             std::sort(closestWalls.begin(), closestWalls.end());
             closestWalls.erase(std::unique(closestWalls.begin(), closestWalls.end()), closestWalls.end());
@@ -383,10 +383,20 @@ namespace ORB_SLAM3
             if (closestWalls.empty())
                 continue;
 
-            // Check if the room already exists in the map
-            ORB_SLAM3::Room *existedRoom = associateRooms(closestWalls);
+            // Create a new room candidate for the cluster
+            ORB_SLAM3::Room *newRoom = GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
+
+            // Now, check if a room already exists in the map for this cluster
+            ORB_SLAM3::Room *existedRoom = associateRooms(clusterCentroid, closestWalls);
             if (existedRoom == nullptr)
-                existedRoom = GeoSemHelpers::createBlankRoomCandidate(mpAtlas, clusterCentroid);
+            {
+                // Add the new room to the map
+                mpAtlas->AddCandidateMapRoom(newRoom);
+                std::cout
+                    << "[SemMgr] New room candidate created: SE#" << newRoom->getId() << "..." << std::endl;
+                // Set the new room as the existedRoom for further processing
+                existedRoom = newRoom;
+            }
 
             // Get the room's walls
             std::vector<ORB_SLAM3::Plane *> roomWalls = existedRoom->getWalls();
@@ -515,19 +525,32 @@ namespace ORB_SLAM3
         }
     }
 
-    ORB_SLAM3::Room *SemanticsManager::associateRooms(const std::vector<ORB_SLAM3::Plane *> &wallList)
+    ORB_SLAM3::Room *SemanticsManager::associateRooms(const Eigen::Vector3d clusterCentroid,
+                                                      const std::vector<ORB_SLAM3::Plane *> &wallList)
     {
         // Variables
         size_t maxMatches = 0;
         ORB_SLAM3::Room *bestMatch = nullptr;
+        std::vector<ORB_SLAM3::Room *> potentialMatches;
+        double distanceThresh = sysParams->room_seg.center_distance_thresh;
 
         // Get all the rooms in the map
         const auto &allRooms = mpAtlas->GetAllRooms();
         if (allRooms.empty())
             return nullptr;
 
-        // Search through all rooms to find the one with the most matching walls
+        // Collect potential matches (rooms within threshold)
         for (const auto &mapRoom : allRooms)
+        {
+            // Calculate distance between centroids
+            double distance = (clusterCentroid - mapRoom->getCentroid()).norm();
+            // Check if the distance is within the threshold
+            if (distance < distanceThresh)
+                potentialMatches.push_back(mapRoom);
+        }
+
+        // Among potential matches, choose the one with most wall overlaps
+        for (const auto &mapRoom : potentialMatches)
         {
             size_t matches = 0;
             // Get the walls of the map room
@@ -536,14 +559,19 @@ namespace ORB_SLAM3
             if (mapRoomWalls.empty())
                 continue;
 
+            // Use a hash set for faster lookup
+            std::unordered_set<int> wallIds;
+            wallIds.reserve(mapRoomWalls.size());
+            for (auto *wall : mapRoomWalls)
+                wallIds.insert(wall->getId());
+
             // Wall matching
             for (auto *wall : wallList)
-                for (auto *roomWall : mapRoomWalls)
-                    if (wall->getId() == roomWall->getId())
-                        matches++;
+                if (wallIds.count(wall->getId()))
+                    matches++;
 
             // Update the best match if the current room has more matches
-            if (matches > maxMatches && matches > 0)
+            if (matches > maxMatches)
             {
                 maxMatches = matches;
                 bestMatch = mapRoom;
@@ -551,9 +579,6 @@ namespace ORB_SLAM3
         }
 
         // A minimum number of matches
-        if (maxMatches >= 0)
-            return bestMatch;
-        else
-            return nullptr;
+        return (maxMatches > 0) ? bestMatch : nullptr;
     }
 }
