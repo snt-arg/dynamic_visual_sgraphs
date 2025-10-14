@@ -992,8 +992,33 @@ void publishStructuralElements(std::vector<ORB_SLAM3::Room *> rooms,
         for (int idx = 0; idx < numRooms; idx++)
         {
             // Skip if the room is bad
-            if (rooms[idx]->isBad())
+            if (rooms[idx]->isBad()) {
+                // Variables
+                visualization_msgs::msg::Marker delRoom, delRoomLabel, delRoomWallLine;
+                // Delete previous marker for this room
+                delRoom.id = idx;
+                delRoom.ns = "room";
+                delRoom.header.stamp = msgTime;
+                delRoom.header.frame_id = frameSE;
+                delRoom.action = visualization_msgs::msg::Marker::DELETE;
+                // Delete previous marker for this room label
+                delRoomLabel.id = idx;
+                delRoomLabel.ns = "roomLabel";
+                delRoomLabel.header.stamp = msgTime;
+                delRoomLabel.header.frame_id = frameSE;
+                delRoomLabel.action = visualization_msgs::msg::Marker::DELETE;
+                // Delete previous room-wall lines
+                delRoomWallLine.id = idx;
+                delRoomWallLine.ns = "roomWallLine";
+                delRoomWallLine.header.stamp = msgTime;
+                delRoomWallLine.header.frame_id = frameWorld;
+                delRoomWallLine.action = visualization_msgs::msg::Marker::DELETE;
+                // Push the delete markers and skip them
+                roomArray.markers.push_back(delRoom);
+                roomArray.markers.push_back(delRoomLabel);
+                roomArray.markers.push_back(delRoomWallLine);
                 continue;
+            }
             
             // Variables
             std::string roomName = rooms[idx]->getName();
