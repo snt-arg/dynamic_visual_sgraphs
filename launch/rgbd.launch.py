@@ -7,7 +7,6 @@ from launch_ros.actions import ComposableNodeContainer
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration, EqualsSubstitution
 
-
 def generate_launch_description():
     return LaunchDescription(
         [
@@ -81,7 +80,7 @@ def generate_launch_description():
                     {"frame_camera": "camera"},
                     {"enable_pangolin": False},
                     {"static_transform": True},
-                    {"colored_pointcloud": False},
+                    {"colored_pointcloud": True},
                     {"publish_pointclouds": True},
                 ],
                 remappings=[

@@ -29,20 +29,39 @@ procs:
       source ~/workspace/install/setup.bash && 
       ros2 launch vs_graphs rgbd.launch.py semantic_scene_segmenter:=off"'
     autostart: false
+  
   -- Custom vS-Graphs --:
     shell: ''
     autostart: false
-  vS-Graphs RGBD ICL:
+  vS-Graphs AutoSense:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd.launch.py sensor_config:=SMapper_RealSense rgb_image_topic:=/camera/camera/color/image_raw
+      depth_image_topic:=/camera/camera/aligned_depth_to_color/image_raw rgb_camera_info_topic:=/camera/camera/color/camera_info"'
+    autostart: false
+  vS-Graphs ICL:
     shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
       source ~/workspace/install/setup.bash && 
       ros2 launch vs_graphs rgbd.launch.py sensor_config:=ICL rgb_image_topic:=/camera/color/image_raw
       depth_image_topic:=/camera/depth/image_raw rgb_camera_info_topic:=/camera/color/camera_info"'
     autostart: false
-  vS-Graphs RGBD ScanNet:
+  vS-Graphs OpenLoris:
     shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
       source ~/workspace/install/setup.bash && 
-      ros2 launch vs_graphs rgbd.launch.py sensor_config:=ScanNet rgb_image_topic:=/camera/color/image_raw
-      depth_image_topic:=/camera/depth/image_raw rgb_camera_info_topic:=/camera/color/camera_info"'
+      ros2 launch vs_graphs rgbd.launch.py sensor_config:=OpenLorisScene rgb_image_topic:=/d400/color/image_raw 
+      depth_image_topic:=/d400/aligned_depth_to_color/image_raw rgb_camera_info_topic:=/d400/color/camera_info camera_frame:=d400_color"'
+    autostart: false
+  vS-Graphs TUM-RGBD:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd.launch.py rgb_image_topic:=/camera/rgb/image_color depth_image_topic:=/camera/depth/image
+      rgb_camera_info_topic:=/camera/rgb/camera_info sensor_config:=TUM3 camera_frame:=kinect"'
+    autostart: false
+  vS-Graphs ScanNet:
+    shell: 'bash -c "source /opt/ros/jazzy/setup.bash && 
+      source ~/workspace/install/setup.bash && 
+      ros2 launch vs_graphs rgbd.launch.py sensor_config:=ScanNet depth_image_topic:=/camera/depth/image_raw
+      rgb_image_topic:=/camera/color/image_raw rgb_camera_info_topic:=/camera/color/camera_info"'
     autostart: false
 
   ---- Procedures ----:

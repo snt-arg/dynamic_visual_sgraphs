@@ -10,7 +10,7 @@ This file documents the available _launch-time arguments_ that can be passed whe
 | `launch_rviz`               | `true`                                               | Launch `RViz` automatically with configured visual settings.          |
 | `colored_pointcloud`        | `true`                                               | Apply artificial color for point clouds or use their real RGB values. |
 | `visualize_segmented_scene` | `true`                                               | Toggle the visualization of segmented scenes in RViz.                 |
-| `sensor_config`             | `RealSense_D435i`                                    | Choose a predefined sensor configuration                              |
+| `sensor_config`             | `SMapper_RealSense`                                  | Choose a predefined sensor configuration                              |
 | `camera_frame`              | `camera`                                             | Set the reference `frame` name for the `camera`.                      |
 | `rgb_image_topic`           | `/camera/realsense/color/image_raw`                  | Topic name for the RGB image stream.                                  |
 | `rgb_camera_info_topic`     | `/camera/realsense/color/camera_info`                | Topic name for RGB camera intrinsics.                                 |
@@ -50,28 +50,30 @@ ros2 launch realsense2_camera rs_launch.py \
 
 To use the [ICL dataset](https://www.doc.ic.ac.uk/~ahanda/VaFRIC/iclnuim.html) rosbags with `vS-Graphs`, set the appropriate parameters as shown below:
 
-| Argument            | Default Value                              | New Value                 |
-| ------------------- | ------------------------------------------ | ------------------------- |
-| `sensor_config`     | `RealSense_D435i`                          | `ICL`                     |
-| `depth_image_topic` | `/camera/aligned_depth_to_color/image_raw` | `/camera/depth/image_raw` |
+| Argument                | Value                       |
+| ----------------------- | --------------------------- |
+| `sensor_config`         | `ICL`                       |
+| `rgb_image_topic`       | `/camera/color/image_raw`   |
+| `rgb_camera_info_topic` | `/camera/color/camera_info` |
+| `depth_image_topic`     | `/camera/depth/image_raw`   |
 
 Or simply launch:
 
 ```bash
-ros2 launch vs_graphs rgbd.launch.py sensor_config:=ICL depth_image_topic:=/camera/depth/image_raw
+ros2 launch vs_graphs rgbd.launch.py sensor_config:=ICL rgb_image_topic:=/camera/color/image_raw rgb_camera_info_topic:=/camera/color/camera_info depth_image_topic:=/camera/depth/image_raw
 ```
 
 ## 🧪 Using the OpenLoris Dataset
 
 To use the [OpenLoris dataset](https://lifelong-robotic-vision.github.io/dataset/scene.html) rosbags with `vS-Graphs`, set the appropriate parameters as shown below:
 
-| Argument                | Default Value                              | New Value                                |
-| ----------------------- | ------------------------------------------ | ---------------------------------------- |
-| `camera_frame`          | `camera`                                   | `d400_color`                             |
-| `sensor_config`         | `RealSense_D435i`                          | `OpenLorisScene`                         |
-| `rgb_image_topic`       | `/camera/color/image_raw`                  | `/d400/color/image_raw`                  |
-| `rgb_camera_info_topic` | `/camera/color/camera_info`                | `/d400/color/camera_info`                |
-| `depth_image_topic`     | `/camera/aligned_depth_to_color/image_raw` | `/d400/aligned_depth_to_color/image_raw` |
+| Argument                | Value                                    |
+| ----------------------- | ---------------------------------------- |
+| `camera_frame`          | `d400_color`                             |
+| `sensor_config`         | `OpenLorisScene`                         |
+| `rgb_image_topic`       | `/d400/color/image_raw`                  |
+| `rgb_camera_info_topic` | `/d400/color/camera_info`                |
+| `depth_image_topic`     | `/d400/aligned_depth_to_color/image_raw` |
 
 Or simply launch:
 
@@ -83,31 +85,51 @@ ros2 launch vs_graphs rgbd.launch.py sensor_config:=OpenLorisScene rgb_image_top
 
 To use the [ScanNet dataset](http://www.scan-net.org/) rosbags with `vS-Graphs`, set the appropriate parameters as shown below:
 
-| Argument            | Default Value                              | New Value                 |
-| ------------------- | ------------------------------------------ | ------------------------- |
-| `sensor_config`     | `RealSense_D435i`                          | `ScanNet`                 |
-| `depth_image_topic` | `/camera/aligned_depth_to_color/image_raw` | `/camera/depth/image_raw` |
+| Argument                | Value                       |
+| ----------------------- | --------------------------- |
+| `sensor_config`         | `ScanNet`                   |
+| `depth_image_topic`     | `/camera/depth/image_raw`   |
+| `rgb_image_topic`       | `/camera/color/image_raw`   |
+| `rgb_camera_info_topic` | `/camera/color/camera_info` |
 
 Or simply launch:
 
 ```bash
-ros2 launch vs_graphs rgbd.launch.py sensor_config:=ScanNet depth_image_topic:=/camera/depth/image_raw
+ros2 launch vs_graphs rgbd.launch.py sensor_config:=ScanNet depth_image_topic:=/camera/depth/image_raw rgb_image_topic:=/camera/color/image_raw rgb_camera_info_topic:=/camera/color/camera_info
 ```
 
 ## 🧪 Using the TUM RGB-D Dataset
 
 To use the [TUM RGB-D dataset](https://cvg.cit.tum.de/data/datasets/rgbd-dataset) rosbags with `vS-Graphs`, set the appropriate parameters as shown below:
 
-| Argument                | Default Value                              | New Value                 |
-| ----------------------- | ------------------------------------------ | ------------------------- |
-| `camera_frame`          | `camera`                                   | `kinect`                  |
-| `sensor_config`         | `RealSense_D435i`                          | `TUM1` / `TUM2` / `TUM3`  |
-| `rgb_image_topic`       | `/camera/color/image_raw`                  | `/camera/rgb/image_color` |
-| `depth_image_topic`     | `/camera/aligned_depth_to_color/image_raw` | `/camera/depth/image`     |
-| `rgb_camera_info_topic` | `/camera/color/camera_info`                | `/camera/rgb/camera_info` |
+| Argument                | Value                     |
+| ----------------------- | ------------------------- |
+| `camera_frame`          | `kinect`                  |
+| `sensor_config`         | `TUM1` / `TUM2` / `TUM3`  |
+| `rgb_image_topic`       | `/camera/rgb/image_color` |
+| `depth_image_topic`     | `/camera/depth/image`     |
+| `rgb_camera_info_topic` | `/camera/rgb/camera_info` |
 
 Or simply launch:
 
 ```bash
 ros2 launch vs_graphs rgbd.launch.py rgb_image_topic:=/camera/rgb/image_color depth_image_topic:=/camera/depth/image rgb_camera_info_topic:=/camera/rgb/camera_info sensor_config:=TUM3 camera_frame:=kinect
+```
+
+## 🧪 Using the AutoSense (in-house) Dataset
+
+To use the AutoSense dataset rosbags with `vS-Graphs`, set the appropriate parameters as shown below:
+
+| Argument                | Value                                                |
+| ----------------------- | ---------------------------------------------------- |
+| `camera_frame`          | `camera`                                             |
+| `sensor_config`         | `RealSense_D435i`                                    |
+| `rgb_image_topic`       | `/camera/realsense/color/image_raw`                  |
+| `rgb_camera_info_topic` | `/camera/realsense/color/camera_info`                |
+| `depth_image_topic`     | `/camera/realsense/aligned_depth_to_color/image_raw` |
+
+Or simply launch:
+
+```bash
+ros2 launch vs_graphs autosense.launch.py
 ```
