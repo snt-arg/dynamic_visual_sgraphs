@@ -81,18 +81,42 @@ namespace ORB_SLAM3
         }
     }
 
-    bool Utils::arePlanesPerpendicular(const Plane *plane1, const Plane *plane2, const double &threshold)
+    bool Utils::arePlanesPerpendicular(const ORB_SLAM3::Plane *plane1, const ORB_SLAM3::Plane *plane2)
     {
-        // Calculate the dot product of the normal vectors of the planes
-        Eigen::Vector3d normal1 = plane1->getGlobalEquation().normal();
-        Eigen::Vector3d normal2 = plane2->getGlobalEquation().normal();
-        double dotProduct = normal1.dot(normal2);
+        // Get the threshold value
+        double threshold = SystemParams::GetParams()->room_seg.walls_perpendicularity_thresh * Utils::DEG_TO_RAD;
+
+        // Extract and normalize plane normals
+        Eigen::Vector3d normal1 = plane1->getGlobalEquation().normal().normalized();
+        Eigen::Vector3d normal2 = plane2->getGlobalEquation().normal().normalized();
+
+        // Compute the absolute dot product (clamped for safety)
+        double dotProduct = std::clamp(std::abs(normal1.dot(normal2)), -1.0, 1.0);
 
         // Calculate the angle between the planes
-        double angle = std::acos(std::abs(dotProduct));
+        double angle = std::acos(dotProduct);
 
         // Check if the angle is within the threshold
-        return std::abs(angle - M_PI / 2.0) < threshold;
+        return std::abs(angle - M_PI_2) < threshold;
+    }
+
+    bool Utils::arePlanesParallel(const ORB_SLAM3::Plane *plane1, const ORB_SLAM3::Plane *plane2)
+    {
+        // Get the threshold value
+        double threshold = SystemParams::GetParams()->room_seg.walls_parallelism_thresh * Utils::DEG_TO_RAD;
+
+        // Extract and normalize plane normals
+        Eigen::Vector3d normal1 = plane1->getGlobalEquation().normal().normalized();
+        Eigen::Vector3d normal2 = plane2->getGlobalEquation().normal().normalized();
+
+        // Compute the dot product (clamped to avoid floating-point domain errors)
+        double dotProduct = std::clamp(std::abs(normal1.dot(normal2)), -1.0, 1.0);
+
+        // Compute the angle between normals in radians
+        double angle = std::acos(dotProduct);
+
+        // Planes are parallel if their normals are within threshold (0° or 180°)
+        return (angle < threshold) || (std::abs(angle - M_PI) < threshold);
     }
 
     std::vector<std::pair<ORB_SLAM3::Plane *, ORB_SLAM3::Plane *>> Utils::getFacingPlanes(const std::vector<ORB_SLAM3::Plane *> &planes)

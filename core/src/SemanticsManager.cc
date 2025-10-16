@@ -191,9 +191,6 @@ namespace ORB_SLAM3
         const std::vector<std::pair<Plane *, Plane *>> &facingWalls,
         double perpThreshDeg)
     {
-        // Convert threshold from degrees to radians
-        double perpThreshold = perpThreshDeg * Utils::DEG_TO_RAD;
-
         // Iterate through each pair of facing walls
         for (size_t idx1 = 0; idx1 < facingWalls.size(); ++idx1)
             for (size_t idx2 = idx1 + 1; idx2 < facingWalls.size(); ++idx2)
@@ -205,10 +202,10 @@ namespace ORB_SLAM3
                 Plane *wall2P2 = facingWalls[idx2].second;
 
                 // Check if wall pairs form a square, considering the perpendicularity threshold
-                if (Utils::arePlanesPerpendicular(wall1P1, wall1P2, perpThreshold) &&
-                    Utils::arePlanesPerpendicular(wall1P1, wall2P2, perpThreshold) &&
-                    Utils::arePlanesPerpendicular(wall2P1, wall1P2, perpThreshold) &&
-                    Utils::arePlanesPerpendicular(wall2P1, wall2P2, perpThreshold))
+                if (Utils::arePlanesPerpendicular(wall1P1, wall1P2) &&
+                    Utils::arePlanesPerpendicular(wall1P1, wall2P2) &&
+                    Utils::arePlanesPerpendicular(wall2P1, wall1P2) &&
+                    Utils::arePlanesPerpendicular(wall2P1, wall2P2))
                 {
                     givenRoom = std::make_pair(facingWalls[idx1], facingWalls[idx2]);
                     return true;
@@ -446,10 +443,6 @@ namespace ORB_SLAM3
             //     // Variables
             //     bool isRoom = false;
 
-            //     // Get a perpendicularity value (degrees to radians)
-            //     double perpThresh =
-            //         sysParams->room_seg.walls_perpendicularity_thresh * ORB_SLAM3::Utils::DEG_TO_RAD;
-
             //     // Iterate through each pair of facing walls
             //     for (size_t idx1 = 0; idx1 < facingWalls.size(); ++idx1)
             //     {
@@ -465,13 +458,13 @@ namespace ORB_SLAM3
             //             ORB_SLAM3::Plane *wall2P2 = facingWalls[idx2].second;
 
             //             // Check if wall pairs form a square, considering the perpendicularity threshold
-            //             if (Utils::arePlanesPerpendicular(wall1P1, wall1P2, perpThresh))
+            //             if (Utils::arePlanesPerpendicular(wall1P1, wall1P2))
             //                 perpCount++;
-            //             if (Utils::arePlanesPerpendicular(wall1P1, wall2P2, perpThresh))
+            //             if (Utils::arePlanesPerpendicular(wall1P1, wall2P2))
             //                 perpCount++;
-            //             if (Utils::arePlanesPerpendicular(wall2P1, wall1P2, perpThresh))
+            //             if (Utils::arePlanesPerpendicular(wall2P1, wall1P2))
             //                 perpCount++;
-            //             if (Utils::arePlanesPerpendicular(wall2P1, wall2P2, perpThresh))
+            //             if (Utils::arePlanesPerpendicular(wall2P1, wall2P2))
             //                 perpCount++;
 
             //             if (perpCount >= 2)

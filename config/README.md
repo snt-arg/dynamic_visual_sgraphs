@@ -106,7 +106,8 @@ These parameters belong to the `room_seg` category and configure the detection a
 | `room_seg` | —                | `method`                             | Choose method: 0 (Geometric), 1 (FreeSpace), or 2 (GNN)                                                         |
 | `room_seg` | —                | `plane_facing_dot_thresh`            | Maximum dot product of plane normals to be considered facing                                                    |
 | `room_seg` | —                | `min_wall_distance_thresh`           | Minimum valid distance (meters) between two walls of a corridor or room                                         |
-| `room_seg` | —                | `perpendicularity_thresh`            | Threshold in degrees for walls perpendicularity to form a square room                                           |
+| `room_seg` | —                | `perpendicularity_thresh`            | Threshold in degrees for walls perpendicularity                                                                 |
+| `room_seg` | —                | `parallelism_thresh`                 | Threshold in degrees for walls parallelism                                                                      |
 | `room_seg` | —                | `center_distance_thresh`             | Maximum distance (meters) between room centroids to be associated                                               |
 | `room_seg` | `geo_based`      | `marker_wall_distance_thresh`        | Max distance from marker to wall to consider marker part of the room (geometric method)                         |
 | `room_seg` | `skeleton_based` | `min_cluster_vertices`               | Minimum number of points to form a cluster (voxblox free-space room segmentation)                               |

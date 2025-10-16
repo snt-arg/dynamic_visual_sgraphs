@@ -167,7 +167,8 @@ namespace ORB_SLAM3
             float center_distance_thresh = 1.5f;
             float plane_facing_dot_thresh = -0.8f;
             float min_wall_distance_thresh = 1.0f;
-            float walls_perpendicularity_thresh = 10.0;
+            float walls_parallelism_thresh = 10.0f;
+            float walls_perpendicularity_thresh = 10.0f;
 
             unsigned int min_cluster_vertices = 5;
             float marker_wall_distance_thresh = 3.0f;

@@ -78,16 +78,22 @@ namespace ORB_SLAM3
          * @brief Checks to see if two planes are perpendicular to each other or not
          * @param plane1 first plane
          * @param plane2 second plane
-         * @param threshold the threshold value for perpendicularity
          */
-        static bool arePlanesPerpendicular(const Plane *plane1, const Plane *plane2, const double &threshold);
+        static bool arePlanesPerpendicular(const ORB_SLAM3::Plane *plane1, const ORB_SLAM3::Plane *plane2);
+
+        /**
+         * @brief Checks to see if two planes are parallel to each other or not
+         * @param plane1 first plane
+         * @param plane2 second plane
+         */
+        static bool arePlanesParallel(const ORB_SLAM3::Plane *plane1, const ORB_SLAM3::Plane *plane2);
 
         /**
          * @brief Checks to see if two planes are facing each other or not
          * @param plane1 first plane
          * @param plane2 second plane
          */
-        static bool arePlanesFacingEachOther(const Plane *plane1, const Plane *plane2);
+        static bool arePlanesFacingEachOther(const ORB_SLAM3::Plane *plane1, const ORB_SLAM3::Plane *plane2);
 
         /**
          * @brief Returns the planes that are facing each other from the given list
