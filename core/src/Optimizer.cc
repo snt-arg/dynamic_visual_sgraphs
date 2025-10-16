@@ -1732,10 +1732,10 @@ namespace ORB_SLAM3
         }
 
         // [LBA] Loop through all the local Rooms to add all their walls to LBA
-        list<Plane *> lRecentLocalMapPlanes;
-        for (list<Room *>::iterator idx = localRoomList.begin(), vend = localRoomList.end(); idx != vend; idx++)
+        std::list<ORB_SLAM3::Plane *> lRecentLocalMapPlanes;
+        for (std::list<ORB_SLAM3::Room *>::iterator idx = localRoomList.begin(), vend = localRoomList.end(); idx != vend; idx++)
         {
-            vector<Plane *> roomWalls = (*idx)->getWalls();
+            std::vector<ORB_SLAM3::Plane *> roomWalls = (*idx)->getWalls();
             for (const auto &roomWall : roomWalls)
             {
                 if (mpLocalPlaneId.find(roomWall->getId()) == mpLocalPlaneId.end())
@@ -1747,14 +1747,14 @@ namespace ORB_SLAM3
             }
         }
 
-        // [LBA] Loop through the recently added planes, get all the keyframes and add them
+        // [LBA] Loop through the recently added planes, get all the KeyFrames and add them
         std::list<ORB_SLAM3::KeyFrame *> lRecentLocalMapKeyFrames;
-        for (list<ORB_SLAM3::Plane *>::iterator idx = lRecentLocalMapPlanes.begin(), vend = lRecentLocalMapPlanes.end(); idx != vend; idx++)
+        for (std::list<ORB_SLAM3::Plane *>::iterator idx = lRecentLocalMapPlanes.begin(), vend = lRecentLocalMapPlanes.end(); idx != vend; idx++)
         {
-            std::map<KeyFrame *, ORB_SLAM3::Plane::Observation> planeObservations = (*idx)->getObservations();
-            for (std::map<KeyFrame *, ORB_SLAM3::Plane::Observation>::const_iterator obsId = planeObservations.begin(), obLast = planeObservations.end(); obsId != obLast; obsId++)
+            std::map<ORB_SLAM3::KeyFrame *, ORB_SLAM3::Plane::Observation> planeObservations = (*idx)->getObservations();
+            for (std::map<ORB_SLAM3::KeyFrame *, ORB_SLAM3::Plane::Observation>::const_iterator obsId = planeObservations.begin(), obLast = planeObservations.end(); obsId != obLast; obsId++)
             {
-                KeyFrame *pKFi = obsId->first;
+                ORB_SLAM3::KeyFrame *pKFi = obsId->first;
                 if (!pKFi->isBad() && pKFi->GetMap() == pCurrentMap)
                 {
                     if (mpLocalKeyFrameId.find(pKFi->mnId) == mpLocalKeyFrameId.end())
@@ -1769,12 +1769,12 @@ namespace ORB_SLAM3
         }
 
         // [LBA] Loop through the recently added keyframes, get all the map points and add them
-        for (list<KeyFrame *>::iterator idx = lRecentLocalMapKeyFrames.begin(), vend = lRecentLocalMapKeyFrames.end(); idx != vend; idx++)
+        for (std::list<ORB_SLAM3::KeyFrame *>::iterator idx = lRecentLocalMapKeyFrames.begin(), vend = lRecentLocalMapKeyFrames.end(); idx != vend; idx++)
         {
-            vector<MapPoint *> vpMPs = (*idx)->GetMapPointMatches();
-            for (vector<MapPoint *>::iterator vit = vpMPs.begin(), vend = vpMPs.end(); vit != vend; vit++)
+            std::vector<ORB_SLAM3::MapPoint *> vpMPs = (*idx)->GetMapPointMatches();
+            for (std::vector<ORB_SLAM3::MapPoint *>::iterator vit = vpMPs.begin(), vend = vpMPs.end(); vit != vend; vit++)
             {
-                MapPoint *pMP = *vit;
+                ORB_SLAM3::MapPoint *pMP = *vit;
                 if (pMP)
                     if (!pMP->isBad() && pMP->GetMap() == pCurrentMap)
                     {
@@ -1789,13 +1789,13 @@ namespace ORB_SLAM3
         }
 
         // [LBA] Fixed Keyframes for MPs (Keyframes that see Local MapPoints but that are not Local Keyframes)
-        list<KeyFrame *> lFixedCameras;
-        for (list<MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
+        std::list<ORB_SLAM3::KeyFrame *> lFixedCameras;
+        for (std::list<ORB_SLAM3::MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
         {
-            map<KeyFrame *, tuple<int, int>> observations = (*lit)->GetObservations();
-            for (map<KeyFrame *, tuple<int, int>>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
+            std::map<ORB_SLAM3::KeyFrame *, std::tuple<int, int>> observations = (*lit)->GetObservations();
+            for (std::map<ORB_SLAM3::KeyFrame *, std::tuple<int, int>>::iterator mit = observations.begin(), mend = observations.end(); mit != mend; mit++)
             {
-                KeyFrame *pKFi = mit->first;
+                ORB_SLAM3::KeyFrame *pKFi = mit->first;
 
                 if (pKFi->mnBALocalForKF != pKF->mnId && pKFi->mnBAFixedForKF != pKF->mnId)
                 {
@@ -1806,15 +1806,15 @@ namespace ORB_SLAM3
             }
         }
 
+        // Count fixed KeyFrames
         countFixedKF = lFixedCameras.size() + countFixedKF;
-
         if (countFixedKF == 0)
         {
-            Verbose::PrintMess("LM-LBA: There are 0 fixed KF in the optimizations, LBA aborted", Verbose::VERBOSITY_NORMAL);
+            std::cout << "[Optimizer] No fixed KeyFrames found for LBA! Aborting..." << std::endl;
             return;
         }
 
-        // Setup optimizer (Local Optimization)
+        // [LBA] Setup optimizer
         g2o::SparseOptimizer optimizer;
         g2o::BlockSolverX::LinearSolverType *linearSolver;
 
@@ -1834,14 +1834,14 @@ namespace ORB_SLAM3
 
         unsigned long maxKFid = 0;
 
-        // DEBUG LBA
+        // Debug LBA
         pCurrentMap->msOptKFs.clear();
         pCurrentMap->msFixedKFs.clear();
 
-        // Local KeyFrame vertices (Local Optimization)
-        for (list<KeyFrame *>::iterator lit = localKeyFrameList.begin(), lend = localKeyFrameList.end(); lit != lend; lit++)
+        // [LBA] Local KeyFrame vertices
+        for (std::list<ORB_SLAM3::KeyFrame *>::iterator lit = localKeyFrameList.begin(), lend = localKeyFrameList.end(); lit != lend; lit++)
         {
-            KeyFrame *pKFi = *lit;
+            ORB_SLAM3::KeyFrame *pKFi = *lit;
             g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
             Sophus::SE3<float> Tcw = pKFi->GetPose();
             vSE3->setEstimate(g2o::SE3Quat(Tcw.unit_quaternion().cast<double>(), Tcw.translation().cast<double>()));
@@ -1850,13 +1850,12 @@ namespace ORB_SLAM3
             optimizer.addVertex(vSE3);
             if (pKFi->mnId > maxKFid)
                 maxKFid = pKFi->mnId;
-            // DEBUG LBA
             pCurrentMap->msOptKFs.insert(pKFi->mnId);
         }
         num_OptKF = localKeyFrameList.size();
 
-        // Fixed KeyFrame vertices (Local Optimization)
-        for (list<KeyFrame *>::iterator lit = lFixedCameras.begin(), lend = lFixedCameras.end(); lit != lend; lit++)
+        // [LBA] Fixed KeyFrame vertices
+        for (std::list<ORB_SLAM3::KeyFrame *>::iterator lit = lFixedCameras.begin(), lend = lFixedCameras.end(); lit != lend; lit++)
         {
             KeyFrame *pKFi = *lit;
             g2o::VertexSE3Expmap *vSE3 = new g2o::VertexSE3Expmap();
@@ -1867,11 +1866,10 @@ namespace ORB_SLAM3
             optimizer.addVertex(vSE3);
             if (pKFi->mnId > maxKFid)
                 maxKFid = pKFi->mnId;
-            // DEBUG LBA
             pCurrentMap->msFixedKFs.insert(pKFi->mnId);
         }
 
-        // MapPoint vertices (Local Optimization)
+        // [LBA] MapPoint vertices
         const int nExpectedSize = (localKeyFrameList.size() + lFixedCameras.size()) * localMapPointList.size();
 
         vector<ORB_SLAM3::EdgeSE3ProjectXYZ *> vpEdgesMono;
@@ -1934,9 +1932,9 @@ namespace ORB_SLAM3
         int nEdges = 0;
         int maxOpId = 0;
 
-        for (list<MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
+        for (std::list<ORB_SLAM3::MapPoint *>::iterator lit = localMapPointList.begin(), lend = localMapPointList.end(); lit != lend; lit++)
         {
-            MapPoint *pMP = *lit;
+            ORB_SLAM3::MapPoint *pMP = *lit;
             g2o::VertexSBAPointXYZ *vPoint = new g2o::VertexSBAPointXYZ();
             vPoint->setEstimate(pMP->GetWorldPos().cast<double>());
             int id = pMP->mnId + maxKFid + 1;
@@ -2183,14 +2181,14 @@ namespace ORB_SLAM3
                         vpPlaneEdgePlane.push_back(pMapPlane);
                     }
 
-                    // adding plane-point constraints
+                    // Adding plane-point constraints
                     if (sysParams->optimization.plane_point.enabled)
                     {
-                        // get the class index of the plane
+                        // Get the class index of the plane
                         int clsCloudIdx = Utils::getClassIdFromPlaneType(pMapPlane->getPlaneType());
                         if (clsCloudIdx != -1)
                         {
-                            // add the plane-point constraint
+                            // Add the plane-point constraint
                             ORB_SLAM3::EdgeSE3KFPointToPlane *e = new ORB_SLAM3::EdgeSE3KFPointToPlane();
                             e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(pKFi->mnId)));
                             e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId)));
@@ -2282,6 +2280,50 @@ namespace ORB_SLAM3
                     rk->setDelta(thHuberStereo);
                     optimizer.addEdge(e);
                 }
+
+                // Optimizing the parallel walls of the room
+                for (size_t i = 0; i < walls.size(); i++)
+                    for (size_t j = i + 1; j < walls.size(); j++)
+                    {
+                        ORB_SLAM3::Plane *wall1 = walls[i];
+                        ORB_SLAM3::Plane *wall2 = walls[j];
+
+                        // If the same wall, skip
+                        if (wall1->getId() == wall2->getId())
+                            continue;
+
+                        // Check if the walls are parallel
+                        if (Utils::arePlanesParallel(wall1, wall2))
+                        {
+                            // If they are parallel, check if they are facing each other
+                            if (Utils::arePlanesFacingEachOther(wall1, wall2))
+                            {
+                                // Variables
+                                int opId1 = wall1->getOpId();
+                                int opId2 = wall2->getOpId();
+
+                                if (optimizer.vertex(opId) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
+                                {
+                                    std::cout << "[Optimizer] Parallelism constraint between walls "
+                                              << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+
+                                    ORB_SLAM3::EdgeVertexPlaneParallelism *e = new ORB_SLAM3::EdgeVertexPlaneParallelism();
+                                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));
+                                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId2)));
+                                    e->setMeasurement(0.0); // We want the angle between the planes to be 0
+
+                                    // Information matrix
+                                    e->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1e3);
+
+                                    // Adding the edge to the optimizer
+                                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                                    e->setRobustKernel(rk);
+                                    rk->setDelta(thHuber1D);
+                                    optimizer.addEdge(e);
+                                }
+                            }
+                        }
+                    }
             }
             catch (std::exception &e)
             {

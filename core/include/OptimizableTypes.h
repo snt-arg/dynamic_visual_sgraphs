@@ -35,6 +35,10 @@
 
 namespace ORB_SLAM3
 {
+    /**
+     * The edge used to connect a MapPoint vertex (SBAPointXYZ) to a Camera vertex (SE3)
+     * [Note]: it creates constraint for two measurements, i.e., (u, v)
+     */
     class EdgeSE3ProjectXYZOnlyPose : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap>
     {
     public:
@@ -65,6 +69,10 @@ namespace ORB_SLAM3
         GeometricCamera *pCamera;
     };
 
+    /**
+     * The edge used to connect a MapPoint vertex (SBAPointXYZ) to a Camera vertex (SE3)
+     * [Note]: it creates constraint for two measurements, i.e., (u, v)
+     */
     class EdgeSE3ProjectXYZOnlyPoseToBody : public g2o::BaseUnaryEdge<2, Eigen::Vector2d, g2o::VertexSE3Expmap>
     {
     public:
@@ -97,6 +105,10 @@ namespace ORB_SLAM3
         g2o::SE3Quat mTrl;
     };
 
+    /**
+     * The edge used to connect a MapPoint vertex (XYZ) to a KeyFrame vertex (SE3)
+     * [Note]: it creates constraint for two measurements, i.e., (u, v)
+     */
     class EdgeSE3ProjectXYZ : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSBAPointXYZ, g2o::VertexSE3Expmap>
     {
     public:
@@ -128,6 +140,10 @@ namespace ORB_SLAM3
         GeometricCamera *pCamera;
     };
 
+    /**
+     * The edge used to connect a MapPoint vertex (XYZ) to a KeyFrame vertex (SE3)
+     * [Note]: it creates constraint for two measurements, i.e., (u, v)
+     */
     class EdgeSE3ProjectXYZToBody : public g2o::BaseBinaryEdge<2, Eigen::Vector2d, g2o::VertexSBAPointXYZ, g2o::VertexSE3Expmap>
     {
     public:
@@ -160,6 +176,10 @@ namespace ORB_SLAM3
         g2o::SE3Quat mTrl;
     };
 
+    /**
+     * The edge used to connect a MapPoint vertex (SBAPointXYZ) to a Camera vertex (Sim3)
+     * [Note]: it creates constraint for seven measurements, i.e., (u, v, z, roll, pitch, yaw, scale)
+     */
     class VertexSim3Expmap : public g2o::BaseVertex<7, g2o::Sim3>
     {
     public:
@@ -226,13 +246,9 @@ namespace ORB_SLAM3
     };
 
     /**
-     * 🚀 [vS-Graphs] Edges for Adding Geometric and Semantic Constraints
-     */
-
-    /**
      * The edge used to connect a Marker vertex (SE3) to a KeyFrame vertex (SE3)
-     * 🚧 [vS-Graphs v.2.0] This edge is not used anymore, in contrast to the previous version.
      * [Note]: it creates constraint for six measurements, i.e., (x, y, z, roll, pitch, yaw)
+     * 🚧 [vS-Graphs v1.5] Deprecated, but extended for other optimization constraints.
      */
     class EdgeSE3ProjectSE3 : public g2o::BaseBinaryEdge<6, g2o::Isometry3D, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
     {
@@ -266,6 +282,7 @@ namespace ORB_SLAM3
     /**
      * The edge used to connect a Room vertex (SE3) to a Door vertex (SE3)
      * [Note]: it creates constraint for six measurements, i.e., (x, y, z, roll, pitch, yaw)
+     * 🚧 [vS-Graphs v1.5] Unused, due to removal of door handling.
      */
     class EdgeSE3DoorProjectSE3Room : public EdgeSE3ProjectSE3
     {
@@ -294,7 +311,7 @@ namespace ORB_SLAM3
     };
 
     /**
-     * The edge used to connect a Plane vertex (VertexPlane) to a KeyFrame vertex (SE3)
+     * The edge used to connect a Plane vertex (VertexPlane) to a KeyFrame point (SE3)
      * [Note]: it creates constraint connecting the points in a plane observation to the plane
      */
     class EdgeSE3KFPointToPlane : public g2o::BaseBinaryEdge<1, Eigen::Matrix4d, g2o::VertexSE3Expmap, g2o::VertexPlane>
@@ -378,7 +395,7 @@ namespace ORB_SLAM3
     };
 
     /**
-     * The edge used to connect a Map Point vertex (SBAPointXYZ) to a Plane vertex (VertexPlane)
+     * The edge used to connect a MapPoint vertex (SBAPointXYZ) to a Plane vertex (VertexPlane)
      */
     class EdgeVertexPlaneProjectPointXYZ : public g2o::BaseBinaryEdge<1, double, g2o::VertexSBAPointXYZ, g2o::VertexPlane>
     {
@@ -405,6 +422,7 @@ namespace ORB_SLAM3
     /**
      * The edge used to connect a Plane vertex (VertexPlane) to a Marker vertex (SE3)
      * [Note]: it creates constraint for four measurements, i.e., (x, y, z, d)
+     * 🚧 [vS-Graphs v1.5] Unused.
      */
     class EdgeVertexPlaneProjectSE3M : public g2o::BaseBinaryEdge<4, Eigen::Vector4d, g2o::VertexSE3Expmap, g2o::VertexPlane>
     {
@@ -450,15 +468,44 @@ namespace ORB_SLAM3
     };
 
     /**
+     * The edge used to enforce parallelism between two Plane vertices (VertexPlane)
+     * [Note]: it creates constraint for one measurement, i.e., (angle difference)
+     */
+    class EdgeVertexPlaneParallelism : public g2o::BaseBinaryEdge<1, double, g2o::VertexPlane, g2o::VertexPlane>
+    {
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        EdgeVertexPlaneParallelism();
+        virtual bool read(std::istream &is);
+        virtual bool write(std::ostream &os) const;
+
+        void computeError() override
+        {
+            // Planes
+            const g2o::VertexPlane *vPlane1 = static_cast<const g2o::VertexPlane *>(_vertices[0]);
+            const g2o::VertexPlane *vPlane2 = static_cast<const g2o::VertexPlane *>(_vertices[1]);
+
+            Eigen::Vector3d n1 = vPlane1->estimate().normal().normalized();
+            Eigen::Vector3d n2 = vPlane2->estimate().normal().normalized();
+
+            // Compute deviation from parallelism
+            double cosTheta = std::clamp(n1.dot(n2), -1.0, 1.0);
+            double angleError = std::acos(cosTheta);
+
+            _error[0] = angleError;
+        }
+    };
+
+    /**
      * The edge used to connect a Two-wall Room's center (SE3) to Wall vertices (VertexPlane)
      * [Note]: it creates constraint for three measurements, i.e., (x, y, z)
+     * 🚧 [vS-Graphs v1.5] Deprecated with the introduction of n-wall rooms.
      */
     class EdgeVertex2PlaneProjectSE3Room : public g2o::BaseMultiEdge<3, Eigen::Vector3d>
     {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-        // Eigen::Vector3d markerPosition;
 
         EdgeVertex2PlaneProjectSE3Room();
         EdgeVertex2PlaneProjectSE3Room(Eigen::Vector3d position);
@@ -506,8 +553,9 @@ namespace ORB_SLAM3
     };
 
     /**
-     * The edge used to connect a Four-wall Room's center (SE3) to Wall vertices (VertexPlane)
+     * The edge used to connect a Four-wall Room's centroid (SE3) to Wall vertices (VertexPlane)
      * [Note]: it creates constraint for three measurements, i.e., (x, y, z)
+     * 🚧 [vS-Graphs v1.5] Deprecated with the introduction of n-wall rooms.
      */
     class EdgeVertex4PlaneProjectSE3Room : public g2o::BaseMultiEdge<3, Eigen::Vector3d>
     {
@@ -561,7 +609,7 @@ namespace ORB_SLAM3
     };
 
     /**
-     * The edge used to connect an N-wall Room's center (SE3) to its Wall vertices (VertexPlane)
+     * The edge used to connect an N-wall Room's centroid (SE3) to its Wall vertices (VertexPlane)
      * [Note]: it creates constraint for three measurements, i.e., (x, y, z)
      */
     class EdgeVertexNPlaneProjectSE3Room : public g2o::BaseMultiEdge<3, Eigen::Vector3d>
@@ -667,7 +715,7 @@ namespace ORB_SLAM3
     };
 
     /**
-     * The edge used to connect a Room's center (SE3) to a Marker vertex (SE3)
+     * The edge used to connect a Room's centroid (SE3) to a Marker vertex (SE3)
      * [Note]: it creates constraint for four measurements, i.e., (x, y, z, d)
      */
     class EdgeVertexSE3RoomProjectSE3Marker : public g2o::BaseBinaryEdge<4, Eigen::Vector4d, g2o::VertexSE3Expmap, g2o::VertexSE3Expmap>
