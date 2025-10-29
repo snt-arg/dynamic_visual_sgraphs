@@ -490,10 +490,36 @@ namespace ORB_SLAM3
             Eigen::Vector3d n2 = vPlane2->estimate().normal().normalized();
 
             // Compute deviation from parallelism
-            double cosTheta = std::clamp(n1.dot(n2), -1.0, 1.0);
-            double angleError = std::acos(cosTheta);
+            double err = std::fabs(n1.dot(n2));
+            _error[0] = 1 - err;
+        }
+    };
 
-            _error[0] = angleError;
+    /**
+     * The edge used to enforce perpendicularity between two Plane vertices (VertexPlane)
+     * [Note]: it creates constraint for one measurement, i.e., (angle difference)
+     */
+    class EdgeVertexPlanePerpendicularity : public g2o::BaseBinaryEdge<1, double, g2o::VertexPlane, g2o::VertexPlane>
+    {
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        EdgeVertexPlanePerpendicularity();
+        virtual bool read(std::istream &is);
+        virtual bool write(std::ostream &os) const;
+
+        void computeError() override
+        {
+            // Planes
+            const g2o::VertexPlane *vPlane1 = static_cast<const g2o::VertexPlane *>(_vertices[0]);
+            const g2o::VertexPlane *vPlane2 = static_cast<const g2o::VertexPlane *>(_vertices[1]);
+
+            Eigen::Vector3d n1 = vPlane1->estimate().normal().normalized();
+            Eigen::Vector3d n2 = vPlane2->estimate().normal().normalized();
+
+            // Compute deviation from perpendicularity
+            double err = std::fabs(n1.dot(n2));
+            _error[0] = err;
         }
     };
 

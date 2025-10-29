@@ -452,6 +452,28 @@ namespace ORB_SLAM3
         return os.good();
     }
 
+    EdgeVertexPlanePerpendicularity::EdgeVertexPlanePerpendicularity() : g2o::BaseBinaryEdge<1, double, g2o::VertexPlane, g2o::VertexPlane>() {}
+
+    bool EdgeVertexPlanePerpendicularity::read(std::istream &is)
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); ++j)
+            {
+                is >> information()(i, j);
+                if (i != j)
+                    information()(j, i) = information()(i, j);
+            }
+        return true;
+    }
+
+    bool EdgeVertexPlanePerpendicularity::write(std::ostream &os) const
+    {
+        for (int i = 0; i < information().rows(); i++)
+            for (int j = i; j < information().cols(); j++)
+                os << " " << information()(i, j);
+        return os.good();
+    }
+
     // ------ Room-Wall Constraints ------
 
     EdgeVertex2PlaneProjectSE3Room::EdgeVertex2PlaneProjectSE3Room() : g2o::BaseMultiEdge<3, Eigen::Vector3d>()

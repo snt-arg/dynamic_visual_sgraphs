@@ -2323,6 +2323,34 @@ namespace ORB_SLAM3
                                 }
                             }
                         }
+
+                        // Check if the walls are perpendicular
+                        if (Utils::arePlanesPerpendicular(wall1, wall2))
+                        {
+                            // Variables
+                            int opId1 = wall1->getOpId();
+                            int opId2 = wall2->getOpId();
+
+                            if (optimizer.vertex(opId) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
+                            {
+                                std::cout << "[Optimizer] Perpendicularity constraint between walls "
+                                          << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+
+                                ORB_SLAM3::EdgeVertexPlanePerpendicularity *e = new ORB_SLAM3::EdgeVertexPlanePerpendicularity();
+                                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));
+                                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId2)));
+                                e->setMeasurement(M_PI_2); // We want the angle between the planes to be 90 degrees
+
+                                // Information matrix
+                                e->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1e3);
+
+                                // Adding the edge to the optimizer
+                                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                                e->setRobustKernel(rk);
+                                rk->setDelta(thHuber1D);
+                                optimizer.addEdge(e);
+                            }   
+                        }
                     }
             }
             catch (std::exception &e)
