@@ -25,6 +25,7 @@ from nav_msgs.msg import Path
 # Load the configurations
 script_dir = os.path.dirname(os.path.abspath(__file__))
 config_path = os.path.join(script_dir, "config.yaml")
+
 with open(config_path, "r") as config_file:
     config = yaml.load(config_file, Loader=yaml.FullLoader)
 
@@ -41,9 +42,9 @@ if len(sys.argv) > 1:
 os.makedirs(files_path, exist_ok=True)
 
 # Creating a txt file that will contain poses
-print("Creating txt file for adding VSLAM poses ...")
-slam_pose_file_path = f"{files_path}/vslam_pose_{vslam_method}_{dataset_seq}.txt"
-
+print("- Creating txt file for adding VSLAM poses ...")
+slam_pose_file_path = f"{files_path}/{vslam_method}_{dataset_seq}.txt"
+print(f"- SLAM poses will be saved to '{slam_pose_file_path}' ...")
 
 def write_pose_file(file_path, poses):
     with open(file_path, "w") as pose_file:

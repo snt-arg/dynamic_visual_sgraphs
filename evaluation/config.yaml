@@ -2,10 +2,10 @@
 results_dir: "/home/alitourani/datasets/eval_res"
 
 # Such as orb3, vsgraphs, uco, suco (semantic UcoSLAM)
-vslam_method: "vsgraphs"
+vslam_method: "vsg"
 
 # the sequence number/name of the dataset
-dataset_seq: "seq01"
+dataset_seq: "seq06"
 
 # the relevant topics for the evaluation
 ros_topics:
