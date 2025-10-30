@@ -91,6 +91,7 @@ namespace ORB_SLAM3
         void AddDetectedMapRoom(Room *room);
         void AddCandidateMapRoom(Room *room);
         void AddMapFloor(ORB_SLAM3::Floor *pFloor);
+        void AddRoomWallPlane(ORB_SLAM3::Plane *pPlane);
 
         void EraseMapDoor(Door *pDoor);
         void EraseMapPoint(MapPoint *pMP);
@@ -99,6 +100,7 @@ namespace ORB_SLAM3
         void EraseMapMarker(Marker *pMarker);
         void EraseDetectedMapRoom(Room *pRoom);
         void EraseMarkerBasedMapRoom(Room *pRoom);
+        void EraseRoomWallPlane(ORB_SLAM3::Plane *pPlane);
 
         void InformNewBigChange();
         int GetLastBigChangeIdx();
@@ -141,6 +143,7 @@ namespace ORB_SLAM3
         Plane *GetPlaneById(int planeId);
         Marker *GetMarkerById(int markerId);
         KeyFrame *GetKeyFrameById(long unsigned int mnId);
+        ORB_SLAM3::Plane *GetRoomWallPlaneById(int planeId);
 
         Plane *GetBiggestGroundPlane();
 
@@ -218,6 +221,7 @@ namespace ORB_SLAM3
         std::unordered_map<int, Plane *> mPlaneIndex;
         std::unordered_map<int, Marker *> mMarkerIndex;
         std::unordered_map<long unsigned int, KeyFrame *> mKFIndex;
+        std::unordered_map<int, ORB_SLAM3::Plane *> mRoomWallPlaneIndex;
 
         // Save/load, the set structure is broken in libboost 1.58 for ubuntu 16.04, a vector is serializated
         std::vector<MapPoint *> mvpBackupMapPoints;

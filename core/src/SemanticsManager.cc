@@ -374,6 +374,16 @@ namespace ORB_SLAM3
                                    return normal.dot(direction) >= 0;
                                }),
                 closestWalls.end());
+            
+            // Filter out closest walls that are already assigned to other rooms
+            // Note: this is done by checking GetRoomWallPlaneById
+            closestWalls.erase(
+                std::remove_if(closestWalls.begin(), closestWalls.end(),
+                               [&](ORB_SLAM3::Plane *wall)
+                               {
+                                   return mpAtlas->GetRoomWallPlaneById(wall->getId()) != nullptr;
+                               }),
+                closestWalls.end());
 
             // Remove duplicate walls
             std::sort(closestWalls.begin(), closestWalls.end());

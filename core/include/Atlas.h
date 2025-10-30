@@ -102,6 +102,7 @@ namespace ORB_SLAM3
         void AddMapMarker(Marker *marker);
         void AddDetectedMapRoom(Room *room);
         void AddCandidateMapRoom(Room *room);
+        void AddRoomWallPlane(ORB_SLAM3::Plane *pPlane);
 
         std::vector<GeometricCamera *> GetAllCameras();
         GeometricCamera *AddCamera(GeometricCamera *pCam);
@@ -173,6 +174,7 @@ namespace ORB_SLAM3
         Floor *GetFloorById(int floorId);
         Marker *GetMarkerById(int markerId);
         KeyFrame *GetKeyFrameById(long unsigned int mnId);
+        ORB_SLAM3::Plane *GetRoomWallPlaneById(int planeId);
 
         KeyFrameDatabase *GetKeyFrameDatabase();
         void SetKeyFrameDababase(KeyFrameDatabase *pKFDB);

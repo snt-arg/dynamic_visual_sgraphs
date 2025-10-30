@@ -118,6 +118,12 @@ namespace ORB_SLAM3
         mPlaneIndex[pPlane->getId()] = pPlane;
     }
 
+    void Map::AddRoomWallPlane(ORB_SLAM3::Plane *pPlane) {
+        unique_lock<mutex> lock(mMutexMap);
+        // Add the plane to the hashmap
+        mRoomWallPlaneIndex[pPlane->getId()] = pPlane;
+    }
+
     void Map::AddMapDoor(Door *pDoor)
     {
         unique_lock<mutex> lock(mMutexMap);
@@ -162,6 +168,12 @@ namespace ORB_SLAM3
     {
         unique_lock<mutex> lock(mMutexMap);
         Plane *fetchedPlane = mPlaneIndex[planeId];
+        return fetchedPlane;
+    }
+
+    ORB_SLAM3::Plane *Map::GetRoomWallPlaneById(int planeId) {
+        unique_lock<mutex> lock(mMutexMap);
+        ORB_SLAM3::Plane *fetchedPlane = mRoomWallPlaneIndex[planeId];
         return fetchedPlane;
     }
 
@@ -210,6 +222,11 @@ namespace ORB_SLAM3
     {
         unique_lock<mutex> lock(mMutexMap);
         mspPlanes.erase(pPlane);
+    }
+
+    void Map::EraseRoomWallPlane(ORB_SLAM3::Plane *pPlane) {
+        unique_lock<mutex> lock(mMutexMap);
+        mRoomWallPlaneIndex.erase(pPlane->getId());
     }
 
     void Map::EraseMapDoor(Door *pDoor)

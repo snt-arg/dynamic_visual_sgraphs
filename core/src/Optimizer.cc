@@ -2304,8 +2304,8 @@ namespace ORB_SLAM3
 
                                 if (optimizer.vertex(opId) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
                                 {
-                                    std::cout << "[Optimizer] Parallelism constraint between walls "
-                                              << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+                                    // std::cout << "[Optimizer] Parallelism constraint between walls "
+                                    //           << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
 
                                     ORB_SLAM3::EdgeVertexPlaneParallelism *e = new ORB_SLAM3::EdgeVertexPlaneParallelism();
                                     e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));
@@ -2333,8 +2333,8 @@ namespace ORB_SLAM3
 
                             if (optimizer.vertex(opId) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
                             {
-                                std::cout << "[Optimizer] Perpendicularity constraint between walls "
-                                          << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+                                // std::cout << "[Optimizer] Perpendicularity constraint between walls "
+                                //           << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
 
                                 ORB_SLAM3::EdgeVertexPlanePerpendicularity *e = new ORB_SLAM3::EdgeVertexPlanePerpendicularity();
                                 e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));

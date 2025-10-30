@@ -1667,6 +1667,14 @@ namespace ORB_SLAM3
                     pPlane->setId(pMergeMap->GetAllPlanes().size());
                     pMergeMap->AddMapPlane(pPlane);
                     pCurrentMap->EraseMapPlane(pPlane);
+
+                    // Check if the plane exists in roomMapWalls
+                    ORB_SLAM3::Plane *pRoomWallPlane = pCurrentMap->GetRoomWallPlaneById(pPlane->getId());
+                    if (pRoomWallPlane)
+                    {
+                        pMergeMap->AddRoomWallPlane(pRoomWallPlane);
+                        pCurrentMap->EraseRoomWallPlane(pRoomWallPlane);
+                    }
                 }
 
                 // Re-associate semantic planes if they get close to each other :)) after optimization
@@ -1696,7 +1704,7 @@ namespace ORB_SLAM3
                 }
 
                 // Loop over the Detected Rooms of the current map and move them to the new map
-                for (Room *pRoom : vpCurrentDetectedMapRooms)
+                for (ORB_SLAM3::Room *pRoom : vpCurrentDetectedMapRooms)
                 {
                     if (!pRoom)
                         continue;
@@ -1707,7 +1715,7 @@ namespace ORB_SLAM3
                 }
 
                 // Loop over the Marker-based Rooms of the current map and move them to the new map
-                for (Room *pRoom : vpCurrentMarkerBasedMapRooms)
+                for (ORB_SLAM3::Room *pRoom : vpCurrentMarkerBasedMapRooms)
                 {
                     if (!pRoom)
                         continue;

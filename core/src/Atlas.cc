@@ -123,11 +123,16 @@ namespace ORB_SLAM3
         pMapMP->AddMapMarker(marker);
     }
 
-    void Atlas::AddMapPlane(Plane *plane)
+    void Atlas::AddMapPlane(ORB_SLAM3::Plane *plane)
     {
-        // Add it to the map
-        Map *pMapMP = plane->GetMap();
+        ORB_SLAM3::Map *pMapMP = plane->GetMap();
         pMapMP->AddMapPlane(plane);
+    }
+
+    void Atlas::AddRoomWallPlane(ORB_SLAM3::Plane *pPlane)
+    {
+        ORB_SLAM3::Map *pMapMP = pPlane->GetMap();
+        pMapMP->AddRoomWallPlane(pPlane);
     }
 
     void Atlas::AddMapDoor(Door *door)
@@ -278,6 +283,12 @@ namespace ORB_SLAM3
     Plane *Atlas::GetPlaneById(int planeId)
     {
         Plane *fetchedPlane = mpCurrentMap->GetPlaneById(planeId);
+        return fetchedPlane;
+    }
+
+    ORB_SLAM3::Plane *Atlas::GetRoomWallPlaneById(int planeId)
+    {
+        ORB_SLAM3::Plane *fetchedPlane = mpCurrentMap->GetRoomWallPlaneById(planeId);
         return fetchedPlane;
     }
 
