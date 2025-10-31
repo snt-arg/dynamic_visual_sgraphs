@@ -316,7 +316,6 @@ namespace ORB_SLAM3
     {
         // Variables
         std::vector<ORB_SLAM3::Plane *> allWalls;
-        ORB_SLAM3::Room *newClusterBasedRoom = nullptr;
 
         // Get the skeleton clusters
         std::vector<std::vector<Eigen::Vector3d>> clusters = getLatestSkeletonCluster();
@@ -346,19 +345,24 @@ namespace ORB_SLAM3
             // Calculate the cluster centroid
             Eigen::Vector3d clusterCentroid = Utils::computeCentroidFromPoints(cluster);
 
-            // Check the minimum wall to all cluster points distance, and only add if that minimum is below the threshold
             for (const auto &wall : allWalls)
             {
                 int closeCount = 0;
-                for (const auto &point : cluster)
+                // Check the distance between the cluster centroid and the wall centroid
+                const double centroidDistance = (wall->getCentroid().cast<double>() - clusterCentroid).norm();
+                if (centroidDistance < sysParams->room_seg.cluster_centroid_wall_centroid_distance_thresh)
                 {
-                    const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
-                    if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
-                        closeCount++;
+                    // Check the minimum wall to all cluster points distance, and only add if that minimum is below the threshold
+                    for (const auto &point : cluster)
+                    {
+                        const double distance = Utils::calculateDistancePointToPlane(wall->getGlobalEquation().coeffs(), point);
+                        if (distance < sysParams->room_seg.cluster_point_wall_distance_thresh)
+                            closeCount++;
+                    }
+                    // Require at least 30% of cluster points to be close to the wall
+                    if (closeCount >= static_cast<int>(0.3 * cluster.size()))
+                        closestWalls.push_back(wall);
                 }
-                // Require at least 30% of cluster points to be close to the wall
-                if (closeCount >= static_cast<int>(0.3 * cluster.size()))
-                    closestWalls.push_back(wall);
             }
 
             // Filter out closest walls with normals pointing away from the cluster

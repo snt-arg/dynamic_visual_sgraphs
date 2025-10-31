@@ -101,15 +101,16 @@ These parameters belong to the `sem_seg` category and configure the Semantic Seg
 
 These parameters belong to the `room_seg` category and configure the detection and segmentation of rooms:
 
-| Category   | Sub-category     | Parameter                            | Description                                                                                                     |
-| ---------- | ---------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------- |
-| `room_seg` | —                | `method`                             | Choose method: 0 (Geometric), 1 (FreeSpace), or 2 (GNN)                                                         |
-| `room_seg` | —                | `plane_facing_dot_thresh`            | Maximum dot product of plane normals to be considered facing                                                    |
-| `room_seg` | —                | `min_wall_distance_thresh`           | Minimum valid distance (meters) between two walls of a corridor or room                                         |
-| `room_seg` | —                | `perpendicularity_thresh`            | Threshold in degrees for walls perpendicularity                                                                 |
-| `room_seg` | —                | `parallelism_thresh`                 | Threshold in degrees for walls parallelism                                                                      |
-| `room_seg` | —                | `center_distance_thresh`             | Maximum distance (meters) between room centroids to be associated                                               |
-| `room_seg` | `geo_based`      | `marker_wall_distance_thresh`        | Max distance from marker to wall to consider marker part of the room (geometric method)                         |
-| `room_seg` | `skeleton_based` | `min_cluster_vertices`               | Minimum number of points to form a cluster (voxblox free-space room segmentation)                               |
-| `room_seg` | `skeleton_based` | `cluster_point_wall_distance_thresh` | Max distance from a cluster point to a wall to be considered part of the room (voxblox free-space segmentation) |
-| `room_seg` | `gnn_based`      | `gnn_version`                        | The version of GNN-based room detector (1: the legacy used in S-Graphs, 2: the newer version)                   |
+| Category   | Sub-category     | Parameter                                        | Description                                                                                                                 |
+| ---------- | ---------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `room_seg` | —                | `method`                                         | Choose method: 0 (Geometric), 1 (FreeSpace), or 2 (GNN)                                                                     |
+| `room_seg` | —                | `plane_facing_dot_thresh`                        | Maximum dot product of plane normals to be considered facing                                                                |
+| `room_seg` | —                | `min_wall_distance_thresh`                       | Minimum valid distance (meters) between two walls of a corridor or room                                                     |
+| `room_seg` | —                | `perpendicularity_thresh`                        | Threshold in degrees for walls perpendicularity                                                                             |
+| `room_seg` | —                | `parallelism_thresh`                             | Threshold in degrees for walls parallelism                                                                                  |
+| `room_seg` | —                | `center_distance_thresh`                         | Maximum distance (meters) between room centroids to be associated                                                           |
+| `room_seg` | `geo_based`      | `marker_wall_distance_thresh`                    | Max distance from marker to wall to consider marker part of the room (geometric method)                                     |
+| `room_seg` | `skeleton_based` | `min_cluster_vertices`                           | Minimum number of points to form a cluster (voxblox free-space room segmentation)                                           |
+| `room_seg` | `skeleton_based` | `cluster_point_wall_distance_thresh`             | Max distance from a cluster points to a wall to be considered part of the room (voxblox free-space segmentation)            |
+| `room_seg` | `skeleton_based` | `cluster_centroid_wall_centroid_distance_thresh` | Max distance from a cluster centroid to a wall centroid to be considered part of the room (voxblox free-space segmentation) |
+| `room_seg` | `gnn_based`      | `gnn_version`                                    | The version of GNN-based room detector (1: the legacy used in S-Graphs, 2: the newer version)                               |

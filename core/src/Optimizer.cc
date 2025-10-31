@@ -483,6 +483,78 @@ namespace ORB_SLAM3
                     rk->setDelta(thHuber2D);
                     optimizer.addEdge(e);
                 }
+
+                // Optimizing the parallel walls of the room
+                for (size_t i = 0; i < walls.size(); i++)
+                    for (size_t j = i + 1; j < walls.size(); j++)
+                    {
+                        ORB_SLAM3::Plane *wall1 = walls[i];
+                        ORB_SLAM3::Plane *wall2 = walls[j];
+
+                        // If the same wall, skip
+                        if (wall1->getId() == wall2->getId())
+                            continue;
+
+                        // Check if the walls are parallel
+                        if (Utils::arePlanesParallel(wall1, wall2))
+                        {
+                            // If they are parallel, check if they are facing each other
+                            if (Utils::arePlanesFacingEachOther(wall1, wall2))
+                            {
+                                // Variables
+                                int opId1 = wall1->getOpIdG();
+                                int opId2 = wall2->getOpIdG();
+
+                                if (optimizer.vertex(opIdG) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
+                                {
+                                    // std::cout << "[Optimizer] Parallelism constraint between walls "
+                                    //           << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+
+                                    ORB_SLAM3::EdgeVertexPlaneParallelism *e = new ORB_SLAM3::EdgeVertexPlaneParallelism();
+                                    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));
+                                    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId2)));
+                                    e->setMeasurement(0.0); // We want the angle between the planes to be 0
+
+                                    // Information matrix
+                                    e->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1e3);
+
+                                    // Adding the edge to the optimizer
+                                    g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                                    e->setRobustKernel(rk);
+                                    rk->setDelta(thHuber1D);
+                                    optimizer.addEdge(e);
+                                }
+                            }
+                        }
+
+                        // Check if the walls are perpendicular
+                        if (Utils::arePlanesPerpendicular(wall1, wall2))
+                        {
+                            // Variables
+                            int opId1 = wall1->getOpIdG();
+                            int opId2 = wall2->getOpIdG();
+
+                            if (optimizer.vertex(opIdG) && optimizer.vertex(opId1) && optimizer.vertex(opId2))
+                            {
+                                // std::cout << "[Optimizer] Perpendicularity constraint between walls "
+                                //           << wall1->getId() << " and " << wall2->getId() << " of room " << pMapRoom->getId() << std::endl;
+
+                                ORB_SLAM3::EdgeVertexPlanePerpendicularity *e = new ORB_SLAM3::EdgeVertexPlanePerpendicularity();
+                                e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId1)));
+                                e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex *>(optimizer.vertex(opId2)));
+                                e->setMeasurement(M_PI_2); // We want the angle between the planes to be 90 degrees
+
+                                // Information matrix
+                                e->setInformation(Eigen::Matrix<double, 1, 1>::Identity() * 1e3);
+
+                                // Adding the edge to the optimizer
+                                g2o::RobustKernelHuber *rk = new g2o::RobustKernelHuber;
+                                e->setRobustKernel(rk);
+                                rk->setDelta(thHuber1D);
+                                optimizer.addEdge(e);
+                            }
+                        }
+                    }
             }
             catch (std::exception &e)
             {
@@ -2349,7 +2421,7 @@ namespace ORB_SLAM3
                                 e->setRobustKernel(rk);
                                 rk->setDelta(thHuber1D);
                                 optimizer.addEdge(e);
-                            }   
+                            }
                         }
                     }
             }
@@ -2632,31 +2704,32 @@ namespace ORB_SLAM3
         }
 
         // [LBA] Locally optimized rooms
-        for (std::list<ORB_SLAM3::Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
-        {
-            try
-            {
-                ORB_SLAM3::Room *pMapRoom = *idx;
-                g2o::VertexSE3Expmap *vrtxRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapRoom->getOpId()));
-                g2o::SE3Quat SE3quat = vrtxRoom->estimate();
-                pMapRoom->setCentroid(SE3quat.translation());
+        // 🚧 Temporarily disabled: The reason is to avoid getting room centroid dragged into the wall equation centroid
+        // for (std::list<ORB_SLAM3::Room *>::iterator idx = localRoomList.begin(), lend = localRoomList.end(); idx != lend; idx++)
+        // {
+        //     try
+        //     {
+        //         ORB_SLAM3::Room *pMapRoom = *idx;
+        //         g2o::VertexSE3Expmap *vrtxRoom = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapRoom->getOpId()));
+        //         g2o::SE3Quat SE3quat = vrtxRoom->estimate();
+        //         pMapRoom->setCentroid(SE3quat.translation());
 
-                // Locally Optimized Doors
-                // for (const auto door : pMapRoom->getDoors())
-                // {
-                //     ORB_SLAM3::Door *pMapDoor = door;
-                //     g2o::VertexSE3Expmap *vDoor = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapDoor->getOpId()));
-                //     g2o::SE3Quat SE3quat = vDoor->estimate();
-                //     Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
-                //     pMapDoor->setGlobalPose(Tiw);
-                // }
-            }
-            catch (std::exception &e)
-            {
-                std::cerr << "[Optimizer] Error while locally updating optimized room: " << e.what() << std::endl;
-                continue;
-            }
-        }
+        //         // Locally Optimized Doors
+        //         // for (const auto door : pMapRoom->getDoors())
+        //         // {
+        //         //     ORB_SLAM3::Door *pMapDoor = door;
+        //         //     g2o::VertexSE3Expmap *vDoor = static_cast<g2o::VertexSE3Expmap *>(optimizer.vertex(pMapDoor->getOpId()));
+        //         //     g2o::SE3Quat SE3quat = vDoor->estimate();
+        //         //     Sophus::SE3f Tiw(SE3quat.rotation().cast<float>(), SE3quat.translation().cast<float>());
+        //         //     pMapDoor->setGlobalPose(Tiw);
+        //         // }
+        //     }
+        //     catch (std::exception &e)
+        //     {
+        //         std::cerr << "[Optimizer] Error while locally updating optimized room: " << e.what() << std::endl;
+        //         continue;
+        //     }
+        // }
 
         // [LBA] Locally optimized floors
         // 🚧 Temporarily disabled: We moved the floor optimization to the the front-end (SemanticsManager)

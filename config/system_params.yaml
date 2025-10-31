@@ -159,6 +159,8 @@ room_seg:
     min_cluster_vertices: 5
     # The maximum distance from a point of a cluster to a wall to be considered part of the room
     cluster_point_wall_distance_thresh: 1.5
+    # The maximum distance from the cluster centroid to a wall centroid to be considered part of the room
+    cluster_centroid_wall_centroid_distance_thresh: 5.0
 
   # Parameters for GNN-based room segmentation
   gnn_based:
