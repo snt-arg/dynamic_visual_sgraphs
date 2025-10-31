@@ -374,9 +374,9 @@ namespace ORB_SLAM3
                                    return normal.dot(direction) >= 0;
                                }),
                 closestWalls.end());
-            
+
             // Filter out closest walls that are already assigned to other rooms
-            // Note: this is done by checking GetRoomWallPlaneById
+            // Note: this is done by checking GetRoomWallPlaneById unordered-map in Atlas
             closestWalls.erase(
                 std::remove_if(closestWalls.begin(), closestWalls.end(),
                                [&](ORB_SLAM3::Plane *wall)
@@ -416,7 +416,11 @@ namespace ORB_SLAM3
             {
                 // If the wall is not already in closestWalls, add it to the room
                 if (std::find(roomWalls.begin(), roomWalls.end(), wall) == roomWalls.end())
+                {
                     existedRoom->setWalls(wall);
+                    // Keep track of the wall-to-room association in the Atlas
+                    mpAtlas->AddRoomWallPlane(wall);
+                }
             }
 
             // Check room layout
