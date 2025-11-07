@@ -1,11 +1,15 @@
 # the path to the directory where the results will be saved
 results_dir: "/home/alitourani/datasets/eval_res"
 
-# Supported: orb3, vsgraphs
+# Supported: orb3, vsg
 vslam_method: "vsg"
 
 # Supported ICL: icl_deergr, icl_deerwh, icl_deerw, icl_deerr, icl_deermavf
-dataset_seq: "icl_deermavf"
+# Supported ScanNet: sc_0041, sc_0200, sc_0614, sc_0626
+# Supported TUM-RGBD: tum_frb1_desk, tum_frb1_desk2, tum_frb1_room, tum_frb2_desk, tum_frb3_struct
+# Supported AutoSense: as_sr01, as_sr02, as_sr03, as_mr01, as_mr02, as_mr03
+# Supported OpenLORIS: ol_o11, ol_o12, ol_o13, ol_o14, ol_o15, ol_o16, ol_o17
+dataset_seq: "ol_o17"
 
 # the relevant topics for the evaluation
 ros_topics:

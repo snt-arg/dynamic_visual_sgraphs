@@ -122,7 +122,8 @@ def generate_launch_description():
                     "0",
                     "0",
                     "camera",
-                    "camera_color_optical_frame",
+                    "d400_color",
+                    # RealSense: camera_color_optical_frame, OpenLoris: d400_color
                 ],
             ),
             # RViz
