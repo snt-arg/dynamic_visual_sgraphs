@@ -42,17 +42,13 @@ services:
       # - ~/.bash_history:/root/.bash_history
       # - container_home_cache:/root/.cache  # Optional: persist cache
       # Working Directory - vS-Graphs (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/visual_sgraphs:/home/alitourani/workspace/src/visual_sgraphs:rw"
+      - "/home/$USERNAME/[PATH]/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
       # Working Directory - Scene Segmenter (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_segmenter/src/scene_segment_ros:/home/alitourani/workspace/src/scene_segment_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/situational_graphs_msgs:/home/alitourani/workspace/src/situational_graphs_msgs:rw"
-      # Working Directory - Graph Reasoning (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/situational_graphs_reasoning:/home/alitourani/workspace/src/situational_graphs_reasoning:rw"
-      # Working Directory - vS-Graphs Tools (** MODIFY **)
-      - "/home/alitourani/ROS/vsgraphs_tools/Voxblox/relay_jazzy.py:/home/alitourani/workspace/vsgraphs_tools/relay_jazzy.py:rw"
+      - "/home/$USERNAME/[PATH]/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
       # Data Directory (** MODIFY **)
-      - "/media/alitourani/AT_SSD/Datasets:/home/$USERNAME/datasets:rw"
+      - "/media/$USERNAME/AT_SSD/Datasets:/home/$USERNAME/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
@@ -64,12 +60,10 @@ services:
     command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
     volumes:
       # Working Directory - vS-Graphs (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/visual_sgraphs:/home/alitourani/workspace/src/visual_sgraphs:rw"
+      - "/home/$USERNAME/[PATH]/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
       # Working Directory - Scene Segmenter (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_segmenter/src/scene_segment_ros:/home/alitourani/workspace/src/scene_segment_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/situational_graphs_msgs:/home/alitourani/workspace/src/situational_graphs_msgs:rw"
-      # Working Directory - Graph Reasoning (** MODIFY **)
-      - "/home/alitourani/ROS/workspace_vsgraphs/src/situational_graphs_reasoning:/home/alitourani/workspace/src/situational_graphs_reasoning:rw"
+      - "/home/$USERNAME/[PATH]/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
     entrypoint: ""
     restart: "no"
