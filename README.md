@@ -55,8 +55,8 @@ To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation
 
 ```bibtex
 @article{tourani2025vsgraphs,
-  title={vS-Graphs: Integrating Visual SLAM and Situational Graphs through Multi-level Scene Understanding},
-  author={Tourani, Ali and Ejaz, Saad and Bavle, Hriday and Morilla-Cabello, David and Sanchez-Lopez, Jose Luis and Voos, Holger},
+  title={vS-Graphs: Tightly Coupling Visual SLAM and 3D Scene Graphs Exploiting Hierarchical Scene Understanding},
+  author={Tourani, Ali and Ejaz, Saad and Bavle, Hriday and Fernandez-Cortizas, Miguel and Morilla-Cabello, David and Sanchez-Lopez, Jose Luis and Voos, Holger},
   journal={arXiv preprint arXiv:2503.01783},
   year={2025},
   doi={https://doi.org/10.48550/arXiv.2503.01783}
@@ -68,6 +68,7 @@ To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation
 - 🔨 [vS-Graphs Tools](https://github.com/snt-arg/vsgraphs_tools)
 - 🔧 [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs)
 - 🎞️ Scene Segmentor ([ROS2 Jazzy](https://github.com/snt-arg/scene_segment_ros))
+- 🦊 Voxblox Minimal ([ROS2 Jazzy](https://github.com/snt-arg/voxblox_ros2_minimal))
 
 ## 🔑 License
 
