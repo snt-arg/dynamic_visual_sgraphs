@@ -94,9 +94,17 @@ pip install -r src/requirements.txt
 
 ### 🦊 Integrating with Voxblox Skeleton (Optional) <a id="voxblox"></a>
 
-For detecting **structural elements** (such as rooms and corridors), vS-Graphs relies on `loco planning` integrated with `Voxblox`, available in [the mav_voxblox_planning repository](https://github.com/snt-arg/mav_voxblox_planning/tree/master). However, the original repository is built for **ROS1 Noetic** and is no longer actively maintained, which makes direct integration with modern **ROS2** systems challenging.
+#### Solution 1: Voxblox Skeleton for ROS2 Jazzy (Recommended)
 
-To address this, we developed a dockerized solution (available in the [vS-Graphs Tools repository](https://github.com/snt-arg/vsgraphs_tools/tree/main)), which contains a Dockerfile for building the complete `Voxblox` environment and a bridging utility that translates Voxblox input feed (`/camera/depth/points`) into **ROS1 Noetic** and output messages `/voxblox_skeletonizer/sparse_graph` into **ROS2 Jazzy**, compatible format for vS-Graphs. You can learn more about the tool and how to integrate it in [this guide](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox).
+To detect **structural elements** such as rooms and floors using the **free-space clustering** strategy, vS-Graphs integrates with `Voxblox Skeleton`, available in [this repository](https://github.com/snt-arg/voxblox_ros2_minimal).
+This version is designed for **ROS2 Jazzy** and is fully compatible with the current vS-Graphs release.
+A ready-to-use Docker environment is provided [here](doc/voxblox/docker-compose.yml).
+
+#### Solution 2: Voxblox Skeleton Relay for ROS1 Noetic
+
+Alternatively, we provide a relay-based dockerized implementation of the original `Voxblox` in **ROS1 Noetic** (available in the [vS-Graphs Tools repository](https://github.com/snt-arg/vsgraphs_tools/tree/main)).
+This solution contains a Dockerfile for building the complete `Voxblox` environment and a custom bridging utility that translates its input feed (`/camera/depth/points`) from vS-Graphs into **ROS1 Noetic** and output messages `/voxblox_skeletonizer/sparse_graph` into **ROS2 Jazzy**, compatible format for vS-Graphs.
+For details and integration steps, see the [full guide](https://github.com/snt-arg/vsgraphs_tools/tree/main/Voxblox).
 
 The procedure of using the tool is as below:
 
