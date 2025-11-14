@@ -98,7 +98,7 @@ pip install -r src/requirements.txt
 
 To detect **structural elements** such as rooms and floors using the **free-space clustering** strategy, vS-Graphs integrates with `Voxblox Skeleton`, available in [this repository](https://github.com/snt-arg/voxblox_ros2_minimal).
 This version is designed for **ROS2 Jazzy** and is fully compatible with the current vS-Graphs release.
-A ready-to-use Docker environment is provided [here](doc/voxblox/docker-compose.yml).
+A ready-to-use Docker environment is provided [in this path](voxblox/).
 
 #### Solution 2: Voxblox Skeleton Relay for ROS1 Noetic
 

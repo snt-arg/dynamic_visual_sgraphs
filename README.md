@@ -2,10 +2,16 @@
 
 ![vS-Graphs](doc/demo.gif "vS-Graphs")
 
-<!-- Badges -->
+<!-- Shields.io Badges -->
 
-[![arXiv](https://img.shields.io/badge/arXiv-2309.10461-b31b1b.svg)](https://arxiv.org/abs/2503.01783)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Static Badge](https://img.shields.io/badge/ArXiv-2503.01783-%23B31B1B?style=flat&logo=arxiv&logoColor=%23B31B1B&color=%23B31B1B)](https://doi.org/10.48550/arXiv.2503.01783)
+[![Static Badge](https://img.shields.io/badge/Docker-availabe-%23B31B1B?style=flat&logo=docker&logoColor=%232496ED&color=%232496ED)](/docker/README.md)
+[![Static Badge](https://img.shields.io/badge/YouTube-watch-%23FF0000?style=flat&logo=youtube&logoColor=%23FF0000&color=%23FF0000)](https://youtu.be/5kbgUucvQos?si=DwitJHGpCXkJaeeJ)
+![Static Badge](https://img.shields.io/badge/Build-Passing-%2314CC80?style=flat&logoColor=%2314CC80&color=%2314CC80)
+![Static Badge](https://img.shields.io/badge/Test-Passing-%2314CC80?style=flat&logoColor=%2314CC80&color=%2314CC80)
+![Static Badge](https://img.shields.io/badge/ROS2-Jazzy-%2322314E?style=flat&logo=ros&logoColor=%2322314E&color=%2322314E)
+[![Static Badge](https://img.shields.io/badge/License-GPLv3-%2387C540?style=flat&logo=gplv3&logoColor=%2387C540&color=%2387C540)](/LICENSE)
+
 
 **vS-Graphs** is inspired by [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs) and extends [ORB-SLAM 3.0](https://github.com/UZ-SLAMLab/ORB_SLAM3) by integrating **optimizable 3D scene graphs**, enhancing mapping and localization accuracy through scene understanding. It improves scene representation with building components (_i.e.,_ wall and ground surfaces) and infering structural elements (_i.e.,_ rooms and corridors), making SLAM more robust and efficient.
 
@@ -13,7 +19,7 @@
 
 Below diagram shows the detailed architecture of the **vS-Graphs** framework, highlighting the key threads and their interactions. Modules with a light gray background are inherited directly from the baseline (_ORB-SLAM 3.0_), while the remaining components are newly added or modified components.
 
-![vS-Graphs Flowchart](doc/flowchart.png "vS-Graphs Flowchart")
+![vS-Graphs Flowchart](doc/flowchart.jpg "vS-Graphs Flowchart")
 
 ## ⚙️ Prerequisites and Installation
 
