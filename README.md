@@ -13,17 +13,17 @@
 [![Static Badge](https://img.shields.io/badge/License-GPLv3-%2387C540?style=flat&logo=gplv3&logoColor=%2387C540&color=%2387C540)](/LICENSE)
 
 
-**vS-Graphs** is inspired by [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs) and extends [ORB-SLAM 3.0](https://github.com/UZ-SLAMLab/ORB_SLAM3) by integrating **optimizable 3D scene graphs**, enhancing mapping and localization accuracy through scene understanding. It improves scene representation with building components (_i.e.,_ wall and ground surfaces) and infering structural elements (_i.e.,_ rooms and corridors), making SLAM more robust and efficient.
+**vS-Graphs** is inspired by [LiDAR S-Graphs](https://github.com/snt-arg/lidar_situational_graphs) and extends [ORB-SLAM 3.0](https://github.com/UZ-SLAMLab/ORB_SLAM3) by integrating **optimizable 3D scene graphs**, enhancing mapping and localization accuracy through scene understanding. It improves scene representation by incorporating building components (_i.e.,_ wall and ground surfaces) and inferring structural elements (_i.e.,_ rooms and corridors), making SLAM more robust and efficient.
 
 ## 🧠 vS-Graphs Architecture
 
-Below diagram shows the detailed architecture of the **vS-Graphs** framework, highlighting the key threads and their interactions. Modules with a light gray background are inherited directly from the baseline (_ORB-SLAM 3.0_), while the remaining components are newly added or modified components.
+The diagram below  shows the detailed architecture of the **vS-Graphs** framework, highlighting the key threads and their interactions. Modules with a light gray background are inherited directly from the baseline (_ORB-SLAM 3.0_), while the remaining components are newly added or modified components.
 
 ![vS-Graphs Flowchart](doc/flowchart.jpg "vS-Graphs Flowchart")
 
 ## ⚙️ Prerequisites and Installation
 
-For system requirements, dependencies, and setup instructions, refer to the [Installation Guide](/doc/INSTALLATION.md).
+For system requirements, dependencies, and setup instructions, please refer to the [Installation Guide](/doc/INSTALLATION.md).
 
 ## 🔨 Configurations
 
@@ -45,11 +45,11 @@ Once you have installed the required dependencies and configured the parameters,
 
 ## 🐋 Docker
 
-For a fully reproducible and environment-independent setup, check the [Docker](/docker) section.
+For a fully reproducible, environment-independent setup, see the [Docker](/docker) section.
 
 ## 📏 Benchmarking
 
-To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation and benchmarking documentation](/evaluation/README.md).
+To evaluate vS-Graphs against other visual SLAM frameworks, read the [evaluation and benchmarking documentation](/evaluation/README.md). You can find sample evaluation results on the [vS-Graphs results page](https://snt-arg.github.io/vsgraphs-results/).
 
 ## 📚 Citation
 
