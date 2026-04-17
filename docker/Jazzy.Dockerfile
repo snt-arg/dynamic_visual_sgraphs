@@ -65,7 +65,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 # --- Python environment setup ---
 RUN pip3 install networkx==3.1
-RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu121 \
+RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu129 \
     torch \
     torchvision
 RUN apt remove --purge python3-typing-extensions -y
@@ -161,7 +161,8 @@ RUN apt-get update && apt-get install -y \
 # Build the workspace
 WORKDIR /home/$USERNAME/workspace/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && rosdep install --from-paths src --ignore-src -r -y"
-RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release"
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-skip realsense2_ros_mqtt_bridge"
+run /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --packages-select realsense2_ros_mqtt_bridge"
 
 # --- Miscalleanous ---
 RUN ldconfig
