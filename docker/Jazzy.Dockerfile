@@ -162,7 +162,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /home/$USERNAME/workspace/
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && rosdep install --from-paths src --ignore-src -r -y"
 RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release --packages-skip realsense2_ros_mqtt_bridge"
-run /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --packages-select realsense2_ros_mqtt_bridge"
+RUN /bin/bash -c "source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --packages-select realsense2_ros_mqtt_bridge"
 
 # --- Miscalleanous ---
 RUN ldconfig
