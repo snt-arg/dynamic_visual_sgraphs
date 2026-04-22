@@ -65,7 +65,7 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 # --- Python environment setup ---
 RUN pip3 install networkx==3.1
-RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu129 \
+RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu126 \
     torch \
     torchvision
 RUN apt remove --purge python3-typing-extensions -y
