@@ -30,7 +30,7 @@ using namespace std;
 class ImuGrabber : public rclcpp::Node
 {
 public:
-    ImuGrabber() : rclcpp::Node("imu_grabber")
+    ImuGrabber() : rclcpp::Node("imu_grabber", rclcpp::NodeOptions().use_global_arguments(false))
     {
         tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
         staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
@@ -46,7 +46,7 @@ class ImageGrabber : public rclcpp::Node
 {
 public:
     ImageGrabber(std::shared_ptr<ImuGrabber> imuGrabber)
-        : rclcpp::Node("image_grabber"),
+        : rclcpp::Node("image_grabber", rclcpp::NodeOptions().use_global_arguments(false)),
           mpImuGb(std::move(imuGrabber))
     {
         tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);

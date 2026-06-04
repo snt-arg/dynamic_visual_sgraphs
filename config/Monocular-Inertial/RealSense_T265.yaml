@@ -43,6 +43,7 @@ IMU.T_b_c1: !!opencv-matrix
 IMU.InsertKFsWhenLost: 0
 
 # IMU noise (Use those from VINS-mono)
+IMU.Threshold: 0.5      # Default: 0.5
 IMU.NoiseGyro: 0.000005148030141 # rad/s^0.5 
 IMU.NoiseAcc: 0.000066952452471 # m/s^1.5
 IMU.GyroWalk: 0.000000499999999 # rad/s^1.5
