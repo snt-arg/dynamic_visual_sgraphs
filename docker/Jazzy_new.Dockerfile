@@ -65,9 +65,10 @@ RUN groupadd --gid $USER_GID $USERNAME \
 
 # --- Python environment setup ---
 RUN pip3 install networkx==3.1
+RUN pip3 uninstall -y torch torchvision torchaudio || true
 RUN pip3 install --extra-index-url https://download.pytorch.org/whl/cu126 \
-    torch \
-    torchvision
+    torch==2.6.0+cu126 \
+    torchvision==0.21.0+cu126
 RUN apt remove --purge python3-typing-extensions -y
 RUN pip3 install typing-extensions==4.11.0
 
@@ -121,7 +122,6 @@ RUN --mount=type=ssh git clone git@github.com:snt-arg/visual_sgraphs.git
 RUN --mount=type=ssh git clone git@github.com:snt-arg/situational_graphs_msgs.git
 RUN --mount=type=ssh git clone -b ros2-jazzy git@github.com:snt-arg/scene_segment_ros.git
 RUN --mount=type=ssh git clone -b ros2-master git@github.com:IntelRealSense/realsense-ros.git
-RUN --mount=type=ssh git clone git@github.com:snt-arg/object_tracker_3d_ros.git
 # RUN --mount=type=ssh git clone -b humble-devel git@github.com:pal-robotics/aruco_ros.git
 
 # Repositories for GNN-based room detection and reasoning
@@ -134,9 +134,11 @@ RUN --mount=type=ssh git clone git@github.com:snt-arg/object_tracker_3d_ros.git
 WORKDIR /home/$USERNAME/workspace/src/visual_sgraphs/docker
 RUN pip3 install --break-system-packages --ignore-installed -r requirements.txt
 
-# Install object tracker dependencies
-RUN pip3 install --break-system-packages --ignore-installed \
-    -r /home/$USERNAME/workspace/src/object_tracker_3d_ros/requirements.txt
+# Install object tracker dependencies when the package is present in the workspace
+RUN if [ -f /home/$USERNAME/workspace/src/object_tracker_3d_ros/requirements.txt ]; then \
+      pip3 install --break-system-packages --ignore-installed \
+      -r /home/$USERNAME/workspace/src/object_tracker_3d_ros/requirements.txt ; \
+    fi
 
 # [Hint] Temp. fix for installing ROS2 Humble repositories (GNN-based room detection) in Jazzy
 # (Read more: https://github.com/ros2/ros2/issues/1702)
@@ -147,7 +149,13 @@ RUN pip3 install --break-system-packages --ignore-installed \
 # RUN mkdir -p /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports \
 #     && chown -R $USERNAME:$USERNAME /home/$USERNAME/workspace/install/situational_graphs_reasoning/share/situational_graphs_reasoning/reports
 
-WORKDIR /home/$USERNAME/workspace/src/
+# Install the EOMT dependencies
+WORKDIR /home/$USERNAME/workspace/src/scene_segment_ros/src/
+RUN git clone https://github.com/tue-mps/eomt.git
+RUN pip3 install --ignore-installed -r /home/${USERNAME}/workspace/src/scene_segment_ros/src/eomt/requirements.txt
+RUN pip3 install "numpy<2.0" --force-reinstall
+
+# WORKDIR /home/$USERNAME/workspace/src/
 
 # Download the yoso checkpoint
 RUN wget https://github.com/hujiecpp/YOSO/releases/download/v0.1/yoso_res50_coco.pth
@@ -218,3 +226,4 @@ ENTRYPOINT ["/entrypoint.sh"]
 USER $USERNAME
 CMD ["/bin/bash"]
 SHELL ["/bin/bash"]
+# note: you might have to reinstall numpy and opencv python pkgs and rebuilding cause the system packages are pointed instead

@@ -254,6 +254,7 @@ endfunction()
 # ROS2 nodes
 add_ros2_node(ros_rgbd          src/ros_rgbd.cc)
 add_ros2_node(ros_rgbd_inertial src/ros_rgbd_inertial.cc)
+add_ros2_node(ros_mono_inertial src/ros_mono_inertial.cc)
 
 # Install other resources
 install(

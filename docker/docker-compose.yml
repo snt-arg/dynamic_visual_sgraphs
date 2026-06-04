@@ -47,8 +47,10 @@ services:
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
+      # Working Directory - 3D object tracker (** MODIFY **)
+      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
       # Data Directory (** MODIFY **)
-      - "/media/$USERNAME/X9\ Pro1/datasets:/home/$USERNAME/datasets:rw"
+      - "/media/$USERNAME/muffin/datasets:/home/$USERNAME/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
@@ -65,5 +67,7 @@ services:
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
+      # Working Directory - 3D object tracker (** MODIFY **)
+      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
     entrypoint: ""
     restart: "no"

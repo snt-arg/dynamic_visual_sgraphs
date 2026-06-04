@@ -22,139 +22,71 @@
 
 #include "common.h"
 
+#include <atomic>
+#include <limits>
+
 using namespace std;
 
-class ImuGrabber
+class ImuGrabber : public rclcpp::Node
 {
 public:
-    ImuGrabber() {};
+    ImuGrabber() : rclcpp::Node("imu_grabber")
+    {
+        tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    }
 
-    void GrabImu(const sensor_msgs::ImuConstPtr &imu_msg);
+    void GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg);
 
     std::mutex mBufMutex;
-    queue<sensor_msgs::ImuConstPtr> imuBuf;
+    std::queue<sensor_msgs::msg::Imu::ConstSharedPtr> imuBuf;
 };
 
-class ImageGrabber
+class ImageGrabber : public rclcpp::Node
 {
 public:
-    ImageGrabber(ImuGrabber *pImuGb) : mpImuGb(pImuGb) {}
+    ImageGrabber(std::shared_ptr<ImuGrabber> imuGrabber)
+        : rclcpp::Node("image_grabber"),
+          mpImuGb(std::move(imuGrabber))
+    {
+        tfBroadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+        staticTfBroadcaster = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    }
 
     void SyncWithImu();
 
-    void GrabImage(const sensor_msgs::ImageConstPtr &msg);
+    void GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     // void GrabArUcoMarker(const aruco_msgs::MarkerArray &msg);
-    cv::Mat GetImage(const sensor_msgs::ImageConstPtr &img_msg);
-    void GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage);
-    void GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArray &msgSkeletonGraph);
+    cv::Mat GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg);
+    void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage);
+    void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraph);
 
-    ImuGrabber *mpImuGb;
     std::mutex mBufMutex;
-    queue<sensor_msgs::ImageConstPtr> img0Buf;
+    std::atomic<bool> mustStop{false};
+    std::shared_ptr<ImuGrabber> mpImuGb;
+    std::queue<sensor_msgs::msg::Image::ConstSharedPtr> img0Buf;
 
 private:
-    // Marker detection
-    double minMarkerTimeDiff;
+    double minMarkerTimeDiff = std::numeric_limits<double>::max();
     std::vector<ORB_SLAM3::Marker *> matchedMarkers;
 };
 
-int main(int argc, char **argv)
+void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &imu_msg)
 {
-    ros::init(argc, argv, "Mono_Inertial");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
-
-    if (argc > 1)
-        ROS_WARN("Arguments supplied via command line are ignored.");
-
-    std::string node_name = ros::this_node::getName();
-
-    ros::NodeHandle nodeHandler;
-    image_transport::ImageTransport image_transport(nodeHandler);
-
-    std::string voc_file, settings_file, sys_params_file;
-    nodeHandler.param<std::string>(node_name + "/sys_params_file", sys_params_file, "file_not_set");
-    nodeHandler.param<std::string>(node_name + "/voc_file", voc_file, "file_not_set");
-    nodeHandler.param<std::string>(node_name + "/settings_file", settings_file, "file_not_set");
-
-    if (voc_file == "file_not_set" || settings_file == "file_not_set")
-    {
-        ROS_ERROR("Please provide voc_file and settings_file in the launch file");
-        ros::shutdown();
-        return 1;
-    }
-
-    if (sys_params_file == "file_not_set")
-    {
-        ROS_ERROR("Please provide the YAML file containing system parameters in the launch file!");
-        ros::shutdown();
-        return 1;
-    }
-
-    bool enable_pangolin;
-    nodeHandler.param<bool>(node_name + "/enable_pangolin", enable_pangolin, true);
-
-    nodeHandler.param<double>(node_name + "/yaw", yaw, 0.0);
-    nodeHandler.param<double>(node_name + "/roll", roll, 0.0);
-    nodeHandler.param<double>(node_name + "/pitch", pitch, 0.0);
-
-    nodeHandler.param<std::string>(node_name + "/frame_map", frameMap, "map");
-    nodeHandler.param<std::string>(node_name + "/frame_imu", frameImu, "imu");
-    nodeHandler.param<std::string>(node_name + "/frame_camera", frameCamera, "camera");
-    nodeHandler.param<std::string>(node_name + "/frame_world", frameWorld, "world");
-    nodeHandler.param<bool>(node_name + "/static_transform", pubStaticTransform, false);
-    nodeHandler.param<std::string>(node_name + "/frame_building_component", frameBC, "build_comp");
-    nodeHandler.param<std::string>(node_name + "/frame_structural_element", frameSE, "struc_elem");
-
-    // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    ImuGrabber imugb;
-    ImageGrabber igb(&imugb);
-    sensorType = ORB_SLAM3::System::IMU_MONOCULAR;
-
-    pSLAM = new ORB_SLAM3::System(voc_file, settings_file, sys_params_file, sensorType, enable_pangolin);
-
-    // Subscribe to get raw images and IMU data
-    ros::Subscriber sub_imu = nodeHandler.subscribe("/imu", 1000, &ImuGrabber::GrabImu, &imugb);
-    ros::Subscriber sub_img = nodeHandler.subscribe("/camera/image_raw", 500, &ImageGrabber::GrabImage, &igb);
-
-    // Subscribe to the markers detected by `aruco_ros` library
-    // ros::Subscriber sub_aruco = nodeHandler.subscribe("/aruco_marker_publisher/markers", 1,
-    //                                                   &ImageGrabber::GrabArUcoMarker, &igb);
-
-    // Subscriber for images obtained from the Semantic Segmentater
-    ros::Subscriber sub_segmented_img = nodeHandler.subscribe("/camera/color/image_segment", 50,
-                                                              &ImageGrabber::GrabSegmentation, &igb);
-
-    // Subscriber to get the mesh from voxblox
-    ros::Subscriber voxblox_skeleton_mesh = nodeHandler.subscribe("/voxblox_skeletonizer/sparse_graph", 1,
-                                                                  &ImageGrabber::GrabVoxbloxSkeletonGraph, &igb);
-
-    setupPublishers(nodeHandler, image_transport, node_name);
-    setupServices(nodeHandler, node_name);
-
-    // Syncing images with IMU
-    std::thread sync_thread(&ImageGrabber::SyncWithImu, &igb);
-
-    ros::spin();
-
-    // Stop all threads
-    pSLAM->Shutdown();
-    ros::shutdown();
-
-    return 0;
+    std::lock_guard<std::mutex> lock(mBufMutex);
+    imuBuf.push(imu_msg);
 }
 
-void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr &img_msg)
+void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg)
 {
-    mBufMutex.lock();
+    std::lock_guard<std::mutex> lock(mBufMutex);
     if (!img0Buf.empty())
         img0Buf.pop();
     img0Buf.push(img_msg);
-    mBufMutex.unlock();
 }
 
-cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
+cv::Mat ImageGrabber::GetImage(const sensor_msgs::msg::Image::ConstSharedPtr &img_msg)
 {
-    // Copy the ros image message to cv::Mat.
     cv_bridge::CvImageConstPtr cv_ptr;
     try
     {
@@ -162,126 +94,253 @@ cv::Mat ImageGrabber::GetImage(const sensor_msgs::ImageConstPtr &img_msg)
     }
     catch (cv_bridge::Exception &e)
     {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "[Error] `cv_bridge` exception: %s", e.what());
+        return cv::Mat();
     }
 
-    // Find the marker with the minimum time difference compared to the current frame
     std::pair<double, std::vector<ORB_SLAM3::Marker *>> result =
-        findNearestMarker(cv_ptr->header.stamp.toSec());
+        findNearestMarker(rclcpp::Time(cv_ptr->header.stamp).seconds());
     minMarkerTimeDiff = result.first;
     matchedMarkers = result.second;
 
-    if (cv_ptr->image.type() == 0)
-    {
-        return cv_ptr->image.clone();
-    }
-    else
-    {
-        std::cout << "Error type" << std::endl;
-        return cv_ptr->image.clone();
-    }
+    return cv_ptr->image.clone();
 }
 
 void ImageGrabber::SyncWithImu()
 {
-    while (1)
+    if (!mpImuGb)
     {
-        if (!img0Buf.empty() && !mpImuGb->imuBuf.empty())
-        {
-            cv::Mat im;
-            double tIm = 0;
-
-            tIm = img0Buf.front()->header.stamp.toSec();
-            if (tIm > mpImuGb->imuBuf.back()->header.stamp.toSec())
-                continue;
-
-            this->mBufMutex.lock();
-            im = GetImage(img0Buf.front());
-            rclcpp::Time msg_time = img0Buf.front()->header.stamp;
-            img0Buf.pop();
-            this->mBufMutex.unlock();
-
-            vector<ORB_SLAM3::IMU::Point> vImuMeas;
-            Eigen::Vector3f Wbb;
-            mpImuGb->mBufMutex.lock();
-            if (!mpImuGb->imuBuf.empty())
-            {
-                // Load imu measurements from buffer
-                vImuMeas.clear();
-                while (!mpImuGb->imuBuf.empty() && mpImuGb->imuBuf.front()->header.stamp.toSec() <= tIm)
-                {
-                    double t = mpImuGb->imuBuf.front()->header.stamp.toSec();
-                    cv::Point3f acc(mpImuGb->imuBuf.front()->linear_acceleration.x, mpImuGb->imuBuf.front()->linear_acceleration.y, mpImuGb->imuBuf.front()->linear_acceleration.z);
-                    cv::Point3f gyr(mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z);
-                    vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc, gyr, t));
-                    Wbb << mpImuGb->imuBuf.front()->angular_velocity.x, mpImuGb->imuBuf.front()->angular_velocity.y, mpImuGb->imuBuf.front()->angular_velocity.z;
-                    mpImuGb->imuBuf.pop();
-                }
-            }
-            mpImuGb->mBufMutex.unlock();
-
-            // ORB-SLAM3 runs in TrackMonocular()
-            if (minMarkerTimeDiff < 0.05)
-            {
-                Sophus::SE3f Tcw = pSLAM->TrackMonocular(im, tIm, vImuMeas,
-                                                         "", matchedMarkers);
-                markersBuffer.clear();
-            }
-            else
-                Sophus::SE3f Tcw = pSLAM->TrackMonocular(im, tIm, vImuMeas);
-
-            publishTopics(msg_time, Wbb);
-        }
-
-        std::chrono::milliseconds tSleep(1);
-        std::this_thread::sleep_for(tSleep);
-    }
-}
-
-void ImuGrabber::GrabImu(const sensor_msgs::ImuConstPtr &imu_msg)
-{
-    mBufMutex.lock();
-    imuBuf.push(imu_msg);
-    mBufMutex.unlock();
-
-    return;
-}
-
-// void ImageGrabber::GrabArUcoMarker(const aruco_msgs::MarkerArray &markerArray)
-// {
-//     // Pass the visited markers to a buffer to be processed later
-//     // addMarkersToBuffer(markerArray);
-// }
-
-void ImageGrabber::GrabSegmentation(const segmenter_ros::SegmenterDataMsg &msgSegImage)
-{
-    // Fetch the segmentation results
-    cv_bridge::CvImageConstPtr cv_imgSeg;
-    uint64_t keyFrameId = msgSegImage.keyFrameId.data;
-
-    try
-    {
-        cv_imgSeg = cv_bridge::toCvCopy(msgSegImage.segmentedImage, sensor_msgs::image_encodings::BGR8);
-    }
-    catch (cv_bridge::Exception &e)
-    {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
+        RCLCPP_ERROR(this->get_logger(), "[Error] IMU Grabber not initialized!");
         return;
     }
 
-    // convert to PCL PointCloud2 from sensor_msgs PointCloud2
+    while (!mustStop)
+    {
+        bool hasData = false;
+        {
+            std::lock_guard<std::mutex> lock(mBufMutex);
+            std::lock_guard<std::mutex> lock2(mpImuGb->mBufMutex);
+            hasData = !img0Buf.empty() && !mpImuGb->imuBuf.empty();
+        }
+
+        if (!hasData)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            continue;
+        }
+
+        cv::Mat im;
+        double tIm = 0.0;
+        rclcpp::Time msgTime;
+        Eigen::Vector3f Wbb = Eigen::Vector3f::Zero();
+        std::vector<ORB_SLAM3::IMU::Point> vImuMeas;
+
+        {
+            std::lock_guard<std::mutex> lock(mBufMutex);
+            std::lock_guard<std::mutex> lock2(mpImuGb->mBufMutex);
+
+            if (img0Buf.empty() || mpImuGb->imuBuf.empty())
+                continue;
+
+            tIm = rclcpp::Time(img0Buf.front()->header.stamp).seconds();
+            const double latestImuTime = rclcpp::Time(mpImuGb->imuBuf.back()->header.stamp).seconds();
+
+            if (tIm > latestImuTime)
+            {
+                RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
+                                     "[Warning] Waiting for IMU data ... image time (%.3f) is ahead of latest IMU time (%.3f)!",
+                                     tIm, latestImuTime);
+                continue;
+            }
+
+            msgTime = rclcpp::Time(img0Buf.front()->header.stamp);
+            im = GetImage(img0Buf.front());
+            img0Buf.pop();
+
+            while (!mpImuGb->imuBuf.empty() &&
+                   rclcpp::Time(mpImuGb->imuBuf.front()->header.stamp).seconds() <= tIm)
+            {
+                const auto imuMsg = mpImuGb->imuBuf.front();
+                const double t = rclcpp::Time(imuMsg->header.stamp).seconds();
+                const cv::Point3f acc(imuMsg->linear_acceleration.x,
+                                      imuMsg->linear_acceleration.y,
+                                      imuMsg->linear_acceleration.z);
+                const cv::Point3f gyr(imuMsg->angular_velocity.x,
+                                      imuMsg->angular_velocity.y,
+                                      imuMsg->angular_velocity.z);
+
+                vImuMeas.push_back(ORB_SLAM3::IMU::Point(acc, gyr, t));
+                Wbb << imuMsg->angular_velocity.x, imuMsg->angular_velocity.y, imuMsg->angular_velocity.z;
+                mpImuGb->imuBuf.pop();
+            }
+        }
+
+        if (im.empty())
+            continue;
+
+        if (minMarkerTimeDiff < 0.05)
+        {
+            pSLAM->TrackMonocular(im, tIm, vImuMeas, "", matchedMarkers);
+            markersBuffer.clear();
+        }
+        else
+            pSLAM->TrackMonocular(im, tIm, vImuMeas);
+
+        publishTopics(msgTime, Wbb);
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+}
+
+/**
+ * @brief Callback function to get scene segmentation results from the SemanticSegmenter module
+ *
+ * @param msgSegImage The segmentation results from the SemanticSegmenter
+ */
+void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage)
+{
+    cv_bridge::CvImageConstPtr cvImgSeg;
+    uint64_t keyFrameId = msgSegImage.key_frame_id.data;
+
+    try
+    {
+        cvImgSeg = cv_bridge::toCvCopy(std::make_shared<sensor_msgs::msg::Image>(msgSegImage.segmented_image),
+                                       sensor_msgs::image_encodings::BGR8);
+    }
+    catch (cv_bridge::Exception &e)
+    {
+        RCLCPP_ERROR(this->get_logger(), "[Error] `cv_bridge` exception: %s", e.what());
+        return;
+    }
+
     pcl::PCLPointCloud2::Ptr pclPc2SegPrb(new pcl::PCLPointCloud2);
-    pcl_conversions::toPCL(msgSegImage.segmentedImageProbability, *pclPc2SegPrb);
+    pcl_conversions::toPCL(msgSegImage.segmented_image_probability, *pclPc2SegPrb);
 
-    // Create the tuple to be appended to the segmentedImageBuffer
-    std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> tuple(keyFrameId, cv_imgSeg->image, pclPc2SegPrb);
-
-    // Add the segmented image to a buffer to be processed in the SemanticSegmentation thread
+    std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> tuple(keyFrameId, cvImgSeg->image, pclPc2SegPrb);
     pSLAM->addSegmentedImage(&tuple);
 }
 
-void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::MarkerArray &msgSkeletonGraphs)
+/**
+ * @brief Callback function to get the skeleton graph from the `voxblox` module
+ *
+ * @param msgSkeletonGraphs The skeleton graph from the `voxblox` module
+ */
+void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraphs)
 {
-    // Pass the skeleton graph to a buffer to be processed by the SemanticSegmentation thread
     setVoxbloxSkeletonCluster(msgSkeletonGraphs);
+}
+
+int main(int argc, char **argv)
+{
+    rclcpp::init(argc, argv);
+    auto node = std::make_shared<rclcpp::Node>("vs_graphs");
+
+    if (argc > 1)
+        RCLCPP_WARN(node->get_logger(), "Arguments supplied via command line are ignored.");
+
+    std::string nodeName = node->get_name();
+
+    node->declare_parameter<double>("yaw", 0.0);
+    node->declare_parameter<double>("roll", 0.0);
+    node->declare_parameter<double>("pitch", 0.0);
+    node->declare_parameter<bool>("enable_pangolin", true);
+    node->declare_parameter<bool>("static_transform", false);
+    node->declare_parameter<std::string>("frame_imu", "imu");
+    node->declare_parameter<std::string>("frame_map", "map");
+    node->declare_parameter<bool>("colored_pointcloud", true);
+    node->declare_parameter<bool>("publish_pointclouds", true);
+    node->declare_parameter<std::string>("frame_world", "world");
+    node->declare_parameter<std::string>("frame_camera", "camera");
+    node->declare_parameter<std::string>("voc_file", "file_not_set");
+    node->declare_parameter<std::string>("settings_file", "file_not_set");
+    node->declare_parameter<std::string>("sys_params_file", "file_not_set");
+    node->declare_parameter<std::string>("frame_structural_element", "struc_elem");
+    node->declare_parameter<std::string>("frame_building_component", "build_comp");
+
+    std::string vocFile = node->get_parameter("voc_file").as_string();
+    std::string settingsFile = node->get_parameter("settings_file").as_string();
+    std::string sysParamsFile = node->get_parameter("sys_params_file").as_string();
+
+    if (vocFile == "file_not_set" || settingsFile == "file_not_set")
+    {
+        RCLCPP_ERROR(node->get_logger(), "[Error] 'voc_file' and 'settings_file' are not provided in the launch file! Exiting...");
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    if (sysParamsFile == "file_not_set")
+    {
+        RCLCPP_ERROR(node->get_logger(), "[Error] The `YAML` file containing system parameters is not provided in the launch file! Exiting...");
+        rclcpp::shutdown();
+        return 1;
+    }
+
+    yaw = node->get_parameter("yaw").as_double();
+    roll = node->get_parameter("roll").as_double();
+    pitch = node->get_parameter("pitch").as_double();
+    frameImu = node->get_parameter("frame_imu").as_string();
+    frameMap = node->get_parameter("frame_map").as_string();
+    frameWorld = node->get_parameter("frame_world").as_string();
+    frameCamera = node->get_parameter("frame_camera").as_string();
+    colorPointcloud = node->get_parameter("colored_pointcloud").as_bool();
+    pubPointClouds = node->get_parameter("publish_pointclouds").as_bool();
+    frameBC = node->get_parameter("frame_building_component").as_string();
+    frameSE = node->get_parameter("frame_structural_element").as_string();
+    pubStaticTransform = node->get_parameter("static_transform").as_bool();
+    bool enablePangolin = node->get_parameter("enable_pangolin").as_bool();
+
+    auto imugb = std::make_shared<ImuGrabber>();
+    auto igb = std::make_shared<ImageGrabber>(imugb);
+
+    sensorType = ORB_SLAM3::System::IMU_MONOCULAR;
+    pSLAM = new ORB_SLAM3::System(vocFile, settingsFile, sysParamsFile, sensorType, enablePangolin);
+
+    using sensor_msgs::msg::Image;
+    using sensor_msgs::msg::Imu;
+
+    rclcpp::QoS sensorQos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
+    sensorQos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
+    sensorQos.durability(rclcpp::DurabilityPolicy::Volatile);
+
+    auto subImu = node->create_subscription<Imu>(
+        "/imu", sensorQos,
+        [imugb](const Imu::ConstSharedPtr msg)
+        { imugb->GrabImu(msg); });
+
+    auto subImg = node->create_subscription<Image>(
+        "/camera/image_raw", sensorQos,
+        [igb](const Image::ConstSharedPtr msg)
+        { igb->GrabImage(msg); });
+
+    // Subscribe to the markers detected by `aruco_ros` library
+    // auto subAruco = node->create_subscription<aruco_msgs::msg::MarkerArray>(
+    //     "/aruco_marker_publisher/markers", 1,
+    //     [igb](const aruco_msgs::msg::MarkerArray::SharedPtr msg)
+    //     { igb->GrabArUcoMarker(*msg); });
+
+    auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
+        "/camera/color/image_segment", 50,
+        [igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
+        { igb->GrabSegmentation(*msg); });
+
+    auto subVoxbloxSkeletonMesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
+        "/voxblox_skeletonizer/sparse_graph", 1,
+        [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
+        { igb->GrabVoxbloxSkeletonGraph(*msg); });
+
+    static std::shared_ptr<image_transport::ImageTransport> imageTransport =
+        std::make_shared<image_transport::ImageTransport>(node);
+    setupPublishers(node, imageTransport, nodeName);
+    setupServices(node, nodeName);
+
+    std::thread syncThread(&ImageGrabber::SyncWithImu, igb);
+
+    rclcpp::spin(node);
+
+    pSLAM->Shutdown();
+    igb->mustStop = true;
+    syncThread.join();
+
+    rclcpp::shutdown();
+
+    return 0;
 }
