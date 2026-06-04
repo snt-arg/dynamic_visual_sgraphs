@@ -24,17 +24,13 @@ def generate_launch_description():
             ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
-            DeclareLaunchArgument("sensor_config", default_value="RealSense_D435i"),
+            DeclareLaunchArgument("sensor_config", default_value="UniLu_RealSense_D435i_640"),
             DeclareLaunchArgument(
                 "rgb_image_topic", default_value="/camera/realsense/color/image_raw"
             ),
             DeclareLaunchArgument(
                 "rgb_camera_info_topic",
                 default_value="/camera/realsense/color/camera_info",
-            ),
-            DeclareLaunchArgument(
-                "depth_image_topic",
-                default_value="/camera/realsense/aligned_depth_to_color/image_raw",
             ),
             DeclareLaunchArgument(
                 "imu_topic",
@@ -83,7 +79,7 @@ def generate_launch_description():
                     {"frame_map": "map"},
                     {"frame_imu": "imu"},
                     {"frame_world": "world"},
-                    {"frame_camera": "camera"},
+                    {"frame_camera": "camera_color_optical_frame"},
                     {"enable_pangolin": False},
                     {"static_transform": True},
                     {"colored_pointcloud": False},
