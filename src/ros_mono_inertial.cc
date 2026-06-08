@@ -72,6 +72,14 @@ struct SharedState
     std::mutex              mtx;
     std::condition_variable image_ready_cv;
 
+    struct ImagePacket
+    {
+        cv::Mat image;
+        double  timestamp = -1.0;
+        double  min_marker_time_diff = std::numeric_limits<double>::max();
+        std::vector<ORB_SLAM3::Marker*> matched_markers;
+    };
+
     // Raw gyro — collected at ~200 Hz
     std::vector<double>       gyro_timestamps;
     std::vector<Eigen::Vector3f>  gyro_data;
@@ -86,11 +94,10 @@ struct SharedState
     Eigen::Vector3f  cur_accel_data;
     double       cur_accel_timestamp  = 0.0;
 
-    // Image state
-    cv::Mat image;
-    double  image_timestamp = -1.0;
-    bool    image_ready     = false;
-    int     dropped_frames  = 0;
+    // Image queue keeps timestamps monotonic even if tracking briefly lags.
+    std::queue<ImagePacket> image_queue;
+    std::size_t             max_image_queue_size = 60;
+    int                     dropped_frames = 0;
 
     // Marker state (populated inside the image callback path)
     double                          min_marker_time_diff = std::numeric_limits<double>::max();
@@ -209,41 +216,27 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
 
     const double new_ts = rclcpp::Time(cv_ptr->header.stamp).seconds();
 
+    // Resolve marker association for this timestamp.
+    auto [min_diff, markers] = findNearestMarker(new_ts);
+
     std::unique_lock<std::mutex> lock(state_->mtx);
 
-    // Duplicate-timestamp guard
-    if (std::abs(state_->image_timestamp - new_ts) < 1e-3)
+    if (!state_->image_queue.empty() && std::abs(state_->image_queue.back().timestamp - new_ts) < 1e-3)
         return;
 
-    state_->dropped_frames++;
-
-    state_->image           = cv_ptr->image.clone();
-    state_->image_timestamp = new_ts;
-    state_->image_ready     = true;
-
-    // Resolve marker association for this timestamp
-    auto [min_diff, markers] = findNearestMarker(new_ts);
-    state_->min_marker_time_diff = min_diff;
-    state_->matched_markers      = markers;
-
-    // Flush any remaining gyro→accel sync gaps, using the last known accel
-    while (state_->gyro_timestamps.size() > state_->accel_timestamps_sync.size())
+    if (state_->image_queue.size() >= state_->max_image_queue_size)
     {
-        const int    idx         = static_cast<int>(state_->accel_timestamps_sync.size());
-        const double target_time = state_->gyro_timestamps[idx];
-        const Eigen::Vector3f &gyro_at_idx = state_->gyro_data[idx];
-
-        ORB_SLAM3::IMU::Point pt = interpolateAccel(
-            target_time,
-            state_->cur_accel_data,  state_->cur_accel_timestamp,
-            state_->prev_accel_data, state_->prev_accel_timestamp,
-            gyro_at_idx);
-
-        state_->accel_data_sync.push_back(pt.a);
-        state_->accel_timestamps_sync.push_back(target_time);
+        state_->image_queue.pop();
+        state_->dropped_frames++;
     }
 
-    lock.unlock();
+    SharedState::ImagePacket packet;
+    packet.image                = cv_ptr->image.clone();
+    packet.timestamp            = new_ts;
+    packet.min_marker_time_diff = min_diff;
+    packet.matched_markers      = std::move(markers);
+
+    state_->image_queue.push(std::move(packet));
     state_->image_ready_cv.notify_all();
 }
 
@@ -266,7 +259,7 @@ void ImageGrabber::SyncWithImu()
         // --- Critical section: wait, copy, clear ---
         {
             std::unique_lock<std::mutex> lk(state_->mtx);
-            state_->image_ready_cv.wait(lk, [this]{ return state_->image_ready || mustStop; });
+            state_->image_ready_cv.wait(lk, [this]{ return !state_->image_queue.empty() || mustStop; });
 
             if (mustStop)
                 break;
@@ -276,14 +269,17 @@ void ImageGrabber::SyncWithImu()
                 RCLCPP_WARN(this->get_logger(), "%d dropped frames", state_->dropped_frames - 1);
             state_->dropped_frames = 0;
 
-            // Copy image
-            im      = state_->image.clone();
-            tIm     = state_->image_timestamp;
+            // Copy next queued image in timestamp order.
+            SharedState::ImagePacket packet = std::move(state_->image_queue.front());
+            state_->image_queue.pop();
+
+            im      = std::move(packet.image);
+            tIm     = packet.timestamp;
             msgTime = rclcpp::Time(static_cast<int64_t>(tIm * 1e9));
 
             // Copy marker state
-            min_marker_diff  = state_->min_marker_time_diff;
-            matched_markers  = state_->matched_markers;
+            min_marker_diff  = packet.min_marker_time_diff;
+            matched_markers  = std::move(packet.matched_markers);
 
             // Build IMU measurement vector from synced accel + gyro
             const size_t n = state_->gyro_timestamps.size();
@@ -312,7 +308,6 @@ void ImageGrabber::SyncWithImu()
             state_->gyro_timestamps.clear();
             state_->accel_data_sync.clear();
             state_->accel_timestamps_sync.clear();
-            state_->image_ready = false;
         }
         // Lock released — TrackMonocular runs outside lock
 
