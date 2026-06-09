@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <limits>
 #include <mutex>
 #include <queue>
@@ -81,12 +82,12 @@ struct SharedState
     };
 
     // Raw gyro — collected at ~200 Hz
-    std::vector<double>       gyro_timestamps;
-    std::vector<Eigen::Vector3f>  gyro_data;
+    std::deque<double>       gyro_timestamps;
+    std::deque<Eigen::Vector3f>  gyro_data;
 
     // Accel interpolated to gyro timestamps
-    std::vector<double>       accel_timestamps_sync;
-    std::vector<Eigen::Vector3f>  accel_data_sync;
+    std::deque<double>       accel_timestamps_sync;
+    std::deque<Eigen::Vector3f>  accel_data_sync;
 
     // Running accel state for interpolation 
     Eigen::Vector3f  prev_accel_data;
@@ -96,7 +97,7 @@ struct SharedState
 
     // Image queue keeps timestamps monotonic even if tracking briefly lags.
     std::queue<ImagePacket> image_queue;
-    std::size_t             max_image_queue_size = 60;
+    std::size_t             max_image_queue_size = 300;
     int                     dropped_frames = 0;
 
     // Marker state (populated inside the image callback path)
@@ -151,10 +152,12 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &msg)
         state_->cur_accel_data       = acc;
         state_->cur_accel_timestamp  = t;
     }
+    // std::cout << "[ROS] Received IMU message at time " << t << std::endl;
 
     // Interpolate accel to cover any gyro timestamps not yet synced
     while (state_->gyro_timestamps.size() > state_->accel_timestamps_sync.size())
     {
+        // std::cout << "[ROS] Interpolating accel for gyro timestamp " << state_->gyro_timestamps[state_->accel_timestamps_sync.size()] << std::endl;
         const int    idx         = static_cast<int>(state_->accel_timestamps_sync.size());
         const double target_time = state_->gyro_timestamps[idx];
         const Eigen::Vector3f &gyro_at_idx = state_->gyro_data[idx];
@@ -168,6 +171,8 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &msg)
         state_->accel_data_sync.push_back(pt.a);   // Eigen::Vector3f member
         state_->accel_timestamps_sync.push_back(target_time);
     }
+
+    state_->image_ready_cv.notify_all();
 }
 
 // ---------------------------------------------------------------------------
@@ -216,6 +221,8 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
 
     const double new_ts = rclcpp::Time(cv_ptr->header.stamp).seconds();
 
+    // std::cout << "[ROS] Received image message at time " << new_ts << std::endl;
+
     // Resolve marker association for this timestamp.
     auto [min_diff, markers] = findNearestMarker(new_ts);
 
@@ -259,7 +266,12 @@ void ImageGrabber::SyncWithImu()
         // --- Critical section: wait, copy, clear ---
         {
             std::unique_lock<std::mutex> lk(state_->mtx);
-            state_->image_ready_cv.wait(lk, [this]{ return !state_->image_queue.empty() || mustStop; });
+            state_->image_ready_cv.wait(lk, [this] {
+                return mustStop ||
+                       (!state_->image_queue.empty() &&
+                        !state_->gyro_timestamps.empty() &&
+                        state_->gyro_timestamps.back() >= state_->image_queue.front().timestamp);
+            });
 
             if (mustStop)
                 break;
@@ -269,7 +281,8 @@ void ImageGrabber::SyncWithImu()
                 RCLCPP_WARN(this->get_logger(), "%d dropped frames", state_->dropped_frames - 1);
             state_->dropped_frames = 0;
 
-            // Copy next queued image in timestamp order.
+            // Copy next queued image in timestamp order. Do this only after
+            // the IMU buffer has reached this image timestamp.
             SharedState::ImagePacket packet = std::move(state_->image_queue.front());
             state_->image_queue.pop();
 
@@ -281,33 +294,28 @@ void ImageGrabber::SyncWithImu()
             min_marker_diff  = packet.min_marker_time_diff;
             matched_markers  = std::move(packet.matched_markers);
 
-            // Build IMU measurement vector from synced accel + gyro
-            const size_t n = state_->gyro_timestamps.size();
-            vImuMeas.reserve(n);
-            for (size_t i = 0; i < n; ++i)
+            // Build IMU measurement vector from synced accel + gyro, consuming
+            // only samples up to this image timestamp. Future IMU samples stay
+            // buffered for the next frame, matching the ORB-SLAM3 ROS1 wrapper.
+            while (!state_->gyro_timestamps.empty() &&
+                   !state_->accel_data_sync.empty() &&
+                   state_->gyro_timestamps.front() <= tIm)
             {
-                if (i < state_->accel_data_sync.size())
-                {
-                    const Eigen::Vector3f &acc = state_->accel_data_sync[i];
-                    const Eigen::Vector3f &gyr = state_->gyro_data[i];
+                const double imuTime = state_->gyro_timestamps.front();
+                const Eigen::Vector3f acc = state_->accel_data_sync.front();
+                const Eigen::Vector3f gyr = state_->gyro_data.front();
 
-                    vImuMeas.emplace_back(
-                        acc.x(), acc.y(), acc.z(),
-                        gyr.x(), gyr.y(), gyr.z(),
-                        state_->gyro_timestamps[i]);
+                vImuMeas.emplace_back(
+                    acc.x(), acc.y(), acc.z(),
+                    gyr.x(), gyr.y(), gyr.z(),
+                    imuTime);
+                Wbb = gyr;
 
-                    // Wbb = angular velocity of the IMU sample closest to image timestamp.
-                    // Pick the last sample before or at tIm
-                    if (state_->gyro_timestamps[i] <= tIm)
-                        Wbb = state_->gyro_data[i];
-                }
+                state_->gyro_data.pop_front();
+                state_->gyro_timestamps.pop_front();
+                state_->accel_data_sync.pop_front();
+                state_->accel_timestamps_sync.pop_front();
             }
-
-            // Clear shared buffers
-            state_->gyro_data.clear();
-            state_->gyro_timestamps.clear();
-            state_->accel_data_sync.clear();
-            state_->accel_timestamps_sync.clear();
         }
         // Lock released — TrackMonocular runs outside lock
 
@@ -460,7 +468,7 @@ int main(int argc, char **argv)
         [imugb](const Imu::ConstSharedPtr msg) { imugb->GrabImu(msg); });
 
     auto subImg = node->create_subscription<Image>(
-        "/camera/image_raw", sensorQos,
+        "/camera/image_raw", 1,
         [igb](const Image::ConstSharedPtr msg) { igb->GrabImage(msg); });
 
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
