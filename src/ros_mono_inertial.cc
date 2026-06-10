@@ -329,6 +329,21 @@ void ImageGrabber::SyncWithImu()
         if (im.empty())
             continue;
 
+        if (vImuMeas.size() < 2)
+        {
+            RCLCPP_WARN(this->get_logger(),
+                "Skipping frame t=%.9f because vImuMeas has only %zu samples",
+                tIm, vImuMeas.size());
+            continue;
+        }
+        if (vImuMeas.back().t > tIm)
+        {
+            RCLCPP_WARN(this->get_logger(),
+                "Skipping frame t=%.9f because last IMU t=%.9f is newer than image",
+                tIm, vImuMeas.back().t);
+            continue;
+        }
+
         // Image scaling
         const float imageScale = pSLAM->GetImageScale();
         if (imageScale != 1.f)
