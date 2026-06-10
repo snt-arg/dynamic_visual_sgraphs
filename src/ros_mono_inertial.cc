@@ -211,7 +211,7 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
     cv_bridge::CvImageConstPtr cv_ptr;
     try
     {
-        cv_ptr = cv_bridge::toCvShare(msg, sensor_msgs::image_encodings::MONO8);
+        cv_ptr = cv_bridge::toCvShare(msg);
     }
     catch (cv_bridge::Exception &e)
     {
@@ -238,7 +238,17 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
     }
 
     SharedState::ImagePacket packet;
-    packet.image                = cv_ptr->image.clone();
+    if (cv_ptr->image.channels() == 1 || cv_ptr->image.channels() == 3 || cv_ptr->image.channels() == 4)
+    {
+        packet.image = cv_ptr->image.clone();
+    }
+    else
+    {
+        RCLCPP_ERROR(this->get_logger(),
+                     "[Error] Unsupported image encoding '%s' with %d channels.",
+                     msg->encoding.c_str(), cv_ptr->image.channels());
+        return;
+    }
     packet.timestamp            = new_ts;
     packet.min_marker_time_diff = min_diff;
     packet.matched_markers      = std::move(markers);

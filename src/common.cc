@@ -415,6 +415,9 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
         if (keyframe->isPublished)
             continue;
 
+        if (keyframe->mImage.empty())
+            continue;
+
         // Create an object of VSGraphDataMsg
         segmenter_ros::msg::VSGraphDataMsg vsGraphPublisher = segmenter_ros::msg::VSGraphDataMsg();
         std_msgs::msg::Header header;
@@ -422,8 +425,18 @@ void publishKeyFrameImages(std::vector<ORB_SLAM3::KeyFrame *> keyframe_vec, rclc
         header.frame_id = frameWorld;
         std_msgs::msg::UInt64 kfId;
         kfId.data = keyframe->mnId;
+        cv::Mat keyframeImageBgr;
+        if (keyframe->mImage.channels() == 1)
+            cv::cvtColor(keyframe->mImage, keyframeImageBgr, cv::COLOR_GRAY2BGR);
+        else if (keyframe->mImage.channels() == 4)
+            cv::cvtColor(keyframe->mImage, keyframeImageBgr, cv::COLOR_BGRA2BGR);
+        else if (keyframe->mImage.channels() == 3)
+            keyframeImageBgr = keyframe->mImage;
+        else
+            continue;
+
         const sensor_msgs::msg::Image::SharedPtr rendered_image_msg =
-            cv_bridge::CvImage(header, "bgr8", keyframe->mImage).toImageMsg();
+            cv_bridge::CvImage(header, sensor_msgs::image_encodings::BGR8, keyframeImageBgr).toImageMsg();
 
         vsGraphPublisher.header = header;
         vsGraphPublisher.key_frame_id = kfId;

@@ -57,6 +57,7 @@
 #include <std_msgs/msg/header.hpp>
 #include <std_msgs/msg/u_int64.hpp>
 #include <sensor_msgs/msg/imu.hpp>
+#include <sensor_msgs/image_encodings.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 // #include <pcl_ros/common/common.hpp>
 // #include <pcl/PCLPointCloud2.hpp>
