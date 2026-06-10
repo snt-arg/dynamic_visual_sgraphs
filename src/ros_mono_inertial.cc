@@ -182,11 +182,9 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &msg)
 class ImageGrabber : public rclcpp::Node
 {
 public:
-    ImageGrabber(std::shared_ptr<SharedState> state,
-                 ORB_SLAM3::System           *slam)
+    ImageGrabber(std::shared_ptr<SharedState> state)
         : rclcpp::Node("image_grabber", rclcpp::NodeOptions().use_global_arguments(false))
         , state_(std::move(state))
-        , slam_(slam)
     {}
 
     void GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
@@ -199,7 +197,6 @@ public:
     std::atomic<bool> mustStop{false};
 private:
     std::shared_ptr<SharedState>  state_;
-    ORB_SLAM3::System            *slam_;
 };
 
 // ---------------------------------------------------------------------------
@@ -263,7 +260,7 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
 
 void ImageGrabber::SyncWithImu()
 {
-    while (!mustStop && !slam_->isShutDown())
+    while (!mustStop && !pSLAM->isShutDown())
     {
         cv::Mat                              im;
         double                               tIm = 0.0;
@@ -333,7 +330,7 @@ void ImageGrabber::SyncWithImu()
             continue;
 
         // Image scaling
-        const float imageScale = slam_->GetImageScale();
+        const float imageScale = pSLAM->GetImageScale();
         if (imageScale != 1.f)
         {
             const int w = static_cast<int>(im.cols * imageScale);
@@ -344,12 +341,12 @@ void ImageGrabber::SyncWithImu()
         // Track
         if (min_marker_diff < 0.05)
         {
-            slam_->TrackMonocular(im, tIm, vImuMeas, "", matched_markers);
+            pSLAM->TrackMonocular(im, tIm, vImuMeas, "", matched_markers);
             markersBuffer.clear();
         }
         else
         {
-            slam_->TrackMonocular(im, tIm, vImuMeas);
+            pSLAM->TrackMonocular(im, tIm, vImuMeas);
         }
 
         publishTopics(msgTime, Wbb);
@@ -377,7 +374,7 @@ void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &
     pcl_conversions::toPCL(msgSegImage.segmented_image_probability, *pclPc2SegPrb);
 
     auto tuple = std::make_tuple(keyFrameId, cvImgSeg->image, pclPc2SegPrb);
-    slam_->addSegmentedImage(&tuple);
+    pSLAM->addSegmentedImage(&tuple);
 }
 
 void ImageGrabber::GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msgSkeletonGraphs)
@@ -447,10 +444,9 @@ int main(int argc, char **argv)
     pubStaticTransform = node->get_parameter("static_transform").as_bool();
     const bool enablePangolin = node->get_parameter("enable_pangolin").as_bool();
 
-    // --- SLAM system (owned here, not a global) ---
-    ORB_SLAM3::System slam(vocFile, settingsFile, sysParamsFile,
-                           ORB_SLAM3::System::IMU_MONOCULAR, enablePangolin);
-    pSLAM = &slam;  // common.h helpers still need this pointer
+    // --- SLAM system ---
+    sensorType = ORB_SLAM3::System::IMU_MONOCULAR;
+    pSLAM = new ORB_SLAM3::System(vocFile, settingsFile, sysParamsFile, sensorType, enablePangolin);
 
     // --- Shared state ---
     auto state = std::make_shared<SharedState>();
@@ -463,9 +459,9 @@ int main(int argc, char **argv)
 
     // --- Grabber nodes ---
     auto imugb = std::make_shared<ImuGrabber>(state);
-    auto igb   = std::make_shared<ImageGrabber>(state, &slam);
+    auto igb   = std::make_shared<ImageGrabber>(state);
 
-    // --- QoS (sensor data profile — same as before) ---
+    // --- QoS (sensor data profile) ---
     rclcpp::QoS sensorQos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
     sensorQos.reliability(rclcpp::ReliabilityPolicy::BestEffort);
     sensorQos.durability(rclcpp::DurabilityPolicy::Volatile);
@@ -501,7 +497,7 @@ int main(int argc, char **argv)
 
     rclcpp::spin(node);
 
-    slam.Shutdown();
+    pSLAM->Shutdown();
     igb->mustStop = true;
     state->image_ready_cv.notify_all();  // unblock SyncWithImu if it's waiting
     syncThread.join();
