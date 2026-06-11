@@ -440,7 +440,7 @@ void ImageGrabber::SyncWithImu()
 
             if (ready_imu_count < 2)
             {
-                // state_->image_queue.pop();
+                state_->image_queue.pop();
                 skip_due_to_insufficient_imu = true;
             }
             else
