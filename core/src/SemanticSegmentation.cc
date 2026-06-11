@@ -50,8 +50,8 @@ namespace ORB_SLAM3
             if (thisKF == nullptr || thisKF->isBad())
                 continue;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr thisKFPointCloud = thisKF->getCurrentFramePointCloud();
-            if (thisKFPointCloud == nullptr && thisKF->mbHasAuxDepth)
-                thisKFPointCloud = thisKF->getAuxDepthPointCloud();
+            if (thisKFPointCloud == nullptr && thisKF->mbHasAuxPointCloud)
+                thisKFPointCloud = thisKF->getAuxPointCloud();
             if (thisKFPointCloud == nullptr)
             {
                 std::cout << "SemSeg: skipping KF ID: " << thisKF->mnId << ". Missing pointcloud..." << std::endl;

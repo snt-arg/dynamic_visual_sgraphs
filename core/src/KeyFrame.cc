@@ -211,37 +211,18 @@ namespace ORB_SLAM3
         return mCurrentFramePointClouds;
     }
 
-    void KeyFrame::SetAuxDepth(const cv::Mat &auxDepth, double auxDepthTimestamp,
-                               const std::string &auxDepthFrameId, float auxDepthMin,
-                               float auxDepthMax, int auxDepthStride,
-                               const std::string &auxDepthScaleMode)
+    void KeyFrame::SetAuxPointCloudFromDepth(const cv::Mat &auxDepth, double auxDepthTimestamp,
+                                             const std::string &auxDepthFrameId, float auxDepthMin,
+                                             float auxDepthMax, int auxDepthStride,
+                                             const std::string &auxDepthScaleMode)
     {
-        if (auxDepth.empty())
+        if (auxDepth.empty() || auxDepth.type() != CV_32FC1)
             return;
 
-        mAuxDepth = auxDepth.clone();
-        mbHasAuxDepth = true;
-        mAuxDepthTimestamp = auxDepthTimestamp;
-        mAuxDepthFrameId = auxDepthFrameId;
-        mAuxDepthMin = auxDepthMin;
-        mAuxDepthMax = auxDepthMax;
-        mAuxDepthStride = std::max(1, auxDepthStride);
-        mAuxDepthScaleMode = auxDepthScaleMode;
-
-        std::cout << "AuxDepth: copied depth into keyframe ID " << mnId
-                  << " for segmented image, depth timestamp "
-                  << mAuxDepthTimestamp << std::endl;
-    }
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr KeyFrame::getAuxDepthPointCloud()
-    {
-        if (!mbHasAuxDepth || mAuxDepth.empty() || mAuxDepth.type() != CV_32FC1)
-            return nullptr;
-
-        cv::Mat depth = mAuxDepth;
+        cv::Mat depth = auxDepth;
         float depthScale = 1.0f;
 
-        if (mAuxDepthScaleMode == "map_median")
+        if (auxDepthScaleMode == "map_median")
         {
             std::vector<float> mapDepths;
             std::vector<float> auxDepths;
@@ -264,7 +245,7 @@ namespace ORB_SLAM3
                     continue;
 
                 const Eigen::Vector3f Pc = Tcw * pMP->GetWorldPos();
-                if (Pc.z() <= mAuxDepthMin || Pc.z() >= mAuxDepthMax)
+                if (Pc.z() <= auxDepthMin || Pc.z() >= auxDepthMax)
                     continue;
 
                 mapDepths.push_back(Pc.z());
@@ -288,7 +269,7 @@ namespace ORB_SLAM3
         cloud->is_dense = false;
         cloud->points.resize(static_cast<size_t>(cloud->width) * cloud->height);
 
-        const int stride = std::max(1, mAuxDepthStride);
+        const int stride = std::max(1, auxDepthStride);
         const float nan = std::numeric_limits<float>::quiet_NaN();
 
         for (int v = 0; v < depth.rows; ++v)
@@ -304,7 +285,7 @@ namespace ORB_SLAM3
                     continue;
 
                 const float z = depth.at<float>(v, u) * depthScale;
-                if (!std::isfinite(z) || z < mAuxDepthMin || z > mAuxDepthMax)
+                if (!std::isfinite(z) || z < auxDepthMin || z > auxDepthMax)
                     continue;
 
                 pt.x = (static_cast<float>(u) - cx) * z * invfx;
@@ -321,7 +302,19 @@ namespace ORB_SLAM3
             }
         }
 
-        return cloud;
+        mAuxPointCloud = cloud;
+        mbHasAuxPointCloud = true;
+        mAuxDepthTimestamp = auxDepthTimestamp;
+        mAuxDepthFrameId = auxDepthFrameId;
+
+        std::cout << "AuxDepth: projected and copied pointcloud into keyframe ID " << mnId
+                  << " for segmented image, depth timestamp "
+                  << mAuxDepthTimestamp << std::endl;
+    }
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr KeyFrame::getAuxPointCloud()
+    {
+        return mbHasAuxPointCloud ? mAuxPointCloud : nullptr;
     }
 
     void KeyFrame::clearPointCloud()
@@ -334,8 +327,12 @@ namespace ORB_SLAM3
 
         // clear images
         mImage.release();
-        mAuxDepth.release();
-        mbHasAuxDepth = false;
+        if (mAuxPointCloud)
+        {
+            mAuxPointCloud->clear();
+            mAuxPointCloud = nullptr;
+        }
+        mbHasAuxPointCloud = false;
     }
 
     std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> KeyFrame::getClsCloudPtrs() const

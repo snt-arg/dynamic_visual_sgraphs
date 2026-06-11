@@ -267,13 +267,13 @@ namespace ORB_SLAM3
         if (pKF == nullptr || pKF->isBad())
         {
             std::cout << "AuxDepth: keyframe ID " << keyFrameId
-                      << " not available for segmented depth attachment" << std::endl;
+                      << " not available for segmented pointcloud attachment" << std::endl;
             return;
         }
 
-        pKF->SetAuxDepth(auxDepth, auxDepthTimestamp, auxDepthFrameId,
-                         auxDepthMin, auxDepthMax, auxDepthStride,
-                         auxDepthScaleMode);
+        pKF->SetAuxPointCloudFromDepth(auxDepth, auxDepthTimestamp, auxDepthFrameId,
+                                       auxDepthMin, auxDepthMax, auxDepthStride,
+                                       auxDepthScaleMode);
     }
 
     std::vector<std::vector<Eigen::Vector3d>> System::getSkeletonCluster()
