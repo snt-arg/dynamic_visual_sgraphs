@@ -258,6 +258,24 @@ namespace ORB_SLAM3
         mpSemanticSegmentation->AddSegmentedFrameToBuffer(tuple);
     }
 
+    void System::AttachAuxDepthToKeyFrame(uint64_t keyFrameId, const cv::Mat &auxDepth,
+                                          double auxDepthTimestamp, const std::string &auxDepthFrameId,
+                                          float auxDepthMin, float auxDepthMax, int auxDepthStride,
+                                          const std::string &auxDepthScaleMode)
+    {
+        ORB_SLAM3::KeyFrame *pKF = mpAtlas->GetKeyFrameById(keyFrameId);
+        if (pKF == nullptr || pKF->isBad())
+        {
+            std::cout << "AuxDepth: keyframe ID " << keyFrameId
+                      << " not available for segmented depth attachment" << std::endl;
+            return;
+        }
+
+        pKF->SetAuxDepth(auxDepth, auxDepthTimestamp, auxDepthFrameId,
+                         auxDepthMin, auxDepthMax, auxDepthStride,
+                         auxDepthScaleMode);
+    }
+
     std::vector<std::vector<Eigen::Vector3d>> System::getSkeletonCluster()
     {
         return mpAtlas->GetSkeletoClusterPoints();

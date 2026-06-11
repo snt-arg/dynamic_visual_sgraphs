@@ -15,13 +15,16 @@
 
 #include "common.h"
 
+#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <deque>
+#include <cmath>
 #include <limits>
 #include <mutex>
 #include <queue>
 #include <thread>
+#include <utility>
 
 using namespace std;
 
@@ -81,6 +84,14 @@ struct SharedState
         std::vector<ORB_SLAM3::Marker*> matched_markers;
     };
 
+    struct AuxDepthFrame
+    {
+        rclcpp::Time stamp;
+        double timestamp_sec = 0.0;
+        std::string frame_id;
+        sensor_msgs::msg::Image::ConstSharedPtr msg;
+    };
+
     // Raw gyro — collected at ~200 Hz
     std::deque<double>       gyro_timestamps;
     std::deque<Eigen::Vector3f>  gyro_data;
@@ -99,6 +110,9 @@ struct SharedState
     std::queue<ImagePacket> image_queue;
     std::size_t             max_image_queue_size = 300;
     int                     dropped_frames = 0;
+
+    std::deque<AuxDepthFrame> aux_depth_buffer;
+    std::size_t              max_aux_depth_buffer_size = 120;
 
     // Marker state (populated inside the image callback path)
     double                          min_marker_time_diff = std::numeric_limits<double>::max();
@@ -182,12 +196,25 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &msg)
 class ImageGrabber : public rclcpp::Node
 {
 public:
-    ImageGrabber(std::shared_ptr<SharedState> state)
+    struct AuxDepthOptions
+    {
+        bool use_aux_depth = true;
+        bool encoding_is_metric = true;
+        double time_tolerance = 0.05;
+        float min_depth = 0.2f;
+        float max_depth = 20.0f;
+        int stride = 2;
+        std::string scale_mode = "none";
+    };
+
+    ImageGrabber(std::shared_ptr<SharedState> state, AuxDepthOptions aux_depth_options)
         : rclcpp::Node("image_grabber", rclcpp::NodeOptions().use_global_arguments(false))
         , state_(std::move(state))
+        , aux_depth_options_(std::move(aux_depth_options))
     {}
 
     void GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
+    void GrabAuxDepth(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msg);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msg);
 
@@ -196,7 +223,11 @@ public:
 
     std::atomic<bool> mustStop{false};
 private:
+    bool FindClosestAuxDepth(double rgb_time, SharedState::AuxDepthFrame &depth_frame, double &dt_abs);
+    bool ConvertAuxDepthImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg, cv::Mat &depth_m);
+
     std::shared_ptr<SharedState>  state_;
+    AuxDepthOptions aux_depth_options_;
 };
 
 // ---------------------------------------------------------------------------
@@ -254,6 +285,112 @@ void ImageGrabber::GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
     state_->image_ready_cv.notify_all();
 }
 
+void ImageGrabber::GrabAuxDepth(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
+{
+    if (!aux_depth_options_.use_aux_depth)
+        return;
+
+    SharedState::AuxDepthFrame frame;
+    frame.stamp = rclcpp::Time(msg->header.stamp);
+    frame.timestamp_sec = frame.stamp.seconds();
+    frame.frame_id = msg->header.frame_id;
+    frame.msg = msg;
+
+    std::lock_guard<std::mutex> lock(state_->mtx);
+    state_->aux_depth_buffer.push_back(std::move(frame));
+    while (state_->aux_depth_buffer.size() > state_->max_aux_depth_buffer_size)
+        state_->aux_depth_buffer.pop_front();
+}
+
+bool ImageGrabber::ConvertAuxDepthImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg, cv::Mat &depth_m)
+{
+    if (!msg)
+        return false;
+
+    cv_bridge::CvImageConstPtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvShare(msg);
+    }
+    catch (cv_bridge::Exception &e)
+    {
+        RCLCPP_ERROR(this->get_logger(), "[Error] AuxDepth cv_bridge exception: %s", e.what());
+        return false;
+    }
+
+    bool depth_is_metric = aux_depth_options_.encoding_is_metric;
+    if (msg->encoding == sensor_msgs::image_encodings::TYPE_32FC1 || cv_ptr->image.type() == CV_32FC1)
+    {
+        depth_m = cv_ptr->image.clone();
+    }
+    else if (msg->encoding == sensor_msgs::image_encodings::TYPE_16UC1 || cv_ptr->image.type() == CV_16UC1)
+    {
+        cv_ptr->image.convertTo(depth_m, CV_32FC1, 0.001);
+        depth_is_metric = true;
+    }
+    else
+    {
+        RCLCPP_WARN(this->get_logger(), "AuxDepth: unsupported encoding '%s'", msg->encoding.c_str());
+        return false;
+    }
+
+    for (int y = 0; y < depth_m.rows; ++y)
+    {
+        float *row = depth_m.ptr<float>(y);
+        for (int x = 0; x < depth_m.cols; ++x)
+        {
+            const float d = row[x];
+            if (!std::isfinite(d) ||
+                (depth_is_metric && (d < aux_depth_options_.min_depth || d > aux_depth_options_.max_depth)))
+                row[x] = std::numeric_limits<float>::quiet_NaN();
+        }
+    }
+
+    return true;
+}
+
+bool ImageGrabber::FindClosestAuxDepth(double rgb_time, SharedState::AuxDepthFrame &depth_frame, double &dt_abs)
+{
+    {
+        std::lock_guard<std::mutex> lock(state_->mtx);
+
+        if (!aux_depth_options_.use_aux_depth || state_->aux_depth_buffer.empty())
+            return false;
+
+        while (!state_->aux_depth_buffer.empty() &&
+               state_->aux_depth_buffer.front().timestamp_sec < rgb_time - 2.0 * aux_depth_options_.time_tolerance)
+        {
+            state_->aux_depth_buffer.pop_front();
+        }
+
+        if (state_->aux_depth_buffer.empty())
+            return false;
+
+        auto best_it = state_->aux_depth_buffer.end();
+        dt_abs = std::numeric_limits<double>::max();
+
+        for (auto it = state_->aux_depth_buffer.begin(); it != state_->aux_depth_buffer.end(); ++it)
+        {
+            const double dt = std::abs(rgb_time - it->timestamp_sec);
+            if (dt < dt_abs)
+            {
+                dt_abs = dt;
+                best_it = it;
+            }
+        }
+
+        if (best_it == state_->aux_depth_buffer.end() || dt_abs > aux_depth_options_.time_tolerance)
+            return false;
+
+        depth_frame.stamp = best_it->stamp;
+        depth_frame.timestamp_sec = best_it->timestamp_sec;
+        depth_frame.frame_id = best_it->frame_id;
+        depth_frame.msg = best_it->msg;
+    }
+
+    return true;
+}
+
 // ---------------------------------------------------------------------------
 // SyncWithImu
 // ---------------------------------------------------------------------------
@@ -269,6 +406,8 @@ void ImageGrabber::SyncWithImu()
         std::vector<ORB_SLAM3::IMU::Point>   vImuMeas;
         double                               min_marker_diff;
         std::vector<ORB_SLAM3::Marker*>      matched_markers;
+        bool                                 skip_due_to_insufficient_imu = false;
+        std::size_t                          ready_imu_count = 0;
 
         // --- Critical section: wait, copy, clear ---
         {
@@ -288,40 +427,55 @@ void ImageGrabber::SyncWithImu()
                 RCLCPP_WARN(this->get_logger(), "%d dropped frames", state_->dropped_frames - 1);
             state_->dropped_frames = 0;
 
-            // Copy next queued image in timestamp order. Do this only after
-            // the IMU buffer has reached this image timestamp.
-            SharedState::ImagePacket packet = std::move(state_->image_queue.front());
-            state_->image_queue.pop();
-
-            im      = std::move(packet.image);
-            tIm     = packet.timestamp;
+            tIm     = state_->image_queue.front().timestamp;
             msgTime = rclcpp::Time(static_cast<int64_t>(tIm * 1e9));
 
-            // Copy marker state
-            min_marker_diff  = packet.min_marker_time_diff;
-            matched_markers  = std::move(packet.matched_markers);
-
-            // Build IMU measurement vector from synced accel + gyro, consuming
-            // only samples up to this image timestamp. Future IMU samples stay
-            // buffered for the next frame, matching the ORB-SLAM3 ROS1 wrapper.
-            while (!state_->gyro_timestamps.empty() &&
-                   !state_->accel_data_sync.empty() &&
-                   state_->gyro_timestamps.front() <= tIm)
+            const std::size_t synced_imu_size =
+                std::min(state_->gyro_timestamps.size(), state_->accel_data_sync.size());
+            while (ready_imu_count < synced_imu_size &&
+                   state_->gyro_timestamps[ready_imu_count] <= tIm)
             {
-                const double imuTime = state_->gyro_timestamps.front();
-                const Eigen::Vector3f acc = state_->accel_data_sync.front();
-                const Eigen::Vector3f gyr = state_->gyro_data.front();
+                ++ready_imu_count;
+            }
 
-                vImuMeas.emplace_back(
-                    acc.x(), acc.y(), acc.z(),
-                    gyr.x(), gyr.y(), gyr.z(),
-                    imuTime);
-                Wbb = gyr;
+            if (ready_imu_count < 2)
+            {
+                // state_->image_queue.pop();
+                skip_due_to_insufficient_imu = true;
+            }
+            else
+            {
+                // Copy next queued image in timestamp order. Do this only after
+                // the IMU buffer has reached this image timestamp.
+                SharedState::ImagePacket packet = std::move(state_->image_queue.front());
+                state_->image_queue.pop();
 
-                state_->gyro_data.pop_front();
-                state_->gyro_timestamps.pop_front();
-                state_->accel_data_sync.pop_front();
-                state_->accel_timestamps_sync.pop_front();
+                im = std::move(packet.image);
+
+                // Copy marker state
+                min_marker_diff  = packet.min_marker_time_diff;
+                matched_markers  = std::move(packet.matched_markers);
+
+                // Build IMU measurement vector from synced accel + gyro, consuming
+                // only samples up to this image timestamp. Future IMU samples stay
+                // buffered for the next frame, matching the ORB-SLAM3 ROS1 wrapper.
+                for (std::size_t i = 0; i < ready_imu_count; ++i)
+                {
+                    const double imuTime = state_->gyro_timestamps.front();
+                    const Eigen::Vector3f acc = state_->accel_data_sync.front();
+                    const Eigen::Vector3f gyr = state_->gyro_data.front();
+
+                    vImuMeas.emplace_back(
+                        acc.x(), acc.y(), acc.z(),
+                        gyr.x(), gyr.y(), gyr.z(),
+                        imuTime);
+                    Wbb = gyr;
+
+                    state_->gyro_data.pop_front();
+                    state_->gyro_timestamps.pop_front();
+                    state_->accel_data_sync.pop_front();
+                    state_->accel_timestamps_sync.pop_front();
+                }
             }
         }
         // Lock released — TrackMonocular runs outside lock
@@ -388,6 +542,39 @@ void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &
     pcl::PCLPointCloud2::Ptr pclPc2SegPrb(new pcl::PCLPointCloud2);
     pcl_conversions::toPCL(msgSegImage.segmented_image_probability, *pclPc2SegPrb);
 
+    if (aux_depth_options_.use_aux_depth)
+    {
+        const double segTimestamp = rclcpp::Time(msgSegImage.header.stamp).seconds(); // Use msgSegImage timestamp (submsgs have empty timestamps)
+        SharedState::AuxDepthFrame auxDepthFrame;
+        double auxDepthDt = std::numeric_limits<double>::max();
+
+        if (FindClosestAuxDepth(segTimestamp, auxDepthFrame, auxDepthDt))
+        {
+            cv::Mat auxDepthForSeg;
+            if (ConvertAuxDepthImage(auxDepthFrame.msg, auxDepthForSeg))
+            {
+                if (!auxDepthForSeg.empty() && auxDepthForSeg.size() != cvImgSeg->image.size())
+                {
+                    cv::Mat resizedDepth;
+                    cv::resize(auxDepthForSeg, resizedDepth, cvImgSeg->image.size(), 0, 0, cv::INTER_NEAREST);
+                    auxDepthForSeg = resizedDepth;
+                }
+
+                RCLCPP_INFO(this->get_logger(), "AuxDepth: matched depth dt = %.6f for segmented keyframe ID %lu",
+                            auxDepthDt, static_cast<unsigned long>(keyFrameId));
+                pSLAM->AttachAuxDepthToKeyFrame(keyFrameId, auxDepthForSeg,
+                                                auxDepthFrame.timestamp_sec, auxDepthFrame.frame_id,
+                                                aux_depth_options_.min_depth, aux_depth_options_.max_depth,
+                                                aux_depth_options_.stride, aux_depth_options_.scale_mode);
+            }
+        }
+        else
+        {
+            RCLCPP_WARN(this->get_logger(), "AuxDepth: no depth found for segmented frame timestamp %.9f keyframe ID %lu",
+                        segTimestamp, static_cast<unsigned long>(keyFrameId));
+        }
+    }
+
     auto tuple = std::make_tuple(keyFrameId, cvImgSeg->image, pclPc2SegPrb);
     pSLAM->addSegmentedImage(&tuple);
 }
@@ -426,10 +613,39 @@ int main(int argc, char **argv)
     node->declare_parameter<std::string>("voc_file",         "file_not_set");
     node->declare_parameter<std::string>("settings_file",    "file_not_set");
     node->declare_parameter<std::string>("sys_params_file",  "file_not_set");
+    node->declare_parameter<bool>("use_aux_depth", true);
+    node->declare_parameter<std::string>("aux_depth_topic", "/camera/depth_da3/image_rect");
+    node->declare_parameter<bool>("aux_depth_encoding_is_metric", true);
+    node->declare_parameter<double>("aux_depth_time_tolerance", 0.05);
+    node->declare_parameter<double>("aux_depth_min", 0.2);
+    node->declare_parameter<double>("aux_depth_max", 20.0);
+    node->declare_parameter<int>("aux_depth_stride", 2);
+    node->declare_parameter<std::string>("aux_depth_scale_mode", "none");
 
     const std::string vocFile      = node->get_parameter("voc_file").as_string();
     const std::string settingsFile = node->get_parameter("settings_file").as_string();
     const std::string sysParamsFile = node->get_parameter("sys_params_file").as_string();
+    const std::string auxDepthTopic = node->get_parameter("aux_depth_topic").as_string();
+
+    ImageGrabber::AuxDepthOptions auxDepthOptions;
+    auxDepthOptions.use_aux_depth = node->get_parameter("use_aux_depth").as_bool();
+    auxDepthOptions.encoding_is_metric = node->get_parameter("aux_depth_encoding_is_metric").as_bool();
+    auxDepthOptions.time_tolerance = node->get_parameter("aux_depth_time_tolerance").as_double();
+    auxDepthOptions.min_depth = static_cast<float>(node->get_parameter("aux_depth_min").as_double());
+    auxDepthOptions.max_depth = static_cast<float>(node->get_parameter("aux_depth_max").as_double());
+    auxDepthOptions.stride = std::max(1, static_cast<int>(node->get_parameter("aux_depth_stride").as_int()));
+    auxDepthOptions.scale_mode = node->get_parameter("aux_depth_scale_mode").as_string();
+    if (auxDepthOptions.scale_mode != "none" && auxDepthOptions.scale_mode != "map_median")
+    {
+        RCLCPP_WARN(node->get_logger(), "AuxDepth: unsupported aux_depth_scale_mode '%s', using 'none'",
+                    auxDepthOptions.scale_mode.c_str());
+        auxDepthOptions.scale_mode = "none";
+    }
+    if (auxDepthOptions.use_aux_depth && !auxDepthOptions.encoding_is_metric && auxDepthOptions.scale_mode == "none")
+    {
+        RCLCPP_WARN(node->get_logger(),
+                    "AuxDepth: aux_depth_encoding_is_metric is false with scale_mode 'none'; depth will be interpreted as meters by segmentation");
+    }
 
     if (vocFile == "file_not_set" || settingsFile == "file_not_set")
     {
@@ -474,7 +690,7 @@ int main(int argc, char **argv)
 
     // --- Grabber nodes ---
     auto imugb = std::make_shared<ImuGrabber>(state);
-    auto igb   = std::make_shared<ImageGrabber>(state);
+    auto igb   = std::make_shared<ImageGrabber>(state, auxDepthOptions);
 
     // --- QoS (sensor data profile) ---
     rclcpp::QoS sensorQos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
@@ -491,6 +707,15 @@ int main(int argc, char **argv)
     auto subImg = node->create_subscription<Image>(
         "/camera/image_raw", 1,
         [igb](const Image::ConstSharedPtr msg) { igb->GrabImage(msg); });
+
+    rclcpp::Subscription<Image>::SharedPtr subAuxDepth;
+    if (auxDepthOptions.use_aux_depth)
+    {
+        subAuxDepth = node->create_subscription<Image>(
+            auxDepthTopic, sensorQos,
+            [igb](const Image::ConstSharedPtr msg) { igb->GrabAuxDepth(msg); });
+        RCLCPP_INFO(node->get_logger(), "AuxDepth: subscribed to %s", auxDepthTopic.c_str());
+    }
 
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
         "/camera/color/image_segment", 50,

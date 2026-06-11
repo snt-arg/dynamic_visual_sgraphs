@@ -447,6 +447,19 @@ namespace ORB_SLAM3
         // For Semantic Segmentation
         cv::Mat mImage;
         bool isPublished;
+        cv::Mat mAuxDepth;
+        bool mbHasAuxDepth = false;
+        double mAuxDepthTimestamp = 0.0;
+        std::string mAuxDepthFrameId;
+        float mAuxDepthMin = 0.2f;
+        float mAuxDepthMax = 20.0f;
+        int mAuxDepthStride = 2;
+        std::string mAuxDepthScaleMode = "none";
+        void SetAuxDepth(const cv::Mat &auxDepth, double auxDepthTimestamp,
+                         const std::string &auxDepthFrameId, float auxDepthMin,
+                         float auxDepthMax, int auxDepthStride,
+                         const std::string &auxDepthScaleMode);
+        pcl::PointCloud<pcl::PointXYZRGB>::Ptr getAuxDepthPointCloud();
 
         // The following variables need to be accessed trough a mutex to be thread safe.
     protected:

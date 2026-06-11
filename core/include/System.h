@@ -270,6 +270,10 @@ namespace ORB_SLAM3
          * @param tuple the address of the tuple of segmented image and pointcloud
          */
         void addSegmentedImage(std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> *tuple);
+        void AttachAuxDepthToKeyFrame(uint64_t keyFrameId, const cv::Mat &auxDepth,
+                                      double auxDepthTimestamp, const std::string &auxDepthFrameId,
+                                      float auxDepthMin, float auxDepthMax, int auxDepthStride,
+                                      const std::string &auxDepthScaleMode);
 
         /**
          * @brief Get the skeleton cluster coming from the current map
