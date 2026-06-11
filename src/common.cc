@@ -43,7 +43,7 @@ std::vector<std::vector<Eigen::Vector3d>> skeletonClusterPoints;
 std::shared_ptr<tf2_ros::StaticTransformBroadcaster> staticTfBroadcaster;
 std::string frameWorld, frameCamera, frameImu, frameMap, frameBC, frameSE;
 
-rclcpp::Time lastPlanePublishTime(0, 0, RCL_ROS_TIME);
+double lastPlanePublishTime = -std::numeric_limits<double>::infinity();
 rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr pubKeyFrameList;
 rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubDoor;
@@ -857,10 +857,10 @@ void publishPlanes(std::vector<ORB_SLAM3::Plane *> planes, rclcpp::Time msgTime)
         return;
 
     // Check if sufficient time has passed since the last plane publication
-    if ((msgTime - lastPlanePublishTime).seconds() < 3.0)
+    if (msgTime.seconds() - lastPlanePublishTime < 3.0)
         return;
 
-    lastPlanePublishTime = msgTime;
+    lastPlanePublishTime = msgTime.seconds();
 
     // Variables
     visualization_msgs::msg::MarkerArray planeLabelArray;

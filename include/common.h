@@ -28,6 +28,7 @@
 #include <queue>
 #include <thread>
 #include <mutex>
+#include <limits>
 #include <Eigen/Dense>
 
 #include <rclcpp/rclcpp.hpp>
@@ -143,7 +144,7 @@ extern std::vector<ORB_SLAM3::Room *> gnnRoomCandidates;
 extern rclcpp::Publisher<vs_graphs::msg::VSGraphsAllWallsData>::SharedPtr pubAllWalls_new;
 extern rclcpp::Publisher<situational_graphs_msgs::msg::PlanesData>::SharedPtr pubAllWalls_legacy;
 
-extern rclcpp::Time lastPlanePublishTime;
+extern double lastPlanePublishTime;
 extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
