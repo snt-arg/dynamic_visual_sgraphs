@@ -227,3 +227,4 @@ USER $USERNAME
 CMD ["/bin/bash"]
 SHELL ["/bin/bash"]
 # note: you might have to reinstall numpy and opencv python pkgs and rebuilding cause the system packages are pointed instead
+# note: torch version might be wrong (cu130 wheel), reinstall torch and torchvision with the correct versions if you encounter issues related to torch.
