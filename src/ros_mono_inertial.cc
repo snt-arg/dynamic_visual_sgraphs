@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <cmath>
@@ -27,6 +28,19 @@
 #include <utility>
 
 using namespace std;
+
+namespace
+{
+constexpr double kMaxImuGap = 0.5;
+constexpr double kMaxFrameImuDt = 0.1;
+constexpr float kMaxAccelNorm = 150.0f;
+constexpr float kMaxGyroNorm = 50.0f;
+
+bool isFiniteVector(const Eigen::Vector3f &v)
+{
+    return std::isfinite(v.x()) && std::isfinite(v.y()) && std::isfinite(v.z());
+}
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -148,7 +162,36 @@ void ImuGrabber::GrabImu(const sensor_msgs::msg::Imu::ConstSharedPtr &msg)
                               msg->angular_velocity.y,
                               msg->angular_velocity.z);
 
+    if (!std::isfinite(t) || !isFiniteVector(acc) || !isFiniteVector(gyr) ||
+        acc.norm() > kMaxAccelNorm || gyr.norm() > kMaxGyroNorm)
+    {
+        RCLCPP_WARN(this->get_logger(), "Dropping invalid IMU sample at t=%.9f", t);
+        return;
+    }
+
     std::lock_guard<std::mutex> lock(state_->mtx);
+
+    if (!state_->gyro_timestamps.empty())
+    {
+        const double last_t = state_->gyro_timestamps.back();
+        if (t <= last_t)
+        {
+            RCLCPP_WARN(this->get_logger(), "Dropping non-monotonic IMU sample t=%.9f after %.9f", t, last_t);
+            return;
+        }
+        if (t - last_t > kMaxImuGap)
+        {
+            RCLCPP_WARN(this->get_logger(), "Large IMU gap %.6f s; clearing stale IMU buffers", t - last_t);
+            state_->gyro_timestamps.clear();
+            state_->gyro_data.clear();
+            state_->accel_timestamps_sync.clear();
+            state_->accel_data_sync.clear();
+            state_->prev_accel_data = Eigen::Vector3f::Zero();
+            state_->cur_accel_data = Eigen::Vector3f::Zero();
+            state_->prev_accel_timestamp = 0.0;
+            state_->cur_accel_timestamp = 0.0;
+        }
+    }
 
     // --- Gyro path (high-rate, ~200 Hz) ---
     // Just buffer; accel will be interpolated to these timestamps
@@ -204,6 +247,7 @@ public:
         float min_depth = 0.2f;
         float max_depth = 20.0f;
         int stride = 2;
+        std::size_t max_segmentation_queue_size = 100;
         std::string scale_mode = "none";
     };
 
@@ -211,23 +255,44 @@ public:
         : rclcpp::Node("image_grabber", rclcpp::NodeOptions().use_global_arguments(false))
         , state_(std::move(state))
         , aux_depth_options_(std::move(aux_depth_options))
-    {}
+    {
+        segmentation_worker_thread_ = std::thread(&ImageGrabber::SegmentationWorkerLoop, this);
+    }
+
+    ~ImageGrabber()
+    {
+        StopSegmentationWorker();
+    }
 
     void GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void GrabAuxDepth(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
-    void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msg);
+    void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg::ConstSharedPtr &msg);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msg);
+    void StopSegmentationWorker();
 
     // Entry point for the sync thread
     void SyncWithImu();
 
     std::atomic<bool> mustStop{false};
 private:
+    struct SegmentationJob
+    {
+        segmenter_ros::msg::SegmenterDataMsg::ConstSharedPtr msg;
+        std::chrono::steady_clock::time_point received_time;
+    };
+
     bool FindClosestAuxDepth(double rgb_time, SharedState::AuxDepthFrame &depth_frame, double &dt_abs);
     bool ConvertAuxDepthImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg, cv::Mat &depth_m);
+    void SegmentationWorkerLoop();
+    void ProcessSegmentationJob(const SegmentationJob &job);
 
     std::shared_ptr<SharedState>  state_;
     AuxDepthOptions aux_depth_options_;
+    std::mutex segmentation_jobs_mtx_;
+    std::condition_variable segmentation_jobs_cv_;
+    std::deque<SegmentationJob> segmentation_jobs_;
+    std::thread segmentation_worker_thread_;
+    bool stop_segmentation_worker_ = false;
 };
 
 // ---------------------------------------------------------------------------
@@ -357,15 +422,6 @@ bool ImageGrabber::FindClosestAuxDepth(double rgb_time, SharedState::AuxDepthFra
         if (!aux_depth_options_.use_aux_depth || state_->aux_depth_buffer.empty())
             return false;
 
-        while (!state_->aux_depth_buffer.empty() &&
-               state_->aux_depth_buffer.front().timestamp_sec < rgb_time - 2.0 * aux_depth_options_.time_tolerance)
-        {
-            state_->aux_depth_buffer.pop_front();
-        }
-
-        if (state_->aux_depth_buffer.empty())
-            return false;
-
         auto best_it = state_->aux_depth_buffer.end();
         dt_abs = std::numeric_limits<double>::max();
 
@@ -406,7 +462,6 @@ void ImageGrabber::SyncWithImu()
         std::vector<ORB_SLAM3::IMU::Point>   vImuMeas;
         double                               min_marker_diff;
         std::vector<ORB_SLAM3::Marker*>      matched_markers;
-        bool                                 skip_due_to_insufficient_imu = false;
         std::size_t                          ready_imu_count = 0;
 
         // --- Critical section: wait, copy, clear ---
@@ -441,7 +496,6 @@ void ImageGrabber::SyncWithImu()
             if (ready_imu_count < 2)
             {
                 state_->image_queue.pop();
-                skip_due_to_insufficient_imu = true;
             }
             else
             {
@@ -498,6 +552,33 @@ void ImageGrabber::SyncWithImu()
             continue;
         }
 
+        bool invalidImuPacket = false;
+        for (std::size_t i = 0; i < vImuMeas.size(); ++i)
+        {
+            const ORB_SLAM3::IMU::Point &imu = vImuMeas[i];
+            if (!std::isfinite(imu.t) || !isFiniteVector(imu.a) || !isFiniteVector(imu.w) ||
+                imu.a.norm() > kMaxAccelNorm || imu.w.norm() > kMaxGyroNorm)
+            {
+                invalidImuPacket = true;
+                break;
+            }
+
+            if (i > 0)
+            {
+                const double dt = imu.t - vImuMeas[i - 1].t;
+                if (dt <= 0.0 || dt > kMaxFrameImuDt)
+                {
+                    invalidImuPacket = true;
+                    break;
+                }
+            }
+        }
+        if (invalidImuPacket)
+        {
+            RCLCPP_WARN(this->get_logger(), "Skipping frame t=%.9f because IMU packet is invalid", tIm);
+            continue;
+        }
+
         // Image scaling
         const float imageScale = pSLAM->GetImageScale();
         if (imageScale != 1.f)
@@ -522,9 +603,82 @@ void ImageGrabber::SyncWithImu()
     }
 }
 
-void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &msgSegImage)
+void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg::ConstSharedPtr &msgSegImage)
+{
+    if (!msgSegImage)
+        return;
+
+    SegmentationJob droppedJob;
+    bool droppedOldest = false;
+    {
+        SegmentationJob job;
+        job.msg = msgSegImage;
+        job.received_time = std::chrono::steady_clock::now();
+
+        std::lock_guard<std::mutex> lock(segmentation_jobs_mtx_);
+        segmentation_jobs_.push_back(job);
+        if (segmentation_jobs_.size() > aux_depth_options_.max_segmentation_queue_size)
+        {
+            droppedJob = segmentation_jobs_.front();
+            segmentation_jobs_.pop_front();
+            droppedOldest = true;
+        }
+    }
+
+    if (droppedOldest && droppedJob.msg)
+    {
+        RCLCPP_WARN(this->get_logger(),
+                    "Segmentation worker queue exceeded %zu jobs; dropping oldest keyframe ID %lu",
+                    aux_depth_options_.max_segmentation_queue_size,
+                    static_cast<unsigned long>(droppedJob.msg->key_frame_id.data));
+    }
+
+    segmentation_jobs_cv_.notify_one();
+}
+
+void ImageGrabber::StopSegmentationWorker()
+{
+    {
+        std::lock_guard<std::mutex> lock(segmentation_jobs_mtx_);
+        if (stop_segmentation_worker_)
+            return;
+        stop_segmentation_worker_ = true;
+        segmentation_jobs_.clear();
+    }
+    segmentation_jobs_cv_.notify_all();
+    if (segmentation_worker_thread_.joinable())
+        segmentation_worker_thread_.join();
+}
+
+void ImageGrabber::SegmentationWorkerLoop()
+{
+    while (true)
+    {
+        SegmentationJob job;
+        {
+            std::unique_lock<std::mutex> lock(segmentation_jobs_mtx_);
+            segmentation_jobs_cv_.wait(lock, [this] {
+                return stop_segmentation_worker_ || !segmentation_jobs_.empty();
+            });
+
+            if (stop_segmentation_worker_ && segmentation_jobs_.empty())
+                break;
+
+            job = segmentation_jobs_.front();
+            segmentation_jobs_.pop_front();
+        }
+
+        ProcessSegmentationJob(job);
+    }
+}
+
+void ImageGrabber::ProcessSegmentationJob(const SegmentationJob &job)
 {
     cv_bridge::CvImageConstPtr cvImgSeg;
+    if (!job.msg)
+        return;
+
+    const auto &msgSegImage = *job.msg;
     const uint64_t keyFrameId = msgSegImage.key_frame_id.data;
 
     try
@@ -560,8 +714,8 @@ void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &
                     auxDepthForSeg = resizedDepth;
                 }
 
-                RCLCPP_INFO(this->get_logger(), "AuxDepth: matched depth dt = %.6f for segmented keyframe ID %lu",
-                            auxDepthDt, static_cast<unsigned long>(keyFrameId));
+                // RCLCPP_INFO(this->get_logger(), "AuxDepth: matched depth dt = %.6f for segmented keyframe ID %lu",
+                //             auxDepthDt, static_cast<unsigned long>(keyFrameId));
                 pSLAM->AttachAuxDepthToKeyFrame(keyFrameId, auxDepthForSeg,
                                                 auxDepthFrame.timestamp_sec, auxDepthFrame.frame_id,
                                                 aux_depth_options_.min_depth, aux_depth_options_.max_depth,
@@ -570,8 +724,18 @@ void ImageGrabber::GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg &
         }
         else
         {
-            RCLCPP_WARN(this->get_logger(), "AuxDepth: no depth found for segmented frame timestamp %.9f keyframe ID %lu",
-                        segTimestamp, static_cast<unsigned long>(keyFrameId));
+            if (std::isfinite(auxDepthDt))
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "AuxDepth: no depth found for segmented frame timestamp %.9f keyframe ID %lu; nearest dt = %.9f",
+                            segTimestamp, static_cast<unsigned long>(keyFrameId), auxDepthDt);
+            }
+            else
+            {
+                RCLCPP_WARN(this->get_logger(),
+                            "AuxDepth: no depth found for segmented frame timestamp %.9f keyframe ID %lu; depth buffer empty",
+                            segTimestamp, static_cast<unsigned long>(keyFrameId));
+            }
         }
     }
 
@@ -620,6 +784,8 @@ int main(int argc, char **argv)
     node->declare_parameter<double>("aux_depth_min", 0.2);
     node->declare_parameter<double>("aux_depth_max", 20.0);
     node->declare_parameter<int>("aux_depth_stride", 2);
+    node->declare_parameter<int>("aux_depth_buffer_size", 600);
+    node->declare_parameter<int>("aux_depth_job_queue_size", 100);
     node->declare_parameter<std::string>("aux_depth_scale_mode", "none");
 
     const std::string vocFile      = node->get_parameter("voc_file").as_string();
@@ -634,6 +800,8 @@ int main(int argc, char **argv)
     auxDepthOptions.min_depth = static_cast<float>(node->get_parameter("aux_depth_min").as_double());
     auxDepthOptions.max_depth = static_cast<float>(node->get_parameter("aux_depth_max").as_double());
     auxDepthOptions.stride = std::max(1, static_cast<int>(node->get_parameter("aux_depth_stride").as_int()));
+    auxDepthOptions.max_segmentation_queue_size =
+        static_cast<std::size_t>(std::max(1, static_cast<int>(node->get_parameter("aux_depth_job_queue_size").as_int())));
     auxDepthOptions.scale_mode = node->get_parameter("aux_depth_scale_mode").as_string();
     if (auxDepthOptions.scale_mode != "none" && auxDepthOptions.scale_mode != "map_median")
     {
@@ -681,6 +849,8 @@ int main(int argc, char **argv)
 
     // --- Shared state ---
     auto state = std::make_shared<SharedState>();
+    state->max_aux_depth_buffer_size =
+        static_cast<std::size_t>(std::max(1, static_cast<int>(node->get_parameter("aux_depth_buffer_size").as_int())));
 
     // --- TF broadcasters (one pair, shared) ---
     tfBroadcaster =
@@ -700,32 +870,54 @@ int main(int argc, char **argv)
     using sensor_msgs::msg::Image;
     using sensor_msgs::msg::Imu;
 
+    auto imuCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto imageCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto auxDepthCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto semanticCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto voxbloxCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+
+    rclcpp::SubscriptionOptions imuOptions;
+    imuOptions.callback_group = imuCallbackGroup;
+    rclcpp::SubscriptionOptions imageOptions;
+    imageOptions.callback_group = imageCallbackGroup;
+    rclcpp::SubscriptionOptions auxDepthOptionsSub;
+    auxDepthOptionsSub.callback_group = auxDepthCallbackGroup;
+    rclcpp::SubscriptionOptions semanticOptions;
+    semanticOptions.callback_group = semanticCallbackGroup;
+    rclcpp::SubscriptionOptions voxbloxOptions;
+    voxbloxOptions.callback_group = voxbloxCallbackGroup;
+
     auto subImu = node->create_subscription<Imu>(
         "/imu", sensorQos,
-        [imugb](const Imu::ConstSharedPtr msg) { imugb->GrabImu(msg); });
+        [imugb](const Imu::ConstSharedPtr msg) { imugb->GrabImu(msg); },
+        imuOptions);
 
     auto subImg = node->create_subscription<Image>(
         "/camera/image_raw", 1,
-        [igb](const Image::ConstSharedPtr msg) { igb->GrabImage(msg); });
+        [igb](const Image::ConstSharedPtr msg) { igb->GrabImage(msg); },
+        imageOptions);
 
     rclcpp::Subscription<Image>::SharedPtr subAuxDepth;
     if (auxDepthOptions.use_aux_depth)
     {
         subAuxDepth = node->create_subscription<Image>(
-            auxDepthTopic, sensorQos,
-            [igb](const Image::ConstSharedPtr msg) { igb->GrabAuxDepth(msg); });
+            auxDepthTopic, 1,
+            [igb](const Image::ConstSharedPtr msg) { igb->GrabAuxDepth(msg); },
+            auxDepthOptionsSub);
         RCLCPP_INFO(node->get_logger(), "AuxDepth: subscribed to %s", auxDepthTopic.c_str());
     }
 
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
         "/camera/color/image_segment", 50,
         [igb](const segmenter_ros::msg::SegmenterDataMsg::SharedPtr msg)
-        { igb->GrabSegmentation(*msg); });
+        { igb->GrabSegmentation(msg); },
+        semanticOptions);
 
     auto subVoxbloxSkeletonMesh = node->create_subscription<visualization_msgs::msg::MarkerArray>(
         "/voxblox_skeletonizer/sparse_graph", 1,
         [igb](const visualization_msgs::msg::MarkerArray::SharedPtr msg)
-        { igb->GrabVoxbloxSkeletonGraph(*msg); });
+        { igb->GrabVoxbloxSkeletonGraph(*msg); },
+        voxbloxOptions);
 
     static std::shared_ptr<image_transport::ImageTransport> imageTransport =
         std::make_shared<image_transport::ImageTransport>(node);
@@ -735,12 +927,15 @@ int main(int argc, char **argv)
     // --- Sync thread ---
     std::thread syncThread(&ImageGrabber::SyncWithImu, igb);
 
-    rclcpp::spin(node);
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 4);
+    executor.add_node(node);
+    executor.spin();
 
-    pSLAM->Shutdown();
     igb->mustStop = true;
     state->image_ready_cv.notify_all();  // unblock SyncWithImu if it's waiting
+    igb->StopSegmentationWorker();
     syncThread.join();
+    pSLAM->Shutdown();
 
     rclcpp::shutdown();
     return 0;

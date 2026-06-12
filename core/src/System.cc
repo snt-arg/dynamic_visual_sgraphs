@@ -266,8 +266,8 @@ namespace ORB_SLAM3
         ORB_SLAM3::KeyFrame *pKF = mpAtlas->GetKeyFrameById(keyFrameId);
         if (pKF == nullptr || pKF->isBad())
         {
-            std::cout << "AuxDepth: keyframe ID " << keyFrameId
-                      << " not available for segmented pointcloud attachment" << std::endl;
+            // std::cout << "AuxDepth: keyframe ID " << keyFrameId
+            //           << " not available for segmented pointcloud attachment" << std::endl;
             return;
         }
 

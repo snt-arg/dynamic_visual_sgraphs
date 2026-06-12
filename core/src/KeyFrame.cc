@@ -307,9 +307,9 @@ namespace ORB_SLAM3
         mAuxDepthTimestamp = auxDepthTimestamp;
         mAuxDepthFrameId = auxDepthFrameId;
 
-        std::cout << "AuxDepth: projected and copied pointcloud into keyframe ID " << mnId
-                  << " for segmented image, depth timestamp "
-                  << mAuxDepthTimestamp << std::endl;
+        // std::cout << "AuxDepth: projected and copied pointcloud into keyframe ID " << mnId
+        //           << " for segmented image, depth timestamp "
+        //           << mAuxDepthTimestamp << std::endl;
     }
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr KeyFrame::getAuxPointCloud()
