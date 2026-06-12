@@ -16,6 +16,10 @@ def generate_launch_description():
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
+            DeclareLaunchArgument("use_aux_depth", default_value="true"),
+            DeclareLaunchArgument(
+                "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
+            ),
             DeclareLaunchArgument(
                 "semantic_scene_segmenter",
                 default_value="yoso",
@@ -84,6 +88,8 @@ def generate_launch_description():
                     {"static_transform": True},
                     {"colored_pointcloud": False},
                     {"publish_pointclouds": True},
+                    {"use_aux_depth": LaunchConfiguration("use_aux_depth")},
+                    {"aux_depth_topic": LaunchConfiguration("aux_depth_topic")},
                 ],
                 remappings=[
                     ("/imu", LaunchConfiguration("imu_topic")),

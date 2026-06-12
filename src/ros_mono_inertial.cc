@@ -814,6 +814,8 @@ int main(int argc, char **argv)
         RCLCPP_WARN(node->get_logger(),
                     "AuxDepth: aux_depth_encoding_is_metric is false with scale_mode 'none'; depth will be interpreted as meters by segmentation");
     }
+    RCLCPP_INFO(node->get_logger(), "AuxDepth: use_aux_depth = %s",
+                auxDepthOptions.use_aux_depth ? "true" : "false");
 
     if (vocFile == "file_not_set" || settingsFile == "file_not_set")
     {
