@@ -16,15 +16,15 @@ def generate_launch_description():
             DeclareLaunchArgument("launch_rviz", default_value="true"),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
-            DeclareLaunchArgument("use_aux_depth", default_value="true"),
+            DeclareLaunchArgument("use_aux_depth", default_value="false"),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
             ),
             DeclareLaunchArgument(
                 "semantic_scene_segmenter",
-                default_value="yoso",
+                default_value="yolo26",
                 description="The method to segment the semantic scene (if off, the baseline)",
-                choices=["yoso", "pfcn", "off"],
+                choices=["yoso", "pfcn", "yolo26", "off"],
             ),
             # Topics
             DeclareLaunchArgument("camera_frame", default_value="camera"),
@@ -194,6 +194,28 @@ def generate_launch_description():
                     [
                         get_package_share_directory("segmenter_ros"),
                         "/config/cfg_pFCN.yaml",
+                    ],
+                ],
+            ),
+            Node(
+                condition=IfCondition(
+                    EqualsSubstitution(
+                        LaunchConfiguration("semantic_scene_segmenter"), "yolo26"
+                    )
+                ),
+                name="segmenter_ros",
+                package="segmenter_ros",
+                executable="frame_segmenter_yolo26.py",
+                output="screen",
+                parameters=[
+                    {"visualize": LaunchConfiguration("visualize_segmented_scene")}
+                ],
+                arguments=[
+                    "--ros-args",
+                    "--params-file",
+                    [
+                        get_package_share_directory("segmenter_ros"),
+                        "/config/cfg_yolo26.yaml",
                     ],
                 ],
             ),
