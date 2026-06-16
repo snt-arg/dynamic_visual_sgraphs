@@ -21,6 +21,7 @@
 #include <condition_variable>
 #include <deque>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <mutex>
 #include <queue>
@@ -33,6 +34,7 @@ namespace
 {
 constexpr double kMaxImuGap = 0.5;
 constexpr double kMaxFrameImuDt = 0.1;
+constexpr double kDefaultInstanceMaskTimeTolerance = 0.03;
 constexpr float kMaxAccelNorm = 150.0f;
 constexpr float kMaxGyroNorm = 50.0f;
 
@@ -94,6 +96,8 @@ struct SharedState
     {
         cv::Mat image;
         double  timestamp = -1.0;
+        cv::Mat instance_mask;
+        double  instance_mask_time_diff = std::numeric_limits<double>::max();
         double  min_marker_time_diff = std::numeric_limits<double>::max();
         std::vector<ORB_SLAM3::Marker*> matched_markers;
     };
@@ -104,6 +108,14 @@ struct SharedState
         double timestamp_sec = 0.0;
         std::string frame_id;
         sensor_msgs::msg::Image::ConstSharedPtr msg;
+    };
+
+    struct InstanceMaskFrame
+    {
+        rclcpp::Time stamp;
+        double timestamp_sec = 0.0;
+        std::string frame_id;
+        cv::Mat mask;
     };
 
     // Raw gyro — collected at ~200 Hz
@@ -127,6 +139,10 @@ struct SharedState
 
     std::deque<AuxDepthFrame> aux_depth_buffer;
     std::size_t              max_aux_depth_buffer_size = 120;
+
+    std::deque<InstanceMaskFrame> instance_mask_buffer;
+    std::size_t                   max_instance_mask_buffer_size = 300;
+    double                        instance_mask_time_tolerance = kDefaultInstanceMaskTimeTolerance;
 
     // Marker state (populated inside the image callback path)
     double                          min_marker_time_diff = std::numeric_limits<double>::max();
@@ -251,11 +267,24 @@ public:
         std::string scale_mode = "none";
     };
 
-    ImageGrabber(std::shared_ptr<SharedState> state, AuxDepthOptions aux_depth_options)
+    struct SegmentOptions
+    {
+        std::string instance_mask_topic = "/camera/color/image_instance_masks";
+        double instance_mask_time_tolerance = kDefaultInstanceMaskTimeTolerance;
+        std::size_t max_instance_mask_buffer_size = 300;
+    };
+
+    ImageGrabber(
+        std::shared_ptr<SharedState> state,
+        AuxDepthOptions aux_depth_options,
+        SegmentOptions segment_options)
         : rclcpp::Node("image_grabber", rclcpp::NodeOptions().use_global_arguments(false))
         , state_(std::move(state))
         , aux_depth_options_(std::move(aux_depth_options))
+        , segment_options_(std::move(segment_options))
     {
+        state_->max_instance_mask_buffer_size = segment_options_.max_instance_mask_buffer_size;
+        state_->instance_mask_time_tolerance = segment_options_.instance_mask_time_tolerance;
         segmentation_worker_thread_ = std::thread(&ImageGrabber::SegmentationWorkerLoop, this);
     }
 
@@ -266,6 +295,7 @@ public:
 
     void GrabImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void GrabAuxDepth(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
+    void GrabInstanceMask(const sensor_msgs::msg::Image::ConstSharedPtr &msg);
     void GrabSegmentation(const segmenter_ros::msg::SegmenterDataMsg::ConstSharedPtr &msg);
     void GrabVoxbloxSkeletonGraph(const visualization_msgs::msg::MarkerArray &msg);
     void StopSegmentationWorker();
@@ -288,6 +318,7 @@ private:
 
     std::shared_ptr<SharedState>  state_;
     AuxDepthOptions aux_depth_options_;
+    SegmentOptions segment_options_;
     std::mutex segmentation_jobs_mtx_;
     std::condition_variable segmentation_jobs_cv_;
     std::deque<SegmentationJob> segmentation_jobs_;
@@ -365,6 +396,43 @@ void ImageGrabber::GrabAuxDepth(const sensor_msgs::msg::Image::ConstSharedPtr &m
     state_->aux_depth_buffer.push_back(std::move(frame));
     while (state_->aux_depth_buffer.size() > state_->max_aux_depth_buffer_size)
         state_->aux_depth_buffer.pop_front();
+}
+
+void ImageGrabber::GrabInstanceMask(const sensor_msgs::msg::Image::ConstSharedPtr &msg)
+{
+    if (!msg)
+        return;
+
+    cv_bridge::CvImageConstPtr cv_ptr;
+    try
+    {
+        cv_ptr = cv_bridge::toCvShare(msg);
+    }
+    catch (cv_bridge::Exception &e)
+    {
+        RCLCPP_ERROR(this->get_logger(), "[Error] Instance mask cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    if (cv_ptr->image.type() != CV_16UC1 &&
+        cv_ptr->image.type() != CV_32SC1 &&
+        cv_ptr->image.type() != CV_8UC1)
+    {
+        RCLCPP_WARN(this->get_logger(), "Instance mask: unsupported encoding '%s'", msg->encoding.c_str());
+        return;
+    }
+
+    SharedState::InstanceMaskFrame frame;
+    frame.stamp = rclcpp::Time(msg->header.stamp);
+    frame.timestamp_sec = frame.stamp.seconds();
+    frame.frame_id = msg->header.frame_id;
+    frame.mask = cv_ptr->image.clone();
+
+    std::lock_guard<std::mutex> lock(state_->mtx);
+    state_->instance_mask_buffer.push_back(std::move(frame));
+    while (state_->instance_mask_buffer.size() > state_->max_instance_mask_buffer_size)
+        state_->instance_mask_buffer.pop_front();
+    state_->image_ready_cv.notify_all();
 }
 
 bool ImageGrabber::ConvertAuxDepthImage(const sensor_msgs::msg::Image::ConstSharedPtr &msg, cv::Mat &depth_m)
@@ -456,6 +524,7 @@ void ImageGrabber::SyncWithImu()
     while (!mustStop && !pSLAM->isShutDown())
     {
         cv::Mat                              im;
+        cv::Mat                              instanceMask;
         double                               tIm = 0.0;
         rclcpp::Time                         msgTime;
         Eigen::Vector3f                      Wbb = Eigen::Vector3f::Zero();
@@ -505,6 +574,33 @@ void ImageGrabber::SyncWithImu()
                 state_->image_queue.pop();
 
                 im = std::move(packet.image);
+
+                auto best_mask_it = state_->instance_mask_buffer.end();
+                double best_mask_dt = std::numeric_limits<double>::max();
+                while (!state_->instance_mask_buffer.empty() &&
+                       state_->instance_mask_buffer.front().timestamp_sec <
+                           tIm - state_->instance_mask_time_tolerance)
+                {
+                    state_->instance_mask_buffer.pop_front();
+                }
+                for (auto it = state_->instance_mask_buffer.begin();
+                     it != state_->instance_mask_buffer.end(); ++it)
+                {
+                    const double dt = std::abs(tIm - it->timestamp_sec);
+                    if (dt < best_mask_dt)
+                    {
+                        best_mask_dt = dt;
+                        best_mask_it = it;
+                    }
+                }
+                if (best_mask_it != state_->instance_mask_buffer.end() &&
+                    best_mask_dt <= state_->instance_mask_time_tolerance)
+                {
+                    instanceMask = best_mask_it->mask.clone();
+                    packet.instance_mask_time_diff = best_mask_dt;
+                    state_->instance_mask_buffer.erase(
+                        state_->instance_mask_buffer.begin(), std::next(best_mask_it));
+                }
 
                 // Copy marker state
                 min_marker_diff  = packet.min_marker_time_diff;
@@ -586,7 +682,12 @@ void ImageGrabber::SyncWithImu()
             const int w = static_cast<int>(im.cols * imageScale);
             const int h = static_cast<int>(im.rows * imageScale);
             cv::resize(im, im, cv::Size(w, h));
+            if (!instanceMask.empty())
+                cv::resize(instanceMask, instanceMask, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
         }
+
+        // instanceMask is synchronized with im and vImuMeas here for future
+        // processing before or after TrackMonocular.
 
         // Track
         if (min_marker_diff < 0.05)
@@ -787,12 +888,14 @@ int main(int argc, char **argv)
     node->declare_parameter<int>("aux_depth_buffer_size", 600);
     node->declare_parameter<int>("aux_depth_job_queue_size", 100);
     node->declare_parameter<std::string>("aux_depth_scale_mode", "none");
+    node->declare_parameter<std::string>("instance_mask_topic", "/camera/color/image_instance_masks");
+    node->declare_parameter<double>("instance_mask_time_tolerance", kDefaultInstanceMaskTimeTolerance);
+    node->declare_parameter<int>("instance_mask_buffer_size", 300);
 
     const std::string vocFile      = node->get_parameter("voc_file").as_string();
     const std::string settingsFile = node->get_parameter("settings_file").as_string();
     const std::string sysParamsFile = node->get_parameter("sys_params_file").as_string();
     const std::string auxDepthTopic = node->get_parameter("aux_depth_topic").as_string();
-
     ImageGrabber::AuxDepthOptions auxDepthOptions;
     auxDepthOptions.use_aux_depth = node->get_parameter("use_aux_depth").as_bool();
     auxDepthOptions.encoding_is_metric = node->get_parameter("aux_depth_encoding_is_metric").as_bool();
@@ -803,6 +906,13 @@ int main(int argc, char **argv)
     auxDepthOptions.max_segmentation_queue_size =
         static_cast<std::size_t>(std::max(1, static_cast<int>(node->get_parameter("aux_depth_job_queue_size").as_int())));
     auxDepthOptions.scale_mode = node->get_parameter("aux_depth_scale_mode").as_string();
+
+    ImageGrabber::SegmentOptions segmentOptions;
+    segmentOptions.instance_mask_topic = node->get_parameter("instance_mask_topic").as_string();
+    segmentOptions.instance_mask_time_tolerance =
+        std::max(0.0, node->get_parameter("instance_mask_time_tolerance").as_double());
+    segmentOptions.max_instance_mask_buffer_size =
+        static_cast<std::size_t>(std::max(1, static_cast<int>(node->get_parameter("instance_mask_buffer_size").as_int())));
     if (auxDepthOptions.scale_mode != "none" && auxDepthOptions.scale_mode != "map_median")
     {
         RCLCPP_WARN(node->get_logger(), "AuxDepth: unsupported aux_depth_scale_mode '%s', using 'none'",
@@ -862,7 +972,7 @@ int main(int argc, char **argv)
 
     // --- Grabber nodes ---
     auto imugb = std::make_shared<ImuGrabber>(state);
-    auto igb   = std::make_shared<ImageGrabber>(state, auxDepthOptions);
+    auto igb   = std::make_shared<ImageGrabber>(state, auxDepthOptions, segmentOptions);
 
     // --- QoS (sensor data profile) ---
     rclcpp::QoS sensorQos(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data));
@@ -875,6 +985,7 @@ int main(int argc, char **argv)
     auto imuCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto imageCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto auxDepthCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
+    auto instanceMaskCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto semanticCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
     auto voxbloxCallbackGroup = node->create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive);
 
@@ -884,6 +995,8 @@ int main(int argc, char **argv)
     imageOptions.callback_group = imageCallbackGroup;
     rclcpp::SubscriptionOptions auxDepthOptionsSub;
     auxDepthOptionsSub.callback_group = auxDepthCallbackGroup;
+    rclcpp::SubscriptionOptions instanceMaskOptions;
+    instanceMaskOptions.callback_group = instanceMaskCallbackGroup;
     rclcpp::SubscriptionOptions semanticOptions;
     semanticOptions.callback_group = semanticCallbackGroup;
     rclcpp::SubscriptionOptions voxbloxOptions;
@@ -908,6 +1021,12 @@ int main(int argc, char **argv)
             auxDepthOptionsSub);
         RCLCPP_INFO(node->get_logger(), "AuxDepth: subscribed to %s", auxDepthTopic.c_str());
     }
+
+    auto subInstanceMask = node->create_subscription<Image>(
+        segmentOptions.instance_mask_topic, 10,
+        [igb](const Image::ConstSharedPtr msg) { igb->GrabInstanceMask(msg); },
+        instanceMaskOptions);
+    RCLCPP_INFO(node->get_logger(), "Instance masks: subscribed to %s", segmentOptions.instance_mask_topic.c_str());
 
     auto subSegmentedImage = node->create_subscription<segmenter_ros::msg::SegmenterDataMsg>(
         "/camera/color/image_segment", 50,
