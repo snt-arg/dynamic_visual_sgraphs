@@ -14,7 +14,7 @@ services:
     environment:
       DISPLAY: $DISPLAY
       XAUTHORITY: $XAUTHORITY
-      SSH_AUTH_SOCK: /ssh-agent
+      SSH_AUTH_SOCK: $SSH_AUTH_SOCK
       NVIDIA_VISIBLE_DEVICES: all
       NVIDIA_DRIVER_CAPABILITIES: all
       TERM: $TERM
@@ -30,7 +30,7 @@ services:
       # - ~/.Xauthority:/home/user/.Xauthority:rw
       - $XAUTHORITY:$XAUTHORITY:rw
       # SSH
-      - $SSH_AUTH_SOCK:/ssh-agent
+      - $SSH_AUTH_SOCK:$SSH_AUTH_SOCK
       # TMUX
       - ~/.tmux:/home/$USERNAME/.tmux:ro
       - ~/.tmux.conf:/home/$USERNAME/.tmux.conf:ro
@@ -42,15 +42,13 @@ services:
       # - ~/.bash_history:/root/.bash_history
       # - container_home_cache:/root/.cache  # Optional: persist cache
       # Working Directory - vS-Graphs (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
+      - "/home/$USERNAME/[PATH]/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
       # Working Directory - Scene Segmenter (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
-      # Working Directory - 3D object tracker (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
       # Data Directory (** MODIFY **)
-      - "/media/$USERNAME/muffin/datasets:/home/$USERNAME/datasets:rw"
+      - "/media/$USERNAME/AT_SSD/Datasets:/home/$USERNAME/datasets:rw"
     network_mode: "host"
     command:
       tail -f /dev/null
@@ -59,15 +57,13 @@ services:
       - volume-init
   volume-init:
     image: busybox
-    command: ["chown", "-R", "1000:1000", "/home/$USERNAME/workspace/src/visual_sgraphs"]
+    command: ["chown", "-R", "1000:1000", "/workspace/src/visual_sgraphs"]
     volumes:
       # Working Directory - vS-Graphs (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
+      - "/home/$USERNAME/[PATH]/src/visual_sgraphs:/home/$USERNAME/workspace/src/visual_sgraphs:rw"
       # Working Directory - Scene Segmenter (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/scene_segment_ros:/home/$USERNAME/workspace/src/scene_segment_ros:rw"
       # Working Directory - Situational Graphs Messages (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
-      # Working Directory - 3D object tracker (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
+      - "/home/$USERNAME/[PATH]/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
     entrypoint: ""
     restart: "no"
