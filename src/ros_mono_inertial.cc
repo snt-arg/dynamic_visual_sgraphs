@@ -35,6 +35,7 @@ namespace
 constexpr double kMaxImuGap = 0.5;
 constexpr double kMaxFrameImuDt = 0.1;
 constexpr double kDefaultInstanceMaskTimeTolerance = 0.03;
+constexpr double kMinOrbMaskAllowedRatio = 0.05;
 constexpr float kMaxAccelNorm = 150.0f;
 constexpr float kMaxGyroNorm = 50.0f;
 
@@ -689,7 +690,14 @@ void ImageGrabber::SyncWithImu()
         // ORB extractor masks are CV_8UC1; non-zero pixels allow feature extraction.
         cv::Mat orbMask;
         if (!instanceMask.empty())
-            cv::compare(instanceMask, 0, orbMask, cv::CMP_GT);
+        {
+            cv::compare(instanceMask, 0, orbMask, cv::CMP_EQ);
+            const double allowedRatio =
+                static_cast<double>(cv::countNonZero(orbMask)) /
+                static_cast<double>(orbMask.total());
+            if (allowedRatio < kMinOrbMaskAllowedRatio)
+                orbMask.release();
+        }
 
         // Track
         if (min_marker_diff < 0.05)
