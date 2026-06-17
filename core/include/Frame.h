@@ -413,6 +413,8 @@ namespace ORB_SLAM3
         }
 
         Sophus::SE3<double> T_test;
+
+        void FilterKeysAndDescriptorsByMask(std::vector<cv::KeyPoint>& keys, cv::Mat& descriptors, const cv::Mat& mask);
     };
 
 } // namespace ORB_SLAM

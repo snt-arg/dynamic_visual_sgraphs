@@ -557,9 +557,14 @@ namespace ORB_SLAM3
         vector<int> vLapping = {x0, x1};
         // Compute ORB based on the flag (0: left, 1: right)
         if (flag == 0)
+        {
             monoLeft = (*mpORBextractorLeft)(imageGray, mask, mvKeys, mDescriptors, vLapping);
+            FilterKeysAndDescriptorsByMask(mvKeys, mDescriptors, mask);
+        }
         else
+        {   
             monoRight = (*mpORBextractorRight)(imageGray, cv::Mat(), mvKeysRight, mDescriptorsRight, vLapping);
+        }
     }
 
     bool Frame::isSet() const
@@ -1310,6 +1315,42 @@ namespace ORB_SLAM3
     Eigen::Vector3f Frame::UnprojectStereoFishEye(const int &i)
     {
         return mRwc * mvStereo3Dpoints[i] + mOw;
+    }
+
+    void Frame::FilterKeysAndDescriptorsByMask(
+        std::vector<cv::KeyPoint>& keys,
+        cv::Mat& descriptors,
+        const cv::Mat& mask)
+    {
+        if (mask.empty())
+            return;
+
+        CV_Assert(mask.type() == CV_8UC1);
+
+        std::vector<cv::KeyPoint> keptKeys;
+        cv::Mat keptDescriptors;
+
+        keptKeys.reserve(keys.size());
+
+        for (int i = 0; i < static_cast<int>(keys.size()); ++i)
+        {
+            const int x = cvRound(keys[i].pt.x);
+            const int y = cvRound(keys[i].pt.y);
+
+            if (x < 0 || x >= mask.cols || y < 0 || y >= mask.rows)
+                continue;
+
+            if (mask.at<uchar>(y, x) == 0)
+                continue;
+
+            keptKeys.push_back(keys[i]);
+
+            if (!descriptors.empty())
+                keptDescriptors.push_back(descriptors.row(i));
+        }
+
+        keys.swap(keptKeys);
+        descriptors = keptDescriptors.clone();
     }
 
 } // namespace ORB_SLAM
