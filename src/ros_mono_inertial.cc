@@ -520,6 +520,7 @@ void ImageGrabber::SyncWithImu()
             state_->image_ready_cv.wait(lk, [this] {
                 return mustStop ||
                        (!state_->image_queue.empty() &&
+                        !state_->instance_mask_buffer.empty() && 
                         !state_->gyro_timestamps.empty() &&
                         state_->gyro_timestamps.back() >= state_->image_queue.front().timestamp);
             });
@@ -670,11 +671,11 @@ void ImageGrabber::SyncWithImu()
         // ORB extractor masks are CV_8UC1; non-zero pixels allow feature extraction.
         cv::Mat orbMask;
         if (!instanceMask.empty())
-        {
+        {   
             cv::compare(instanceMask, 0, orbMask, cv::CMP_EQ);
             const double allowedRatio =
                 static_cast<double>(cv::countNonZero(orbMask)) /
-                static_cast<double>(orbMask.total());
+                static_cast<double>(orbMask.total());          
             if (allowedRatio < kMinOrbMaskAllowedRatio)
                 orbMask.release();
         }
