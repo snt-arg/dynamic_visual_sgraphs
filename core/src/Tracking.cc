@@ -1636,7 +1636,7 @@ namespace ORB_SLAM3
 
     Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename,
                                               const std::vector<Marker *> markers, const std::vector<Door *> doors,
-                                              const std::vector<Room *> rooms)
+                                              const std::vector<Room *> rooms, const cv::Mat &mask)
     {
         // Set arguments to local variables
         env_doors = doors;
@@ -1662,21 +1662,21 @@ namespace ORB_SLAM3
         {
             if (mState == NOT_INITIALIZED || mState == NO_IMAGES_YET || (lastID - initID) < mMaxFrames)
                 mCurrentFrame = Frame(im, mImGray, timestamp, mpIniORBextractor, mpORBVocabulary,
-                                      mpCamera, mDistCoef, mbf, mThDepth, NULL, IMU::Calib(), markers);
+                                      mpCamera, mDistCoef, mbf, mThDepth, NULL, IMU::Calib(), markers, mask);
             else
                 mCurrentFrame = Frame(im, mImGray, timestamp, mpORBextractorLeft, mpORBVocabulary, mpCamera,
-                                      mDistCoef, mbf, mThDepth, NULL, IMU::Calib(), markers);
+                                      mDistCoef, mbf, mThDepth, NULL, IMU::Calib(), markers, mask);
         }
         else if (mSensor == System::IMU_MONOCULAR)
         {
             if (mState == NOT_INITIALIZED || mState == NO_IMAGES_YET)
             {
                 mCurrentFrame = Frame(im, mImGray, timestamp, mpIniORBextractor, mpORBVocabulary,
-                                      mpCamera, mDistCoef, mbf, mThDepth, &mLastFrame, *mpImuCalib, markers);
+                                      mpCamera, mDistCoef, mbf, mThDepth, &mLastFrame, *mpImuCalib, markers, mask);
             }
             else
                 mCurrentFrame = Frame(im, mImGray, timestamp, mpORBextractorLeft, mpORBVocabulary,
-                                      mpCamera, mDistCoef, mbf, mThDepth, &mLastFrame, *mpImuCalib, markers);
+                                      mpCamera, mDistCoef, mbf, mThDepth, &mLastFrame, *mpImuCalib, markers, mask);
         }
 
         if (mState == NO_IMAGES_YET)

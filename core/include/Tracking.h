@@ -95,7 +95,7 @@ namespace ORB_SLAM3
                                    const std::vector<Door *> doors, const std::vector<Room *> rooms);
         Sophus::SE3f GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename,
                                         const std::vector<Marker *> markers, const std::vector<Door *> doors,
-                                        const std::vector<Room *> rooms);
+                                        const std::vector<Room *> rooms, const cv::Mat &mask = cv::Mat());
 
         void GrabImuData(const IMU::Point &imuMeasurement);
 

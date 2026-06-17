@@ -686,18 +686,20 @@ void ImageGrabber::SyncWithImu()
                 cv::resize(instanceMask, instanceMask, cv::Size(w, h), 0, 0, cv::INTER_NEAREST);
         }
 
-        // instanceMask is synchronized with im and vImuMeas here for future
-        // processing before or after TrackMonocular.
+        // ORB extractor masks are CV_8UC1; non-zero pixels allow feature extraction.
+        cv::Mat orbMask;
+        if (!instanceMask.empty())
+            cv::compare(instanceMask, 0, orbMask, cv::CMP_GT);
 
         // Track
         if (min_marker_diff < 0.05)
         {
-            pSLAM->TrackMonocular(im, tIm, vImuMeas, "", matched_markers);
+            pSLAM->TrackMonocular(im, tIm, vImuMeas, "", matched_markers, orbMask);
             markersBuffer.clear();
         }
         else
         {
-            pSLAM->TrackMonocular(im, tIm, vImuMeas);
+            pSLAM->TrackMonocular(im, tIm, vImuMeas, "", std::vector<ORB_SLAM3::Marker *>{}, orbMask);
         }
 
         publishTopics(msgTime, Wbb);

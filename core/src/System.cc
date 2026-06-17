@@ -453,7 +453,7 @@ namespace ORB_SLAM3
     }
 
     Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, const vector<IMU::Point> &vImuMeas,
-                                        string filename, const std::vector<Marker *> markers)
+                                        string filename, const std::vector<Marker *> markers, const cv::Mat &mask)
     {
         // Multi-thread to prevent race conditions
         {
@@ -471,11 +471,14 @@ namespace ORB_SLAM3
 
         // Obtain the images
         cv::Mat imToFeed = im.clone();
+        cv::Mat maskToFeed = mask.clone();
         if (settings_ && settings_->needToResize())
         {
             cv::Mat resizedImage;
             cv::resize(im, resizedImage, settings_->newImSize());
             imToFeed = resizedImage;
+            if (!mask.empty())
+                cv::resize(mask, maskToFeed, settings_->newImSize(), 0, 0, cv::INTER_NEAREST);
         }
 
         // Check mode change
@@ -522,7 +525,7 @@ namespace ORB_SLAM3
             for (size_t i_imu = 0; i_imu < vImuMeas.size(); i_imu++)
                 mpTracker->GrabImuData(vImuMeas[i_imu]);
 
-        Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, filename, markers, envDoors, envRooms);
+        Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, filename, markers, envDoors, envRooms, maskToFeed);
 
         unique_lock<mutex> lock2(mMutexState);
         mTrackingState = mpTracker->mState;

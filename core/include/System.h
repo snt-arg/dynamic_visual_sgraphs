@@ -167,7 +167,7 @@ namespace ORB_SLAM3
          */
         Sophus::SE3f TrackMonocular(const cv::Mat &im, const double &timestamp,
                                     const vector<IMU::Point> &vImuMeas = vector<IMU::Point>(), string filename = "",
-                                    const vector<Marker *> markers = vector<Marker *>{});
+                                    const vector<Marker *> markers = vector<Marker *>{}, const cv::Mat &mask = cv::Mat());
 
         // This stops local mapping thread (map building) and performs only camera tracking.
         void ActivateLocalizationMode();

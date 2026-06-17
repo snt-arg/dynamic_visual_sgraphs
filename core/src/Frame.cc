@@ -417,7 +417,7 @@ namespace ORB_SLAM3
     // Monocular Frames Processing
     Frame::Frame(const cv::Mat &imColor, const cv::Mat &imGray, const double &timeStamp, ORBextractor *extractor, ORBVocabulary *voc,
                  GeometricCamera *pCamera, cv::Mat &distCoef, const float &bf, const float &thDepth, Frame *pPrevF,
-                 const IMU::Calib &ImuCalib, const std::vector<Marker *> markers)
+                 const IMU::Calib &ImuCalib, const std::vector<Marker *> markers, const cv::Mat &mask)
         : mpcpi(NULL), mpORBvocabulary(voc), mpORBextractorLeft(extractor), mpORBextractorRight(static_cast<ORBextractor *>(NULL)),
           mTimeStamp(timeStamp), mK(static_cast<Pinhole *>(pCamera)->toK()), mK_(static_cast<Pinhole *>(pCamera)->toK_()), mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth),
           mImuCalib(ImuCalib), mpImuPreintegrated(NULL), mpPrevFrame(pPrevF), mpImuPreintegratedFrame(NULL), mpReferenceKF(static_cast<KeyFrame *>(NULL)), mbIsSet(false), mbImuPreintegrated(false), mpCamera(pCamera),
@@ -442,7 +442,7 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartExtORB = std::chrono::steady_clock::now();
 #endif
-        ExtractORB(0, imGray, 0, 1000);
+        ExtractORB(0, imGray, 0, 1000, mask);
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
 
@@ -552,12 +552,12 @@ namespace ORB_SLAM3
         }
     }
 
-    void Frame::ExtractORB(int flag, const cv::Mat &imageGray, const int x0, const int x1)
+    void Frame::ExtractORB(int flag, const cv::Mat &imageGray, const int x0, const int x1, const cv::Mat &mask)
     {
         vector<int> vLapping = {x0, x1};
         // Compute ORB based on the flag (0: left, 1: right)
         if (flag == 0)
-            monoLeft = (*mpORBextractorLeft)(imageGray, cv::Mat(), mvKeys, mDescriptors, vLapping);
+            monoLeft = (*mpORBextractorLeft)(imageGray, mask, mvKeys, mDescriptors, vLapping);
         else
             monoRight = (*mpORBextractorRight)(imageGray, cv::Mat(), mvKeysRight, mDescriptorsRight, vLapping);
     }
