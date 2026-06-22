@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <functional>
 #include <string>
 #include <thread>
 #include <opencv2/core/core.hpp>
@@ -88,6 +89,7 @@ namespace ORB_SLAM3
     class Viewer;
     class FrameDrawer;
     class MapDrawer;
+    class KeyFrame;
     class Atlas;
     class Tracking;
     class LocalMapping;
@@ -168,6 +170,8 @@ namespace ORB_SLAM3
         Sophus::SE3f TrackMonocular(const cv::Mat &im, const double &timestamp,
                                     const vector<IMU::Point> &vImuMeas = vector<IMU::Point>(), string filename = "",
                                     const vector<Marker *> markers = vector<Marker *>{}, const cv::Mat &mask = cv::Mat());
+
+        void SetKeyFrameCreatedCallback(std::function<void(const KeyFrame *)> callback);
 
         // This stops local mapping thread (map building) and performs only camera tracking.
         void ActivateLocalizationMode();

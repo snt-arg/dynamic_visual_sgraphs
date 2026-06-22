@@ -46,6 +46,7 @@ find_package(Eigen3 3.1.0 REQUIRED)
 find_package(backward_ros REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(segmenter_ros REQUIRED)
+find_package(keyframe_depth_estimator REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(rviz_visual_tools REQUIRED)
@@ -83,6 +84,7 @@ include_directories(
   ${Pangolin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
   ${segmenter_ros_INCLUDE_DIRS}
+  ${keyframe_depth_estimator_INCLUDE_DIRS}
 )
 include_directories(${OPENGL_INCLUDE_DIRS})
 
@@ -210,6 +212,7 @@ ament_target_dependencies(${PROJECT_NAME}_lib
   image_transport
   rviz_visual_tools
   situational_graphs_msgs
+  keyframe_depth_estimator
 )
 
 # Common source files
@@ -228,6 +231,7 @@ set(COMMON_DEPENDENCIES
   sensor_msgs
   geometry_msgs
   segmenter_ros
+  keyframe_depth_estimator
   message_filters
   situational_graphs_msgs
 )

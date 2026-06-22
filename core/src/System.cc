@@ -546,6 +546,12 @@ namespace ORB_SLAM3
         mbDeactivateLocalizationMode = true;
     }
 
+    void System::SetKeyFrameCreatedCallback(std::function<void(const KeyFrame *)> callback)
+    {
+        if (mpLocalMapper)
+            mpLocalMapper->SetKeyFrameCreatedCallback(std::move(callback));
+    }
+
     bool System::MapChanged()
     {
         static int n = 0;

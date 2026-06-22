@@ -59,6 +59,11 @@ namespace ORB_SLAM3
         mpTracker = pTracker;
     }
 
+    void LocalMapping::SetKeyFrameCreatedCallback(KeyFrameCreatedCallback callback)
+    {
+        mKeyFrameCreatedCallback = std::move(callback);
+    }
+
     void LocalMapping::Run()
     {
         mbFinished = false;
@@ -339,6 +344,9 @@ namespace ORB_SLAM3
 
         // Insert Keyframe in Map
         mpAtlas->AddKeyFrame(mpCurrentKeyFrame);
+
+        if (mKeyFrameCreatedCallback)
+            mKeyFrameCreatedCallback(mpCurrentKeyFrame);
     }
 
     void LocalMapping::EmptyQueue()

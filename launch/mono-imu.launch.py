@@ -1,3 +1,5 @@
+import os
+
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.conditions import IfCondition
@@ -6,9 +8,16 @@ from launch_ros.descriptions import ComposableNode
 from launch_ros.actions import ComposableNodeContainer
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration, EqualsSubstitution
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
+    keyframe_depth_config = os.path.join(
+        get_package_share_directory("keyframe_depth_estimator"),
+        "config",
+        "config.yaml",
+    )
+
     return LaunchDescription(
         [
             # Global arguments declarations
@@ -17,12 +26,20 @@ def generate_launch_description():
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             DeclareLaunchArgument("use_aux_depth", default_value="false"),
+            DeclareLaunchArgument("launch_keyframe_depth_estimator", default_value="true"),
+            DeclareLaunchArgument("keyframe_depth_model_path", default_value=""),
+            DeclareLaunchArgument(
+                "keyframe_depth_metric_topic", default_value="/keyframe_depth/metric"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_publish_debug_image", default_value="true"
+            ),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
             ),
             DeclareLaunchArgument(
                 "semantic_scene_segmenter",
-                default_value="yolo26",
+                default_value="off",
                 description="The method to segment the semantic scene (if off, the baseline)",
                 choices=["yoso", "pfcn", "yolo26", "off"],
             ),
@@ -94,6 +111,36 @@ def generate_launch_description():
                 remappings=[
                     ("/imu", LaunchConfiguration("imu_topic")),
                     ("/camera/image_raw", LaunchConfiguration("rgb_image_topic")),
+                ],
+            ),
+            # Keyframe Metric Depth Estimator
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_keyframe_depth_estimator")
+                ),
+                package="keyframe_depth_estimator",
+                executable="keyframe_depth_estimator_node",
+                name="keyframe_depth_estimator",
+                output="screen",
+                parameters=[
+                    keyframe_depth_config,
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "keyframe_created_topic": "/orbslam3/keyframe_created",
+                        "camera_info_topic": LaunchConfiguration(
+                            "rgb_camera_info_topic"
+                        ),
+                        "metric_depth_topic": LaunchConfiguration(
+                            "keyframe_depth_metric_topic"
+                        ),
+                        "model_path": LaunchConfiguration(
+                            "keyframe_depth_model_path"
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration("keyframe_depth_publish_debug_image"),
+                            value_type=bool,
+                        ),
+                    },
                 ],
             ),
             # Static Transforms

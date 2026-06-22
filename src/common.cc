@@ -50,6 +50,7 @@ rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pubDoor;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
+rclcpp::Publisher<keyframe_depth_estimator::msg::KeyFrameCreated>::SharedPtr pubKeyFrameCreated;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubBuildingComponents;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
@@ -125,6 +126,43 @@ void setupServices(std::shared_ptr<rclcpp::Node> node, const std::string &node_n
         node_name + "/save_traj", &saveTrajectoryService);
 }
 
+void publishKeyFrameCreatedEvent(const ORB_SLAM3::KeyFrame *keyframe)
+{
+    if (!pubKeyFrameCreated || keyframe == nullptr || keyframe->mImage.empty())
+        return;
+
+    try
+    {
+        cv::Mat keyframeImageBgr;
+        if (keyframe->mImage.channels() == 1)
+            cv::cvtColor(keyframe->mImage, keyframeImageBgr, cv::COLOR_GRAY2BGR);
+        else if (keyframe->mImage.channels() == 4)
+            cv::cvtColor(keyframe->mImage, keyframeImageBgr, cv::COLOR_BGRA2BGR);
+        else if (keyframe->mImage.channels() == 3)
+            keyframeImageBgr = keyframe->mImage;
+        else
+            return;
+
+        std_msgs::msg::Header header;
+        header.stamp = rclcpp::Time(static_cast<int64_t>(keyframe->mTimeStamp * 1e9));
+        header.frame_id = frameCamera;
+
+        keyframe_depth_estimator::msg::KeyFrameCreated event;
+        event.header = header;
+        event.keyframe_id = keyframe->mnId;
+        auto image_msg = cv_bridge::CvImage(
+            header, sensor_msgs::image_encodings::BGR8, keyframeImageBgr).toImageMsg();
+        event.image = *image_msg;
+        pubKeyFrameCreated->publish(event);
+    }
+    catch (const std::exception &e)
+    {
+        RCLCPP_ERROR(rclcpp::get_logger("visual_sgraphs"),
+                     "Failed to publish KeyFrameCreated event for keyframe %lu: %s",
+                     keyframe->mnId, e.what());
+    }
+}
+
 void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_transport::ImageTransport> image_transport, const std::string &node_name)
 {
     // Basic
@@ -132,6 +170,9 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubAllMappoints = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/all_points", 1);
     pubCameraPose = node->create_publisher<geometry_msgs::msg::PoseStamped>(node_name + "/camera_pose", 1);
     pubKFImage = node->create_publisher<segmenter_ros::msg::VSGraphDataMsg>(node_name + "/keyframe_image", 50);
+    pubKeyFrameCreated =
+        node->create_publisher<keyframe_depth_estimator::msg::KeyFrameCreated>(
+            "/orbslam3/keyframe_created", 10);
     pubTrackedMappoints = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/tracked_points", 1);
     pubWorldFramePointCloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/points_map", 1);
     pubKeyFrameMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/kf_markers", 1);
@@ -159,6 +200,9 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     if (sensorType == ORB_SLAM3::System::IMU_MONOCULAR || sensorType == ORB_SLAM3::System::IMU_STEREO ||
         sensorType == ORB_SLAM3::System::IMU_RGBD)
         pubOdometry = node->create_publisher<nav_msgs::msg::Odometry>(node_name + "/body_odom", 1);
+
+    if (pSLAM)
+        pSLAM->SetKeyFrameCreatedCallback(publishKeyFrameCreatedEvent);
 
     tfBuffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     tfListener_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);
