@@ -27,13 +27,20 @@ def generate_launch_description():
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             DeclareLaunchArgument("use_aux_depth", default_value="false"),
             DeclareLaunchArgument("launch_keyframe_depth_estimator", default_value="true"),
-            DeclareLaunchArgument("keyframe_depth_model_path", default_value=""),
+            DeclareLaunchArgument(
+                "keyframe_depth_model_path",
+                default_value=(
+                    "/home/marco/workspace/src/keyframe_depth_estimator/include/models/"
+                    "engines/da3metric_280x504.engine"
+                ),
+            ),
             DeclareLaunchArgument(
                 "keyframe_depth_metric_topic", default_value="/keyframe_depth/metric"
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_publish_debug_image", default_value="true"
             ),
+            DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
             ),
@@ -138,6 +145,10 @@ def generate_launch_description():
                         ),
                         "publish_debug_image": ParameterValue(
                             LaunchConfiguration("keyframe_depth_publish_debug_image"),
+                            value_type=bool,
+                        ),
+                        "sky_handling": ParameterValue(
+                            LaunchConfiguration("keyframe_depth_sky_handling"),
                             value_type=bool,
                         ),
                     },
