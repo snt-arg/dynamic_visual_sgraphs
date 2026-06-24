@@ -21,6 +21,7 @@
  */
 
 #include "common.h"
+#include <cmath>
 #include <rclcpp/rclcpp.hpp>
 
 // Variables for ORB-SLAM3
@@ -51,6 +52,7 @@ rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
 rclcpp::Publisher<keyframe_depth_estimator::msg::KeyFrameCreated>::SharedPtr pubKeyFrameCreated;
+rclcpp::Publisher<keyframe_depth_validator::msg::StaticMapPointCorrespondences>::SharedPtr pubKeyFrameStaticMapPoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubBuildingComponents;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
 rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubFreespaceCluster;
@@ -154,6 +156,46 @@ void publishKeyFrameCreatedEvent(const ORB_SLAM3::KeyFrame *keyframe)
             header, sensor_msgs::image_encodings::BGR8, keyframeImageBgr).toImageMsg();
         event.image = *image_msg;
         pubKeyFrameCreated->publish(event);
+
+        if (pubKeyFrameStaticMapPoints)
+        {
+            keyframe_depth_validator::msg::StaticMapPointCorrespondences points_msg;
+            points_msg.header = header;
+            points_msg.keyframe_id = keyframe->mnId;
+
+            ORB_SLAM3::KeyFrame *mutable_keyframe = const_cast<ORB_SLAM3::KeyFrame *>(keyframe);
+            const std::vector<ORB_SLAM3::MapPoint *> map_points =
+                mutable_keyframe->GetMapPointMatches();
+            const Sophus::SE3f Tcw = mutable_keyframe->GetPose();
+            points_msg.u.reserve(map_points.size());
+            points_msg.v.reserve(map_points.size());
+            points_msg.z_orb.reserve(map_points.size());
+            points_msg.map_point_ids.reserve(map_points.size());
+
+            for (std::size_t i = 0; i < map_points.size() && i < keyframe->mvKeysUn.size(); ++i)
+            {
+                ORB_SLAM3::MapPoint *map_point = map_points[i];
+                if (map_point == nullptr || map_point->isBad())
+                    continue;
+
+                const cv::Point2f pixel = keyframe->mvKeysUn[i].pt;
+                if (pixel.x < 0.0F || pixel.y < 0.0F ||
+                    pixel.x >= static_cast<float>(keyframeImageBgr.cols) ||
+                    pixel.y >= static_cast<float>(keyframeImageBgr.rows))
+                    continue;
+
+                const Eigen::Vector3f Xc = Tcw * map_point->GetWorldPos();
+                if (!std::isfinite(Xc.z()) || Xc.z() <= 0.0F)
+                    continue;
+
+                points_msg.u.push_back(pixel.x);
+                points_msg.v.push_back(pixel.y);
+                points_msg.z_orb.push_back(Xc.z());
+                points_msg.map_point_ids.push_back(static_cast<uint64_t>(map_point->mnId));
+            }
+
+            pubKeyFrameStaticMapPoints->publish(points_msg);
+        }
     }
     catch (const std::exception &e)
     {
@@ -173,6 +215,9 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     pubKeyFrameCreated =
         node->create_publisher<keyframe_depth_estimator::msg::KeyFrameCreated>(
             "/orbslam3/keyframe_created", 10);
+    pubKeyFrameStaticMapPoints =
+        node->create_publisher<keyframe_depth_validator::msg::StaticMapPointCorrespondences>(
+            "/orbslam3/keyframe_static_map_points", 10);
     pubTrackedMappoints = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/tracked_points", 1);
     pubWorldFramePointCloud = node->create_publisher<sensor_msgs::msg::PointCloud2>(node_name + "/points_map", 1);
     pubKeyFrameMarker = node->create_publisher<visualization_msgs::msg::MarkerArray>(node_name + "/kf_markers", 1);

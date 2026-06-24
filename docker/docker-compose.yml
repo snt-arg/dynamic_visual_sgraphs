@@ -53,6 +53,8 @@ services:
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/dynamic_keypoint_tracker:/home/$USERNAME/workspace/src/dynamic_keypoint_tracker:rw"
       # Working Directory - Keyframe depth estimator (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/keyframe_depth_estimator:/home/$USERNAME/workspace/src/keyframe_depth_estimator:rw"
+      # Working Directory - Keyframe depth validator (** MODIFY **)
+      - "/home/$USERNAME/workspaces/dv_sgraphs/src/keyframe_depth_validator:/home/$USERNAME/workspace/src/keyframe_depth_validator:rw"
       # Data Directory (** MODIFY **)
       - "/media/$USERNAME/muffin/datasets:/home/$USERNAME/datasets:rw"
     network_mode: "host"
@@ -77,5 +79,7 @@ services:
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/dynamic_keypoint_tracker:/home/$USERNAME/workspace/src/dynamic_keypoint_tracker:rw"
       # Working Directory - Keyframe depth estimator (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/keyframe_depth_estimator:/home/$USERNAME/workspace/src/keyframe_depth_estimator:rw"
+      # Working Directory - Keyframe depth validator (** MODIFY **)
+      - "/home/$USERNAME/workspaces/dv_sgraphs/src/keyframe_depth_validator:/home/$USERNAME/workspace/src/keyframe_depth_validator:rw"
     entrypoint: ""
     restart: "no"

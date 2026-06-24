@@ -17,6 +17,11 @@ def generate_launch_description():
         "config",
         "config.yaml",
     )
+    keyframe_depth_validator_config = os.path.join(
+        get_package_share_directory("keyframe_depth_validator"),
+        "config",
+        "config.yaml",
+    )
 
     return LaunchDescription(
         [
@@ -27,6 +32,7 @@ def generate_launch_description():
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             DeclareLaunchArgument("use_aux_depth", default_value="false"),
             DeclareLaunchArgument("launch_keyframe_depth_estimator", default_value="true"),
+            DeclareLaunchArgument("launch_keyframe_depth_validator", default_value="true"),
             DeclareLaunchArgument(
                 "keyframe_depth_model_path",
                 default_value=(
@@ -38,7 +44,13 @@ def generate_launch_description():
                 "keyframe_depth_metric_topic", default_value="/keyframe_depth/metric"
             ),
             DeclareLaunchArgument(
+                "keyframe_depth_corrected_topic", default_value="/keyframe_depth/corrected"
+            ),
+            DeclareLaunchArgument(
                 "keyframe_depth_publish_debug_image", default_value="true"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_publish_debug_image", default_value="true"
             ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
@@ -149,6 +161,37 @@ def generate_launch_description():
                         ),
                         "sky_handling": ParameterValue(
                             LaunchConfiguration("keyframe_depth_sky_handling"),
+                            value_type=bool,
+                        ),
+                    },
+                ],
+            ),
+            # Keyframe Depth Validator
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_keyframe_depth_validator")
+                ),
+                package="keyframe_depth_validator",
+                executable="keyframe_depth_validator_node",
+                name="keyframe_depth_validator",
+                output="screen",
+                parameters=[
+                    keyframe_depth_validator_config,
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "metric_depth_topic": LaunchConfiguration(
+                            "keyframe_depth_metric_topic"
+                        ),
+                        "static_correspondences_topic": (
+                            "/orbslam3/keyframe_static_map_points"
+                        ),
+                        "corrected_depth_topic": LaunchConfiguration(
+                            "keyframe_depth_corrected_topic"
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_publish_debug_image"
+                            ),
                             value_type=bool,
                         ),
                     },

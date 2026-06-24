@@ -79,6 +79,7 @@
 #include <segmenter_ros/msg/vs_graph_data_msg.hpp>
 #include <segmenter_ros/msg/segmenter_data_msg.hpp>
 #include <keyframe_depth_estimator/msg/key_frame_created.hpp>
+#include <keyframe_depth_validator/msg/static_map_point_correspondences.hpp>
 #include <nav_msgs/msg/path.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <pcl_conversions/pcl_conversions.h>
@@ -150,6 +151,7 @@ extern std::shared_ptr<image_transport::Publisher> pubTrackingImage;
 extern rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr pubOdometry;
 extern rclcpp::Publisher<segmenter_ros::msg::VSGraphDataMsg>::SharedPtr pubKFImage;
 extern rclcpp::Publisher<keyframe_depth_estimator::msg::KeyFrameCreated>::SharedPtr pubKeyFrameCreated;
+extern rclcpp::Publisher<keyframe_depth_validator::msg::StaticMapPointCorrespondences>::SharedPtr pubKeyFrameStaticMapPoints;
 extern rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pubCameraPose;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubAllMappoints;
 extern rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubTrackedMappoints;
