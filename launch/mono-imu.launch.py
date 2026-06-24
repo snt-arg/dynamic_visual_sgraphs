@@ -52,6 +52,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "keyframe_depth_validator_publish_debug_image", default_value="true"
             ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_debug_match_logging", default_value="true"
+            ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
@@ -191,6 +194,12 @@ def generate_launch_description():
                         "publish_debug_image": ParameterValue(
                             LaunchConfiguration(
                                 "keyframe_depth_validator_publish_debug_image"
+                            ),
+                            value_type=bool,
+                        ),
+                        "debug_match_logging": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_debug_match_logging"
                             ),
                             value_type=bool,
                         ),
