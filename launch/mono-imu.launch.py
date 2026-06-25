@@ -28,6 +28,13 @@ def generate_launch_description():
             # Global arguments declarations
             DeclareLaunchArgument("offline", default_value="true"),
             DeclareLaunchArgument("launch_rviz", default_value="true"),
+            DeclareLaunchArgument(
+                "rviz_config",
+                default_value=[
+                    get_package_share_directory("vs_graphs"),
+                    "/config/Visualization/vsgraphs_rgbd.rviz",
+                ],
+            ),
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             DeclareLaunchArgument("use_aux_depth", default_value="false"),
@@ -53,6 +60,9 @@ def generate_launch_description():
                 "keyframe_depth_validator_publish_debug_image", default_value="true"
             ),
             DeclareLaunchArgument(
+                "keyframe_depth_validator_queue_depth", default_value="4"
+            ),
+            DeclareLaunchArgument(
                 "keyframe_depth_validator_debug_match_logging", default_value="true"
             ),
             DeclareLaunchArgument(
@@ -60,6 +70,15 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_validator_offline_sync_tolerance_ms", default_value="20.0"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_tuning_mode", default_value="false"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_tuning_history_size", default_value="200"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_tuning_visualization_period_s", default_value="2.0"
             ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
@@ -197,6 +216,12 @@ def generate_launch_description():
                         "corrected_depth_topic": LaunchConfiguration(
                             "keyframe_depth_corrected_topic"
                         ),
+                        "queue_depth": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_queue_depth"
+                            ),
+                            value_type=int,
+                        ),
                         "publish_debug_image": ParameterValue(
                             LaunchConfiguration(
                                 "keyframe_depth_validator_publish_debug_image"
@@ -218,6 +243,24 @@ def generate_launch_description():
                         "offline_metric_depth_sync_tolerance_ms": ParameterValue(
                             LaunchConfiguration(
                                 "keyframe_depth_validator_offline_sync_tolerance_ms"
+                            ),
+                            value_type=float,
+                        ),
+                        "tuning_mode": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_tuning_mode"
+                            ),
+                            value_type=bool,
+                        ),
+                        "tuning_history_size": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_tuning_history_size"
+                            ),
+                            value_type=int,
+                        ),
+                        "tuning_visualization_period_s": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_tuning_visualization_period_s"
                             ),
                             value_type=float,
                         ),
@@ -273,10 +316,7 @@ def generate_launch_description():
                 name="rviz",
                 arguments=[
                     "-d",
-                    [
-                        get_package_share_directory("vs_graphs"),
-                        "/config/Visualization/vsgraphs_rgbd.rviz",
-                    ],
+                    LaunchConfiguration("rviz_config"),
                 ],
                 output="screen",
             ),
