@@ -80,6 +80,23 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "keyframe_depth_validator_tuning_visualization_period_s", default_value="2.0"
             ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_rgbd_depth_topic",
+                default_value="/camera/realsense/aligned_depth_to_color/image_raw",
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_dynamic_masks_topic",
+                default_value="/camera/color/instance_masks",
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_rgbd_valid_range_min_m", default_value="0.3"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_rgbd_valid_range_max_m", default_value="3.0"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_rgbd_heatmap_max_abs_error_m", default_value="1.0"
+            ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
@@ -261,6 +278,30 @@ def generate_launch_description():
                         "tuning_visualization_period_s": ParameterValue(
                             LaunchConfiguration(
                                 "keyframe_depth_validator_tuning_visualization_period_s"
+                            ),
+                            value_type=float,
+                        ),
+                        "rgbd_depth_topic": LaunchConfiguration(
+                            "keyframe_depth_validator_rgbd_depth_topic"
+                        ),
+                        "dynamic_masks_topic": LaunchConfiguration(
+                            "keyframe_depth_validator_dynamic_masks_topic"
+                        ),
+                        "rgbd_valid_range_min_m": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_rgbd_valid_range_min_m"
+                            ),
+                            value_type=float,
+                        ),
+                        "rgbd_valid_range_max_m": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_rgbd_valid_range_max_m"
+                            ),
+                            value_type=float,
+                        ),
+                        "rgbd_heatmap_max_abs_error_m": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_rgbd_heatmap_max_abs_error_m"
                             ),
                             value_type=float,
                         ),
