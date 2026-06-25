@@ -55,6 +55,12 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "keyframe_depth_validator_debug_match_logging", default_value="true"
             ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_use_offline_metric_depth", default_value="false"
+            ),
+            DeclareLaunchArgument(
+                "keyframe_depth_validator_offline_sync_tolerance_ms", default_value="20.0"
+            ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
                 "aux_depth_topic", default_value="/camera/depth_da3/image_rect"
@@ -202,6 +208,18 @@ def generate_launch_description():
                                 "keyframe_depth_validator_debug_match_logging"
                             ),
                             value_type=bool,
+                        ),
+                        "use_offline_metric_depth": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_use_offline_metric_depth"
+                            ),
+                            value_type=bool,
+                        ),
+                        "offline_metric_depth_sync_tolerance_ms": ParameterValue(
+                            LaunchConfiguration(
+                                "keyframe_depth_validator_offline_sync_tolerance_ms"
+                            ),
+                            value_type=float,
                         ),
                     },
                 ],
