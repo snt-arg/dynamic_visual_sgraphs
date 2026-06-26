@@ -22,6 +22,16 @@ def generate_launch_description():
         "config",
         "config.yaml",
     )
+    dynamic_keypoint_tracker_config = os.path.join(
+        get_package_share_directory("dynamic_keypoint_tracker"),
+        "config",
+        "config.yaml",
+    )
+    dynamic_keypoint_3d_lifter_config = os.path.join(
+        get_package_share_directory("dynamic_keypoint_3d_lifter"),
+        "config",
+        "config.yaml",
+    )
 
     return LaunchDescription(
         [
@@ -38,8 +48,12 @@ def generate_launch_description():
             DeclareLaunchArgument("colored_pointcloud", default_value="true"),
             DeclareLaunchArgument("visualize_segmented_scene", default_value="true"),
             DeclareLaunchArgument("use_aux_depth", default_value="false"),
-            DeclareLaunchArgument("launch_keyframe_depth_estimator", default_value="true"),
+            DeclareLaunchArgument("launch_keyframe_depth_estimator", default_value="false"),
             DeclareLaunchArgument("launch_keyframe_depth_validator", default_value="true"),
+            DeclareLaunchArgument("launch_dynamic_keypoint_tracker", default_value="true"),
+            DeclareLaunchArgument("launch_object_track_manager", default_value="true"),
+            DeclareLaunchArgument("launch_track_outlier_rejector", default_value="true"),
+            DeclareLaunchArgument("launch_dynamic_keypoint_3d_lifter", default_value="true"),
             DeclareLaunchArgument(
                 "keyframe_depth_model_path",
                 default_value=(
@@ -63,10 +77,10 @@ def generate_launch_description():
                 "keyframe_depth_validator_queue_depth", default_value="4"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_validator_debug_match_logging", default_value="true"
+                "keyframe_depth_validator_debug_match_logging", default_value="false"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_validator_use_offline_metric_depth", default_value="false"
+                "keyframe_depth_validator_use_offline_metric_depth", default_value="true"
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_validator_offline_sync_tolerance_ms", default_value="20.0"
@@ -96,6 +110,50 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_validator_rgbd_heatmap_max_abs_error_m", default_value="1.0"
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_instance_masks_topic",
+                default_value="/camera/color/image_instance_masks_array",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_tracks_topic",
+                default_value="/dynamic_keypoint_tracks",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_object_tracks_topic",
+                default_value="/object_tracks",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_filtered_object_tracks_topic",
+                default_value="/object_tracks/filtered",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_publish_debug_image",
+                default_value="true",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_debug_image_width",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_debug_image_height",
+                default_value="0",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_output_topic",
+                default_value="/dynamic_object_points_3d",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_low_confidence_behavior",
+                default_value="lift_and_flag",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_low_confidence_max_residual_m",
+                default_value="0.25",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_publish_debug_image",
+                default_value="true",
             ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
             DeclareLaunchArgument(
@@ -308,6 +366,138 @@ def generate_launch_description():
                     },
                 ],
             ),
+            # Dynamic Keypoint Tracker
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_dynamic_keypoint_tracker")
+                ),
+                package="dynamic_keypoint_tracker",
+                executable="dynamic_keypoint_tracker_node",
+                name="dynamic_keypoint_tracker",
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "image_topic": LaunchConfiguration("rgb_image_topic"),
+                        "instance_masks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_instance_masks_topic"
+                        ),
+                        "tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_tracks_topic"
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_publish_debug_image"),
+                            value_type=bool,
+                        ),
+                    },
+                ],
+            ),
+            # Dynamic Object Track Manager
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_object_track_manager")
+                ),
+                package="dynamic_keypoint_tracker",
+                executable="object_track_manager_node",
+                name="object_track_manager",
+                output="screen",
+                parameters=[
+                    dynamic_keypoint_tracker_config,
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "instance_masks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_instance_masks_topic"
+                        ),
+                        "dynamic_keypoint_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_tracks_topic"
+                        ),
+                        "image_topic": LaunchConfiguration("rgb_image_topic"),
+                        "object_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_object_tracks_topic"
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_publish_debug_image"),
+                            value_type=bool,
+                        ),
+                    },
+                ],
+            ),
+            # Dynamic Track Outlier Rejector
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_track_outlier_rejector")
+                ),
+                package="dynamic_keypoint_tracker",
+                executable="track_outlier_rejector_node",
+                name="track_outlier_rejector",
+                output="screen",
+                parameters=[
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "object_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_object_tracks_topic"
+                        ),
+                        "filtered_object_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_filtered_object_tracks_topic"
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_publish_debug_image"),
+                            value_type=bool,
+                        ),
+                        "debug_image_width": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_debug_image_width"),
+                            value_type=int,
+                        ),
+                        "debug_image_height": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_debug_image_height"),
+                            value_type=int,
+                        ),
+                    },
+                ],
+            ),
+            # Dynamic Keypoint 3D Lifter
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_dynamic_keypoint_3d_lifter")
+                ),
+                package="dynamic_keypoint_3d_lifter",
+                executable="dynamic_keypoint_3d_lifter_node",
+                name="dynamic_keypoint_3d_lifter",
+                output="screen",
+                parameters=[
+                    dynamic_keypoint_3d_lifter_config,
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "object_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_filtered_object_tracks_topic"
+                        ),
+                        "corrected_depth_topic": LaunchConfiguration(
+                            "keyframe_depth_corrected_topic"
+                        ),
+                        "keyframe_pose_topic": "/vs_graphs/camera_pose",
+                        "keyframe_created_topic": "/orbslam3/keyframe_created",
+                        "camera_info_topic": LaunchConfiguration("rgb_camera_info_topic"),
+                        "output_topic": LaunchConfiguration(
+                            "dynamic_keypoint_3d_lifter_output_topic"
+                        ),
+                        "low_confidence_behavior": LaunchConfiguration(
+                            "dynamic_keypoint_3d_lifter_low_confidence_behavior"
+                        ),
+                        "low_confidence_max_residual_m": ParameterValue(
+                            LaunchConfiguration(
+                                "dynamic_keypoint_3d_lifter_low_confidence_max_residual_m"
+                            ),
+                            value_type=float,
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration(
+                                "dynamic_keypoint_3d_lifter_publish_debug_image"
+                            ),
+                            value_type=bool,
+                        ),
+                    },
+                ],
+            ),
             # Static Transforms
             Node(
                 package="tf2_ros",
@@ -417,7 +607,12 @@ def generate_launch_description():
                 executable="frame_segmenter_yolo26.py",
                 output="screen",
                 parameters=[
-                    {"visualize": LaunchConfiguration("visualize_segmented_scene")}
+                    {"visualize": LaunchConfiguration("visualize_segmented_scene")},
+                    {
+                        "params.ros_topics.raw_image_topic": LaunchConfiguration(
+                            "rgb_image_topic"
+                        )
+                    },
                 ],
                 arguments=[
                     "--ros-args",
