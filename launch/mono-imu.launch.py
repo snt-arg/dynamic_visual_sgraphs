@@ -501,7 +501,7 @@ def generate_launch_description():
             # Static Transforms
             Node(
                 package="tf2_ros",
-                name="map_to_map_elevated", # For Voxblox Skeleton
+                name="map_to_map_elevated",  # For Voxblox Skeleton
                 executable="static_transform_publisher",
                 arguments=["0", "0", "0", "0", "0", "0", "map", "map_elevated"],
             ),
@@ -521,19 +521,28 @@ def generate_launch_description():
                 package="tf2_ros",
                 name="camera_to_imu",
                 executable="static_transform_publisher",
-                arguments=["0", "0", "0", "1.5708", "0", "1.5708", "camera", "imu"],
+                arguments=[
+                    "-0.011739999987185001",
+                    "-0.005520000122487545",
+                    "0.005100000184029341",
+                    "0",
+                    "0",
+                    "0",
+                    "camera",
+                    "imu",
+                ],
             ),
             Node(
                 package="tf2_ros",
                 name="camera_to_camera_optical",
                 executable="static_transform_publisher",
                 arguments=[
-                    "0",
-                    "0",
-                    "0",
-                    "0",
-                    "0",
-                    "0",
+                    "0.00011983246804447845",
+                    "0.014999180100858212",
+                    "0.00015637179603800178",
+                    "-1.5730284322450263",
+                    "0.019080586334886032",
+                    "-1.574238659946616",
                     "camera",
                     "camera_color_optical_frame",
                     # RealSense: camera_color_optical_frame, OpenLoris: d400_color
