@@ -54,6 +54,7 @@ def generate_launch_description():
             DeclareLaunchArgument("launch_object_track_manager", default_value="true"),
             DeclareLaunchArgument("launch_track_outlier_rejector", default_value="true"),
             DeclareLaunchArgument("launch_dynamic_keypoint_3d_lifter", default_value="true"),
+            DeclareLaunchArgument("launch_dynamic_keypoint_interpolator", default_value="false"),
             DeclareLaunchArgument(
                 "keyframe_depth_model_path",
                 default_value=(
@@ -68,13 +69,13 @@ def generate_launch_description():
                 "keyframe_depth_corrected_topic", default_value="/keyframe_depth/corrected"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_publish_debug_image", default_value="true"
+                "keyframe_depth_publish_debug_image", default_value="false"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_validator_publish_debug_image", default_value="true"
+                "keyframe_depth_validator_publish_debug_image", default_value="false"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_validator_queue_depth", default_value="4"
+                "keyframe_depth_validator_queue_depth", default_value="100"
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_validator_debug_match_logging", default_value="false"
@@ -106,7 +107,7 @@ def generate_launch_description():
                 "keyframe_depth_validator_rgbd_valid_range_min_m", default_value="0.3"
             ),
             DeclareLaunchArgument(
-                "keyframe_depth_validator_rgbd_valid_range_max_m", default_value="3.0"
+                "keyframe_depth_validator_rgbd_valid_range_max_m", default_value="8.0"
             ),
             DeclareLaunchArgument(
                 "keyframe_depth_validator_rgbd_heatmap_max_abs_error_m", default_value="1.0"
@@ -153,6 +154,34 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "dynamic_keypoint_3d_lifter_publish_debug_image",
+                default_value="true",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_queue_depth",
+                default_value="100",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_3d_lifter_debug_match_logging",
+                default_value="true",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_interpolator_output_topic",
+                default_value="/dynamic_object_points_3d/interpolated",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_interpolator_queue_depth",
+                default_value="300",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_interpolator_gap_timeout_ms",
+                default_value="2000",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_interpolator_min_residual_path_length_px",
+                default_value="1.0",
+            ),
+            DeclareLaunchArgument(
+                "dynamic_keypoint_interpolator_publish_debug_image",
                 default_value="true",
             ),
             DeclareLaunchArgument("keyframe_depth_sky_handling", default_value="true"),
@@ -475,10 +504,13 @@ def generate_launch_description():
                             "keyframe_depth_corrected_topic"
                         ),
                         "keyframe_pose_topic": "/vs_graphs/camera_pose",
-                        "keyframe_created_topic": "/orbslam3/keyframe_created",
                         "camera_info_topic": LaunchConfiguration("rgb_camera_info_topic"),
                         "output_topic": LaunchConfiguration(
                             "dynamic_keypoint_3d_lifter_output_topic"
+                        ),
+                        "queue_depth": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_3d_lifter_queue_depth"),
+                            value_type=int,
                         ),
                         "low_confidence_behavior": LaunchConfiguration(
                             "dynamic_keypoint_3d_lifter_low_confidence_behavior"
@@ -492,6 +524,59 @@ def generate_launch_description():
                         "publish_debug_image": ParameterValue(
                             LaunchConfiguration(
                                 "dynamic_keypoint_3d_lifter_publish_debug_image"
+                            ),
+                            value_type=bool,
+                        ),
+                        "debug_match_logging": ParameterValue(
+                            LaunchConfiguration(
+                                "dynamic_keypoint_3d_lifter_debug_match_logging"
+                            ),
+                            value_type=bool,
+                        ),
+                    },
+                ],
+            ),
+            # Dynamic Keypoint Interpolator
+            Node(
+                condition=IfCondition(
+                    LaunchConfiguration("launch_dynamic_keypoint_interpolator")
+                ),
+                package="dynamic_keypoint_3d_lifter",
+                executable="dynamic_keypoint_interpolator_node",
+                name="dynamic_keypoint_interpolator",
+                output="screen",
+                parameters=[
+                    dynamic_keypoint_3d_lifter_config,
+                    {
+                        "use_sim_time": LaunchConfiguration("offline"),
+                        "lifted_points_topic": LaunchConfiguration(
+                            "dynamic_keypoint_3d_lifter_output_topic"
+                        ),
+                        "object_tracks_topic": LaunchConfiguration(
+                            "dynamic_keypoint_filtered_object_tracks_topic"
+                        ),
+                        "camera_pose_topic": "/vs_graphs/camera_pose",
+                        "camera_info_topic": LaunchConfiguration("rgb_camera_info_topic"),
+                        "output_topic": LaunchConfiguration(
+                            "dynamic_keypoint_interpolator_output_topic"
+                        ),
+                        "queue_depth": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_interpolator_queue_depth"),
+                            value_type=int,
+                        ),
+                        "gap_timeout_ms": ParameterValue(
+                            LaunchConfiguration("dynamic_keypoint_interpolator_gap_timeout_ms"),
+                            value_type=int,
+                        ),
+                        "min_residual_path_length_px": ParameterValue(
+                            LaunchConfiguration(
+                                "dynamic_keypoint_interpolator_min_residual_path_length_px"
+                            ),
+                            value_type=float,
+                        ),
+                        "publish_debug_image": ParameterValue(
+                            LaunchConfiguration(
+                                "dynamic_keypoint_interpolator_publish_debug_image"
                             ),
                             value_type=bool,
                         ),
