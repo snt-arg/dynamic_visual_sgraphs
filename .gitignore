@@ -48,5 +48,3 @@ borrar/*
 */ExecMean.txt
 
 !Dockerfile
-docker/docker-compose.yml
-docker/Jazzy_new.Dockerfile

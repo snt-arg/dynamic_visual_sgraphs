@@ -48,7 +48,7 @@ services:
       # Working Directory - Situational Graphs Messages (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
       # Working Directory - 3D object tracker (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
+      # - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
       # Working Directory - Dynamic keypoint tracker (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/dynamic_keypoint_tracker:/home/$USERNAME/workspace/src/dynamic_keypoint_tracker:rw"
       # Working Directory - Keyframe depth estimator (** MODIFY **)
@@ -76,7 +76,7 @@ services:
       # Working Directory - Situational Graphs Messages (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/situational_graphs_msgs:/home/$USERNAME/workspace/src/situational_graphs_msgs:rw"
       # Working Directory - 3D object tracker (** MODIFY **)
-      - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
+      # - "/home/$USERNAME/workspaces/dv_sgraphs/src/object_tracker_3d_ros:/home/$USERNAME/workspace/src/object_tracker_3d_ros:rw"
       # Working Directory - Dynamic keypoint tracker (** MODIFY **)
       - "/home/$USERNAME/workspaces/dv_sgraphs/src/dynamic_keypoint_tracker:/home/$USERNAME/workspace/src/dynamic_keypoint_tracker:rw"
       # Working Directory - Keyframe depth estimator (** MODIFY **)
