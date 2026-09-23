@@ -123,6 +123,36 @@ namespace ORB_SLAM3
             room_seg.marker_wall_distance_thresh = mConfig["room_seg"]["geo_based"]["marker_wall_distance_thresh"].as<float>();
             room_seg.cluster_point_wall_distance_thresh = mConfig["room_seg"]["skeleton_based"]["cluster_point_wall_distance_thresh"].as<float>();
             room_seg.cluster_centroid_wall_centroid_distance_thresh = mConfig["room_seg"]["skeleton_based"]["cluster_centroid_wall_centroid_distance_thresh"].as<float>();
+
+            // W2 pedestrian scale feedback -- OPTIONAL block, defaults hold when absent so that
+            // every config written before W2 keeps loading and the feature stays off.
+            if (mConfig["scale_feedback"])
+            {
+                const YAML::Node &sf = mConfig["scale_feedback"];
+                if (sf["enabled"])
+                    scale_feedback.enabled = sf["enabled"].as<bool>();
+                if (sf["deadband"])
+                    scale_feedback.deadband = sf["deadband"].as<float>();
+                if (sf["gain"])
+                    scale_feedback.gain = sf["gain"].as<float>();
+                if (sf["max_step"])
+                    scale_feedback.max_step = sf["max_step"].as<float>();
+                if (sf["min_interval_s"])
+                    scale_feedback.min_interval_s = sf["min_interval_s"].as<float>();
+                if (sf["t_min_s"])
+                    scale_feedback.t_min_s = sf["t_min_s"].as<float>();
+                if (sf["min_measurements"])
+                    scale_feedback.min_measurements = sf["min_measurements"].as<unsigned int>();
+                if (sf["measurement_max_age_s"])
+                    scale_feedback.measurement_max_age_s = sf["measurement_max_age_s"].as<float>();
+            }
+            std::cout << "[SysParams] scale_feedback.enabled=" << scale_feedback.enabled
+                      << " deadband=" << scale_feedback.deadband
+                      << " gain=" << scale_feedback.gain
+                      << " max_step=" << scale_feedback.max_step
+                      << " min_interval_s=" << scale_feedback.min_interval_s
+                      << " t_min_s=" << scale_feedback.t_min_s
+                      << " min_measurements=" << scale_feedback.min_measurements << std::endl;
         }
         catch (YAML::Exception &e)
         {

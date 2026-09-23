@@ -104,6 +104,29 @@ namespace ORB_SLAM3
         double mFirstTs;
         int mnMatchesInliers;
 
+        // ---- W2 pedestrian scale feedback (docs/evaluation/results/w2_scale_controller/) ----
+        // A measurement pushed in from ROS (System::setScaleMeasurement -> common.cc callback).
+        // scale is METRES PER MAP UNIT, already divided by the W1 calibration constant c, i.e.
+        // exactly the factor Map::ApplyScaledRotation takes. See criterion.md sec 3.2.
+        struct ScaleMeasurement
+        {
+            double scale = 1.0;
+            double sigma = 0.0;
+            double stamp = 0.0;
+        };
+        void SetScaleMeasurement(double scale, double sigma, double stamp);
+
+        // Applied-correction trace, for the campaign reads (criterion.md sec 6).
+        struct ScaleCorrectionRecord
+        {
+            double stamp = 0.0;
+            double s_measured = 1.0;
+            double s_applied = 1.0;
+            double map_time = 0.0;
+            unsigned int index = 0;
+        };
+        std::vector<ScaleCorrectionRecord> GetScaleCorrectionTrace();
+
         // For debugging (erase in normal mode)
         int mInitFr;
         int mIdxIteration;
@@ -197,6 +220,20 @@ namespace ORB_SLAM3
         int mNumKFCulling;
 
         float mTinit;
+
+        // ---- W2 pedestrian scale feedback state, LocalMapping-owned ----
+        // Deliberately NOT a ring buffer of every measurement: the controller consumes the most
+        // recent valid one and nothing else (criterion.md sec 3.3), so a single slot plus a
+        // consumed flag is the whole state. The measurement already IS a long robust median.
+        void MaybeApplyScaleCorrection();
+        std::mutex mMutexScaleMeas;
+        ScaleMeasurement mScaleMeas;
+        bool mbScaleMeasFresh = false;
+        unsigned int mnScaleMeasReceived = 0;
+        double mdLastScaleCorrectionStamp = -1e9;
+        unsigned int mnScaleCorrections = 0;
+        std::mutex mMutexScaleTrace;
+        std::vector<ScaleCorrectionRecord> mvScaleCorrectionTrace;
 
         int countRefinement;
 

@@ -29,6 +29,8 @@
 
 #include <mutex>
 #include <chrono>
+#include <cmath>
+#include <iomanip>
 
 namespace ORB_SLAM3
 {
@@ -201,6 +203,13 @@ namespace ORB_SLAM3
 
                     // Check redundant local Keyframes
                     KeyFrameCulling();
+
+                    // W2: pedestrian-derived slow constant scale correction
+                    // (docs/evaluation/results/w2_scale_controller/criterion.md sec 3.4).
+                    // Placed after KeyFrameCulling() and before mpLoopCloser->InsertKeyFrame,
+                    // on the LocalMapping thread, so the ApplyScaledRotation + UpdateFrameIMU
+                    // pair runs exactly where InitializeIMU's does. No-op when the flag is off.
+                    MaybeApplyScaleCorrection();
 
 #ifdef REGISTER_TIMES
                     std::chrono::steady_clock::time_point time_EndKFCulling = std::chrono::steady_clock::now();
@@ -1544,6 +1553,127 @@ namespace ORB_SLAM3
     KeyFrame *LocalMapping::GetCurrKF()
     {
         return mpCurrentKeyFrame;
+    }
+
+
+    // ================= W2: pedestrian-derived slow constant scale correction =================
+    // docs/evaluation/results/w2_scale_controller/criterion.md.
+    //
+    // CONVENTION (criterion.md sec 3.2, from W1 t0b_regate/criterion.md sec 1): the measurement is
+    // METRES PER MAP UNIT -- the same factor Map::ApplyScaledRotation multiplies map coordinates
+    // by. Applying it makes the map metric, so the NEXT measurement must read ~1.0. It is NOT
+    // inverted and it is NOT squared; the synthetic gate exists to keep that true.
+
+    void LocalMapping::SetScaleMeasurement(double scale, double sigma, double stamp)
+    {
+        unique_lock<mutex> lock(mMutexScaleMeas);
+        mScaleMeas.scale = scale;
+        mScaleMeas.sigma = sigma;
+        mScaleMeas.stamp = stamp;
+        mbScaleMeasFresh = true;
+        mnScaleMeasReceived++;
+    }
+
+    std::vector<LocalMapping::ScaleCorrectionRecord> LocalMapping::GetScaleCorrectionTrace()
+    {
+        unique_lock<mutex> lock(mMutexScaleTrace);
+        return mvScaleCorrectionTrace;
+    }
+
+    void LocalMapping::MaybeApplyScaleCorrection()
+    {
+        const SystemParams *params = SystemParams::GetParams();
+        if (!params->scale_feedback.enabled)
+            return;
+        if (!mbInertial || !mpCurrentKeyFrame)
+            return;
+
+        Map *pMap = mpCurrentKeyFrame->GetMap();
+        if (!pMap || !pMap->isImuInitialized())
+            return;
+
+        // Map time: the same clock the measurement stamps live on.
+        const double now = mpCurrentKeyFrame->mTimeStamp;
+        const double mapTime = now - mFirstTs;
+        if (mapTime < params->scale_feedback.t_min_s)
+            return;
+
+        // Rate limit (criterion.md sec 2: 90 s).
+        if (now - mdLastScaleCorrectionStamp < params->scale_feedback.min_interval_s)
+            return;
+
+        ScaleMeasurement meas;
+        unsigned int received = 0;
+        {
+            unique_lock<mutex> lock(mMutexScaleMeas);
+            if (!mbScaleMeasFresh)
+                return;
+            meas = mScaleMeas;
+            received = mnScaleMeasReceived;
+            mbScaleMeasFresh = false; // consumed either way -- a stale one must not be retried
+        }
+
+        if (received < params->scale_feedback.min_measurements)
+            return;
+        if (!std::isfinite(meas.scale) || meas.scale <= 0.0)
+            return;
+        // A measurement that predates the last correction describes a map that no longer exists.
+        if (meas.stamp <= mdLastScaleCorrectionStamp)
+            return;
+        if (now - meas.stamp > params->scale_feedback.measurement_max_age_s)
+        {
+            std::cout << "[Mapping][W2] measurement stale by " << (now - meas.stamp)
+                      << " s -- dropped" << std::endl;
+            return;
+        }
+
+        // Dead-band, on the raw measurement (criterion.md sec 3.3).
+        if (std::fabs(meas.scale - 1.0) <= params->scale_feedback.deadband)
+        {
+            std::cout << "[Mapping][W2] s_meas=" << meas.scale << " inside deadband +/-"
+                      << params->scale_feedback.deadband << " -- no correction" << std::endl;
+            return;
+        }
+
+        // Log-domain gain, then clamp the step (criterion.md sec 2/3.2).
+        double logApply = params->scale_feedback.gain * std::log(meas.scale);
+        const double logMax = std::log(1.0 + params->scale_feedback.max_step);
+        if (logApply > logMax)
+            logApply = logMax;
+        else if (logApply < -logMax)
+            logApply = -logMax;
+        const float sApply = static_cast<float>(std::exp(logApply));
+
+        {
+            unique_lock<mutex> lock(pMap->mMutexMapUpdate);
+            // Byte-for-byte the InitializeIMU pattern (LocalMapping.cc ~1304-1310). Identity
+            // rotation: W2 corrects scale only, never gravity. bScaledVel = true is MANDATORY --
+            // without it velocities and positions end up in different units and the next
+            // preintegration residual is nonsense (T1 sec 5b).
+            Sophus::SE3f Tid(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero());
+            pMap->ApplyScaledRotation(Tid, sApply, true);
+            mpTracker->UpdateFrameIMU(sApply, mpCurrentKeyFrame->GetImuBias(), mpCurrentKeyFrame);
+        }
+
+        mdLastScaleCorrectionStamp = now;
+        mnScaleCorrections++;
+        {
+            unique_lock<mutex> lock(mMutexScaleTrace);
+            ScaleCorrectionRecord rec;
+            rec.stamp = now;
+            rec.s_measured = meas.scale;
+            rec.s_applied = sApply;
+            rec.map_time = mapTime;
+            rec.index = mnScaleCorrections;
+            mvScaleCorrectionTrace.push_back(rec);
+        }
+
+        std::cout << "[Mapping][W2] scale correction #" << mnScaleCorrections
+                  << " t=" << std::fixed << std::setprecision(3) << now
+                  << " map_t=" << mapTime
+                  << " s_meas=" << meas.scale << " sigma=" << meas.sigma
+                  << " s_applied=" << sApply
+                  << " version=" << pMap->GetScaleCorrectionVersion() << std::endl;
     }
 
 } // namespace ORB_SLAM

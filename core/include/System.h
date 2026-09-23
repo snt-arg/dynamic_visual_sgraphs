@@ -298,6 +298,16 @@ namespace ORB_SLAM3
         void setSkeletonCluster(const std::vector<std::vector<Eigen::Vector3d>> &skeletonClusterPoints);
 
         /**
+         * @brief W2: hand LocalMapping one pedestrian-derived scale measurement.
+         * @param scale METRES PER MAP UNIT, already divided by the W1 calibration constant c --
+         *        the same factor Map::ApplyScaledRotation takes. NOT its inverse.
+         * @param sigma standard error of that measurement
+         * @param stamp measurement timestamp, on the same clock as keyframe timestamps
+         * See docs/evaluation/results/w2_scale_controller/criterion.md sec 3.
+         */
+        void setScaleMeasurement(double scale, double sigma, double stamp);
+
+        /**
          * @brief Update the GNN room candidates list
          */
         void setGNNRoomCandidates(const std::vector<ORB_SLAM3::Room *> &gnnRoomCandidates);
