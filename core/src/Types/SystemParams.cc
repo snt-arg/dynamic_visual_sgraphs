@@ -133,6 +133,8 @@ namespace ORB_SLAM3
                     scale_feedback.enabled = sf["enabled"].as<bool>();
                 if (sf["deadband"])
                     scale_feedback.deadband = sf["deadband"].as<float>();
+                if (sf["sigma_margin"])
+                    scale_feedback.sigma_margin = sf["sigma_margin"].as<float>();
                 if (sf["gain"])
                     scale_feedback.gain = sf["gain"].as<float>();
                 if (sf["max_step"])
@@ -148,6 +150,7 @@ namespace ORB_SLAM3
             }
             std::cout << "[SysParams] scale_feedback.enabled=" << scale_feedback.enabled
                       << " deadband=" << scale_feedback.deadband
+                      << " sigma_margin=" << scale_feedback.sigma_margin
                       << " gain=" << scale_feedback.gain
                       << " max_step=" << scale_feedback.max_step
                       << " min_interval_s=" << scale_feedback.min_interval_s

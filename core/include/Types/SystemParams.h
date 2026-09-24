@@ -186,7 +186,8 @@ namespace ORB_SLAM3
         struct scale_feedback
         {
             bool enabled = false;          // criterion sec 4: default off
-            float deadband = 0.04f;        // criterion sec 2, from W1 sec 10
+            float deadband = 0.06f;        // criterion Addendum A: above W1's worst measurement SE
+            float sigma_margin = 1.0f;     // act only if |s-1| - sigma_margin*sigma > deadband
             float gain = 0.6f;             // log-domain gain
             float max_step = 0.15f;        // |ln s_apply| <= ln(1 + max_step)
             float min_interval_s = 90.0f;  // rate limit between applied corrections

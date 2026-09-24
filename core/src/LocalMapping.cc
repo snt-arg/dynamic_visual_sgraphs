@@ -1627,10 +1627,16 @@ namespace ORB_SLAM3
             return;
         }
 
-        // Dead-band, on the raw measurement (criterion.md sec 3.3).
-        if (std::fabs(meas.scale - 1.0) <= params->scale_feedback.deadband)
+        // Dead-band WITH a significance margin (criterion.md Addendum A): the measured deviation
+        // must clear the dead-band by its own standard error. A deviation within noise of the
+        // threshold is not evidence the map moved, and acting on it made the controller hunt --
+        // that is what the pre-registered synthetic gate C caught.
+        const double excess = std::fabs(meas.scale - 1.0)
+                              - params->scale_feedback.sigma_margin * meas.sigma;
+        if (excess <= params->scale_feedback.deadband)
         {
-            std::cout << "[Mapping][W2] s_meas=" << meas.scale << " inside deadband +/-"
+            std::cout << "[Mapping][W2] s_meas=" << meas.scale << " sigma=" << meas.sigma
+                      << " excess=" << excess << " inside deadband "
                       << params->scale_feedback.deadband << " -- no correction" << std::endl;
             return;
         }
