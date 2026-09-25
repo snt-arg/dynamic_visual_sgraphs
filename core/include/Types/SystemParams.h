@@ -185,7 +185,13 @@ namespace ORB_SLAM3
         // configs predating W2 load unchanged and the feature stays off.
         struct scale_feedback
         {
-            bool enabled = false;          // criterion sec 4: default off
+            // OFF, and stays off: the W2 campaign returned SCALE_FEEDBACK_HARMFUL (office ATE
+            // 0.660 -> 1.112 m, subway 1.8 % of the gap, every multi-correction run oscillated).
+            // object_motion_estimator docs/evaluation/results/w2_scale_campaign/findings.md, the
+            // X1 reconciliation in x1_w2_reconciliation/findings.md, and the decision on this
+            // line's future in docs/architecture/scale_line_decision.md. Do not enable without
+            // reading all three.
+            bool enabled = false;
             float deadband = 0.06f;        // criterion Addendum A: above W1's worst measurement SE
             float sigma_margin = 1.0f;     // act only if |s-1| - sigma_margin*sigma > deadband
             float gain = 0.6f;             // log-domain gain
