@@ -211,6 +211,13 @@ namespace ORB_SLAM3
         // See format details at: http://vision.in.tum.de/data/datasets/rgbd-dataset
         void SaveKeyFrameTrajectoryTUM(const string &filename);
 
+        // X2 amendment (object_motion_estimator docs/evaluation/results/y1_scale_retry/): after
+        // Shutdown(), wait up to timeoutS for LocalMapping and LoopClosing to finish, then write the
+        // ACTIVE map's keyframe trajectory -- ORB-SLAM3's own final-map poses, which carry every
+        // retroactive rescale -- with SaveKeyFrameTrajectoryTUM. Returns false if the threads did
+        // not finish in time (the file is still written, and says so on stdout).
+        bool SaveKeyFrameTrajectoryAtShutdown(const string &filename, double timeoutS);
+
         void SaveTrajectoryEuRoC(const string &filename);
         void SaveKeyFrameTrajectoryEuRoC(const string &filename);
 
