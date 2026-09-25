@@ -179,6 +179,29 @@ namespace ORB_SLAM3
             int gnn_version = 1;
         } room_seg;
 
+        // W2 (docs/evaluation/results/w2_scale_controller/criterion.md): a slow, dead-banded,
+        // rate-limited constant scale correction driven by a pedestrian-derived measurement.
+        // OPTIONAL in the YAML -- every field has the criterion's value as its default, so
+        // configs predating W2 load unchanged and the feature stays off.
+        struct scale_feedback
+        {
+            // OFF, and stays off: the W2 campaign returned SCALE_FEEDBACK_HARMFUL (office ATE
+            // 0.660 -> 1.112 m, subway 1.8 % of the gap, every multi-correction run oscillated).
+            // object_motion_estimator docs/evaluation/results/w2_scale_campaign/findings.md, the
+            // X1 reconciliation in x1_w2_reconciliation/findings.md, and the decision on this
+            // line's future in docs/architecture/scale_line_decision.md. Do not enable without
+            // reading all three.
+            bool enabled = false;
+            float deadband = 0.06f;        // criterion Addendum A: above W1's worst measurement SE
+            float sigma_margin = 1.0f;     // act only if |s-1| - sigma_margin*sigma > deadband
+            float gain = 0.6f;             // log-domain gain
+            float max_step = 0.15f;        // |ln s_apply| <= ln(1 + max_step)
+            float min_interval_s = 90.0f;  // rate limit between applied corrections
+            float t_min_s = 120.0f;        // no correction before this much map time
+            unsigned int min_measurements = 1;   // K_meas
+            float measurement_max_age_s = 60.0f; // a measurement older than this is stale
+        } scale_feedback;
+
     private:
         SystemParams();
         static SystemParams *mSystemParams;

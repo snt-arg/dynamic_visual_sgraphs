@@ -287,6 +287,15 @@ namespace ORB_SLAM3
         mpAtlas->SetSkeletonClusterPoints(skeletonClusterPoints);
     }
 
+    void System::setScaleMeasurement(double scale, double sigma, double stamp)
+    {
+        // W2 (docs/evaluation/results/w2_scale_controller/criterion.md sec 3.4). Follows the
+        // setSkeletonCluster precedent: ROS callback -> System setter -> core state. The
+        // controller itself lives in LocalMapping and runs on the LocalMapping thread.
+        if (mpLocalMapper)
+            mpLocalMapper->SetScaleMeasurement(scale, sigma, stamp);
+    }
+
     void System::setGNNRoomCandidates(const std::vector<ORB_SLAM3::Room *> &gnnRoomCandidates)
     {
         // [TODO] Add the GNN room candidates to the SemanticsManager

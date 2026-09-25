@@ -72,6 +72,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/MapReadyEvent.msg"
   "msg/MapRescaleEvent.msg"
   "msg/ImuBiasEstimate.msg"
+  "msg/ScaleMeasurement.msg"
   DEPENDENCIES std_msgs geometry_msgs sensor_msgs
 )
 
