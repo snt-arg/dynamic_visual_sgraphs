@@ -956,6 +956,22 @@ int main(int argc, char **argv)
         { igb->GrabVoxbloxSkeletonGraph(*msg); },
         voxbloxOptions);
 
+    // W2 (docs/evaluation/results/w2_scale_controller/criterion.md sec 3.4): pedestrian-derived
+    // scale measurements from scale_observer_node. Created unconditionally -- the controller
+    // itself is gated by SystemParams scale_feedback.enabled, so an unused subscription costs a
+    // callback registration and nothing else.
+    auto subScaleMeasurement = node->create_subscription<vs_graphs::msg::ScaleMeasurement>(
+        "/vs_graphs/scale_measurement", 10,
+        [](const vs_graphs::msg::ScaleMeasurement::SharedPtr msg)
+        {
+            if (!msg->valid)
+                return;
+            const double stamp = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
+            pSLAM->setScaleMeasurement(msg->scale, msg->sigma, stamp);
+        },
+        semanticOptions);
+    RCLCPP_INFO(node->get_logger(), "W2: subscribed to /vs_graphs/scale_measurement");
+
     static std::shared_ptr<image_transport::ImageTransport> imageTransport =
         std::make_shared<image_transport::ImageTransport>(node);
     setupPublishers(node, imageTransport, node->get_name());
