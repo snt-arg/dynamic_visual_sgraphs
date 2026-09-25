@@ -23,6 +23,7 @@
 #include "System.h"
 #include "Converter.h"
 #include <thread>
+#include <chrono>
 #include <pangolin/pangolin.h>
 #include <iomanip>
 #include <openssl/md5.h>
@@ -287,13 +288,13 @@ namespace ORB_SLAM3
         mpAtlas->SetSkeletonClusterPoints(skeletonClusterPoints);
     }
 
-    void System::setScaleMeasurement(double scale, double sigma, double stamp)
+    void System::setScaleMeasurement(double scale, double sigma, double stamp, double windowS)
     {
         // W2 (docs/evaluation/results/w2_scale_controller/criterion.md sec 3.4). Follows the
         // setSkeletonCluster precedent: ROS callback -> System setter -> core state. The
         // controller itself lives in LocalMapping and runs on the LocalMapping thread.
         if (mpLocalMapper)
-            mpLocalMapper->SetScaleMeasurement(scale, sigma, stamp);
+            mpLocalMapper->SetScaleMeasurement(scale, sigma, stamp, windowS);
     }
 
     void System::setGNNRoomCandidates(const std::vector<ORB_SLAM3::Room *> &gnnRoomCandidates)
@@ -726,6 +727,30 @@ namespace ORB_SLAM3
         }
 
         f.close();
+    }
+
+    bool System::SaveKeyFrameTrajectoryAtShutdown(const string &filename, double timeoutS)
+    {
+        // Shutdown() only requests the finish; reading keyframes while LocalMapping is still
+        // running would race a BA or a scale correction.
+        const auto deadline = std::chrono::steady_clock::now() +
+                              std::chrono::milliseconds(static_cast<long>(timeoutS * 1000.0));
+        bool finished = false;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            if (mpLocalMapper->isFinished() && mpLoopCloser->isFinished())
+            {
+                finished = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+        SaveKeyFrameTrajectoryTUM(filename);
+        cout << "[X2] keyframe trajectory: " << filename
+             << " kfs=" << mpAtlas->GetAllKeyFrames().size()
+             << " maps=" << mpAtlas->CountMaps()
+             << " threads_finished=" << (finished ? 1 : 0) << endl;
+        return finished;
     }
 
     void System::SaveTrajectoryEuRoC(const string &filename)

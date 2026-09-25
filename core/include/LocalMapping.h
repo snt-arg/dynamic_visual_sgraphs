@@ -31,6 +31,7 @@
 #include "Settings.h"
 #include "Types/SystemParams.h"
 
+#include <deque>
 #include <functional>
 #include <mutex>
 
@@ -113,14 +114,17 @@ namespace ORB_SLAM3
             double scale = 1.0;
             double sigma = 0.0;
             double stamp = 0.0;
+            double window_s = 0.0; // the observer's measurement window (Y1: no-reversal horizon)
         };
-        void SetScaleMeasurement(double scale, double sigma, double stamp);
+        void SetScaleMeasurement(double scale, double sigma, double stamp, double windowS);
 
         // Applied-correction trace, for the campaign reads (criterion.md sec 6).
         struct ScaleCorrectionRecord
         {
             double stamp = 0.0;
-            double s_measured = 1.0;
+            double s_measured = 1.0;  // newest reading
+            double level = 1.0;       // Y1: median of the last level_n readings -- what was acted on
+            double sigma_level = 0.0;
             double s_applied = 1.0;
             double map_time = 0.0;
             unsigned int index = 0;
@@ -221,17 +225,26 @@ namespace ORB_SLAM3
 
         float mTinit;
 
-        // ---- W2 pedestrian scale feedback state, LocalMapping-owned ----
-        // Deliberately NOT a ring buffer of every measurement: the controller consumes the most
-        // recent valid one and nothing else (criterion.md sec 3.3), so a single slot plus a
-        // consumed flag is the whole state. The measurement already IS a long robust median.
+        // ---- W2/Y1 pedestrian scale feedback state, LocalMapping-owned ----
+        // W2 acted on the single newest reading, which X1a showed is by construction an upper-tail
+        // one (trigger/level 1.05-1.23). Y1 queues every reading and acts on the median of the last
+        // level_n that survived the plausibility bound and postdate the last correction.
         void MaybeApplyScaleCorrection();
+        void ApplyScaleCorrection(Map *pMap, double now, double mapTime,
+                                  const ScaleMeasurement &meas, double level, double sigmaLevel);
+        // Y2 single checkpoint state
+        ScaleMeasurement mLatestScaleMeas;
+        bool mbHaveLatestScaleMeas = false;
+        bool mbScaleCheckpointDecided = false;
         std::mutex mMutexScaleMeas;
-        ScaleMeasurement mScaleMeas;
-        bool mbScaleMeasFresh = false;
-        unsigned int mnScaleMeasReceived = 0;
+        std::vector<ScaleMeasurement> mvScaleMeasPending;
+        std::deque<ScaleMeasurement> mdqScaleLevel;
         double mdLastScaleCorrectionStamp = -1e9;
+        int mnLastScaleCorrectionSign = 0;
         unsigned int mnScaleCorrections = 0;
+        // Y1: per-test rejection census, printed with every decision line.
+        unsigned long mnScaleRejPlausibility = 0, mnScaleRejStale = 0, mnScaleRejSigma = 0,
+                      mnScaleRejDeadband = 0, mnScaleRejReversal = 0, mnScaleRejLevelNotReady = 0;
         std::mutex mMutexScaleTrace;
         std::vector<ScaleCorrectionRecord> mvScaleCorrectionTrace;
 

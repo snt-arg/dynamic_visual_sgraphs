@@ -198,8 +198,21 @@ namespace ORB_SLAM3
             float max_step = 0.15f;        // |ln s_apply| <= ln(1 + max_step)
             float min_interval_s = 90.0f;  // rate limit between applied corrections
             float t_min_s = 120.0f;        // no correction before this much map time
-            unsigned int min_measurements = 1;   // K_meas
             float measurement_max_age_s = 60.0f; // a measurement older than this is stale
+
+            // Y1 (object_motion_estimator docs/evaluation/results/y1_scale_retry/criterion.md),
+            // each traceable to an X1 finding. They replace W2's K_meas = 1 single-reading trigger.
+            float plausibility_bound = 0.25f; // reject |s_meas - 1| > this before any other test
+            unsigned int level_n = 9;         // act on the median of the last N valid readings...
+            float level_max_span_s = 100.0f;  // ...which must span at most this long (10 s publishes)
+            bool sigma_guard = true;          // also refuse when sigma_level > deadband (W2 sec 2.1)
+            bool no_reversal = true;          // no opposite-sign correction within one window length
+
+            // Y2 (y2_checkpoint/criterion.md): > 0 replaces the controller with ONE go/no-go at
+            // the first keyframe stamped at or after this time (same clock as the measurement
+            // stamps). Uses plausibility_bound, sigma_guard and deadband; gain/max_step still
+            // shape the applied step (Y2 runs gain 1, max_step = plausibility_bound).
+            float checkpoint_stamp_s = 0.0f;
         } scale_feedback;
 
     private:
