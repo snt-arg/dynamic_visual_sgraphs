@@ -31,6 +31,8 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <sstream>
+#include <algorithm>
 
 namespace ORB_SLAM3
 {
@@ -1564,14 +1566,15 @@ namespace ORB_SLAM3
     // by. Applying it makes the map metric, so the NEXT measurement must read ~1.0. It is NOT
     // inverted and it is NOT squared; the synthetic gate exists to keep that true.
 
-    void LocalMapping::SetScaleMeasurement(double scale, double sigma, double stamp)
+    void LocalMapping::SetScaleMeasurement(double scale, double sigma, double stamp, double windowS)
     {
         unique_lock<mutex> lock(mMutexScaleMeas);
-        mScaleMeas.scale = scale;
-        mScaleMeas.sigma = sigma;
-        mScaleMeas.stamp = stamp;
-        mbScaleMeasFresh = true;
-        mnScaleMeasReceived++;
+        ScaleMeasurement m;
+        m.scale = scale;
+        m.sigma = sigma;
+        m.stamp = stamp;
+        m.window_s = windowS;
+        mvScaleMeasPending.push_back(m);
     }
 
     std::vector<LocalMapping::ScaleCorrectionRecord> LocalMapping::GetScaleCorrectionTrace()
@@ -1583,7 +1586,8 @@ namespace ORB_SLAM3
     void LocalMapping::MaybeApplyScaleCorrection()
     {
         const SystemParams *params = SystemParams::GetParams();
-        if (!params->scale_feedback.enabled)
+        const auto &sf = params->scale_feedback;
+        if (!sf.enabled)
             return;
         if (!mbInertial || !mpCurrentKeyFrame)
             return;
@@ -1595,60 +1599,125 @@ namespace ORB_SLAM3
         // Map time: the same clock the measurement stamps live on.
         const double now = mpCurrentKeyFrame->mTimeStamp;
         const double mapTime = now - mFirstTs;
-        if (mapTime < params->scale_feedback.t_min_s)
-            return;
 
-        // Rate limit (criterion.md sec 2: 90 s).
-        if (now - mdLastScaleCorrectionStamp < params->scale_feedback.min_interval_s)
-            return;
-
-        ScaleMeasurement meas;
-        unsigned int received = 0;
+        // Y1: every reading goes through the plausibility bound and into the level buffer as it
+        // arrives, whether or not a correction could fire now, so the level is ready when it can.
+        std::vector<ScaleMeasurement> pending;
         {
             unique_lock<mutex> lock(mMutexScaleMeas);
-            if (!mbScaleMeasFresh)
-                return;
-            meas = mScaleMeas;
-            received = mnScaleMeasReceived;
-            mbScaleMeasFresh = false; // consumed either way -- a stale one must not be retried
+            pending.swap(mvScaleMeasPending);
         }
-
-        if (received < params->scale_feedback.min_measurements)
-            return;
-        if (!std::isfinite(meas.scale) || meas.scale <= 0.0)
-            return;
-        // A measurement that predates the last correction describes a map that no longer exists.
-        if (meas.stamp <= mdLastScaleCorrectionStamp)
-            return;
-        if (now - meas.stamp > params->scale_feedback.measurement_max_age_s)
+        for (const auto &m : pending)
         {
-            std::cout << "[Mapping][W2] measurement stale by " << (now - meas.stamp)
+            if (!std::isfinite(m.scale) || m.scale <= 0.0)
+                continue;
+            // A reading that predates the last correction describes a map that no longer exists.
+            if (m.stamp <= mdLastScaleCorrectionStamp)
+            {
+                mnScaleRejStale++;
+                continue;
+            }
+            // Y1 sec 3.1: W1 puts the map within ~25 % of metric on both sequences, so a reading
+            // outside that is not a scale measurement. W2's office outliers read 1.45-1.82.
+            if (std::fabs(m.scale - 1.0) > sf.plausibility_bound)
+            {
+                mnScaleRejPlausibility++;
+                std::cout << "[Mapping][Y1] s_meas=" << m.scale << " rejected: |s-1| > "
+                          << sf.plausibility_bound << std::endl;
+                continue;
+            }
+            mdqScaleLevel.push_back(m);
+            while (mdqScaleLevel.size() > sf.level_n)
+                mdqScaleLevel.pop_front();
+        }
+        if (pending.empty())
+            return; // decisions are taken only when a new reading arrives
+
+        if (mapTime < sf.t_min_s)
+            return;
+        // Rate limit (W2 criterion.md sec 2: 90 s).
+        if (now - mdLastScaleCorrectionStamp < sf.min_interval_s)
+            return;
+
+        // Y1 sec 3.2: act on a level, not on a reading.
+        if (mdqScaleLevel.size() < sf.level_n ||
+            mdqScaleLevel.back().stamp - mdqScaleLevel.front().stamp > sf.level_max_span_s)
+        {
+            mnScaleRejLevelNotReady++;
+            return;
+        }
+        const ScaleMeasurement &newest = mdqScaleLevel.back();
+        if (now - newest.stamp > sf.measurement_max_age_s)
+        {
+            std::cout << "[Mapping][W2] measurement stale by " << (now - newest.stamp)
                       << " s -- dropped" << std::endl;
             return;
         }
-
-        // Dead-band WITH a significance margin (criterion.md Addendum A): the measured deviation
-        // must clear the dead-band by its own standard error. A deviation within noise of the
-        // threshold is not evidence the map moved, and acting on it made the controller hunt --
-        // that is what the pre-registered synthetic gate C caught.
-        const double excess = std::fabs(meas.scale - 1.0)
-                              - params->scale_feedback.sigma_margin * meas.sigma;
-        if (excess <= params->scale_feedback.deadband)
+        std::vector<double> vs, vsig;
+        for (const auto &m : mdqScaleLevel)
         {
-            std::cout << "[Mapping][W2] s_meas=" << meas.scale << " sigma=" << meas.sigma
-                      << " excess=" << excess << " inside deadband "
-                      << params->scale_feedback.deadband << " -- no correction" << std::endl;
+            vs.push_back(m.scale);
+            vsig.push_back(m.sigma);
+        }
+        auto median = [](std::vector<double> v)
+        {
+            std::sort(v.begin(), v.end());
+            const size_t n = v.size();
+            return n % 2 ? v[n / 2] : 0.5 * (v[n / 2 - 1] + v[n / 2]);
+        };
+        const double level = median(vs);
+        const double sigmaLevel = median(vsig);
+
+        auto census = [&]()
+        {
+            std::ostringstream o;
+            o << " rej{plaus=" << mnScaleRejPlausibility << " stale=" << mnScaleRejStale
+              << " level_not_ready=" << mnScaleRejLevelNotReady << " sigma=" << mnScaleRejSigma
+              << " deadband=" << mnScaleRejDeadband << " reversal=" << mnScaleRejReversal << "}";
+            return o.str();
+        };
+
+        // Y1 sec 3.2: the multiplicative guard W2's Addendum A removed -- a level too imprecise to
+        // act on at all. The subtractive rule below cannot catch it (W2 campaign sec 2.1).
+        if (sf.sigma_guard && sigmaLevel > sf.deadband)
+        {
+            mnScaleRejSigma++;
+            std::cout << "[Mapping][Y1] level=" << level << " sigma=" << sigmaLevel
+                      << " > deadband -- no correction" << census() << std::endl;
+            return;
+        }
+        // Dead-band WITH a significance margin (W2 criterion Addendum A).
+        const double excess = std::fabs(level - 1.0) - sf.sigma_margin * sigmaLevel;
+        if (excess <= sf.deadband)
+        {
+            mnScaleRejDeadband++;
+            std::cout << "[Mapping][Y1] level=" << level << " sigma=" << sigmaLevel
+                      << " excess=" << excess << " inside deadband " << sf.deadband
+                      << " -- no correction" << census() << std::endl;
+            return;
+        }
+        // Y1 sec 3.3: never reverse within one measurement window (X1a: 6/6 multi-correction runs
+        // were up-then-down). A real move in the level is still there after the window.
+        const int sign = level > 1.0 ? 1 : -1;
+        if (sf.no_reversal && mnLastScaleCorrectionSign != 0 && sign != mnLastScaleCorrectionSign &&
+            now - mdLastScaleCorrectionStamp < newest.window_s)
+        {
+            mnScaleRejReversal++;
+            std::cout << "[Mapping][Y1] level=" << level << " would reverse the correction "
+                      << (now - mdLastScaleCorrectionStamp) << " s ago (window " << newest.window_s
+                      << " s) -- blocked" << census() << std::endl;
             return;
         }
 
         // Log-domain gain, then clamp the step (criterion.md sec 2/3.2).
-        double logApply = params->scale_feedback.gain * std::log(meas.scale);
-        const double logMax = std::log(1.0 + params->scale_feedback.max_step);
+        double logApply = sf.gain * std::log(level);
+        const double logMax = std::log(1.0 + sf.max_step);
         if (logApply > logMax)
             logApply = logMax;
         else if (logApply < -logMax)
             logApply = -logMax;
         const float sApply = static_cast<float>(std::exp(logApply));
+        const ScaleMeasurement meas = newest;
 
         {
             unique_lock<mutex> lock(pMap->mMutexMapUpdate);
@@ -1662,12 +1731,16 @@ namespace ORB_SLAM3
         }
 
         mdLastScaleCorrectionStamp = now;
+        mnLastScaleCorrectionSign = sign;
+        mdqScaleLevel.clear(); // every buffered reading describes the map before this correction
         mnScaleCorrections++;
         {
             unique_lock<mutex> lock(mMutexScaleTrace);
             ScaleCorrectionRecord rec;
             rec.stamp = now;
             rec.s_measured = meas.scale;
+            rec.level = level;
+            rec.sigma_level = sigmaLevel;
             rec.s_applied = sApply;
             rec.map_time = mapTime;
             rec.index = mnScaleCorrections;
@@ -1678,8 +1751,9 @@ namespace ORB_SLAM3
                   << " t=" << std::fixed << std::setprecision(3) << now
                   << " map_t=" << mapTime
                   << " s_meas=" << meas.scale << " sigma=" << meas.sigma
+                  << " level=" << level << " sigma_level=" << sigmaLevel
                   << " s_applied=" << sApply
-                  << " version=" << pMap->GetScaleCorrectionVersion() << std::endl;
+                  << " version=" << pMap->GetScaleCorrectionVersion() << census() << std::endl;
     }
 
 } // namespace ORB_SLAM

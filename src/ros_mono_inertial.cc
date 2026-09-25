@@ -968,7 +968,7 @@ int main(int argc, char **argv)
             if (!msg->valid)
                 return;
             const double stamp = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
-            pSLAM->setScaleMeasurement(msg->scale, msg->sigma, stamp);
+            pSLAM->setScaleMeasurement(msg->scale, msg->sigma, stamp, msg->window_s);
         },
         semanticOptions);
     RCLCPP_INFO(node->get_logger(), "W2: subscribed to /vs_graphs/scale_measurement");

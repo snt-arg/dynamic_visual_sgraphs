@@ -310,9 +310,10 @@ namespace ORB_SLAM3
          *        the same factor Map::ApplyScaledRotation takes. NOT its inverse.
          * @param sigma standard error of that measurement
          * @param stamp measurement timestamp, on the same clock as keyframe timestamps
+         * @param windowS the observer's measurement window, the Y1 no-reversal horizon
          * See docs/evaluation/results/w2_scale_controller/criterion.md sec 3.
          */
-        void setScaleMeasurement(double scale, double sigma, double stamp);
+        void setScaleMeasurement(double scale, double sigma, double stamp, double windowS);
 
         /**
          * @brief Update the GNN room candidates list

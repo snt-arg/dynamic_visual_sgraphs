@@ -143,10 +143,18 @@ namespace ORB_SLAM3
                     scale_feedback.min_interval_s = sf["min_interval_s"].as<float>();
                 if (sf["t_min_s"])
                     scale_feedback.t_min_s = sf["t_min_s"].as<float>();
-                if (sf["min_measurements"])
-                    scale_feedback.min_measurements = sf["min_measurements"].as<unsigned int>();
                 if (sf["measurement_max_age_s"])
                     scale_feedback.measurement_max_age_s = sf["measurement_max_age_s"].as<float>();
+                if (sf["plausibility_bound"])
+                    scale_feedback.plausibility_bound = sf["plausibility_bound"].as<float>();
+                if (sf["level_n"])
+                    scale_feedback.level_n = sf["level_n"].as<unsigned int>();
+                if (sf["level_max_span_s"])
+                    scale_feedback.level_max_span_s = sf["level_max_span_s"].as<float>();
+                if (sf["sigma_guard"])
+                    scale_feedback.sigma_guard = sf["sigma_guard"].as<bool>();
+                if (sf["no_reversal"])
+                    scale_feedback.no_reversal = sf["no_reversal"].as<bool>();
             }
             std::cout << "[SysParams] scale_feedback.enabled=" << scale_feedback.enabled
                       << " deadband=" << scale_feedback.deadband
@@ -155,7 +163,11 @@ namespace ORB_SLAM3
                       << " max_step=" << scale_feedback.max_step
                       << " min_interval_s=" << scale_feedback.min_interval_s
                       << " t_min_s=" << scale_feedback.t_min_s
-                      << " min_measurements=" << scale_feedback.min_measurements << std::endl;
+                      << " plausibility_bound=" << scale_feedback.plausibility_bound
+                      << " level_n=" << scale_feedback.level_n
+                      << " level_max_span_s=" << scale_feedback.level_max_span_s
+                      << " sigma_guard=" << scale_feedback.sigma_guard
+                      << " no_reversal=" << scale_feedback.no_reversal << std::endl;
         }
         catch (YAML::Exception &e)
         {
