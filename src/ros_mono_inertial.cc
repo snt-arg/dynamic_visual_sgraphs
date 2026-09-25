@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <atomic>
 #include <condition_variable>
+#include <cstdlib>
 #include <deque>
 #include <cmath>
 #include <iterator>
@@ -967,7 +968,7 @@ int main(int argc, char **argv)
             if (!msg->valid)
                 return;
             const double stamp = msg->header.stamp.sec + msg->header.stamp.nanosec * 1e-9;
-            pSLAM->setScaleMeasurement(msg->scale, msg->sigma, stamp);
+            pSLAM->setScaleMeasurement(msg->scale, msg->sigma, stamp, msg->window_s);
         },
         semanticOptions);
     RCLCPP_INFO(node->get_logger(), "W2: subscribed to /vs_graphs/scale_measurement");
@@ -998,6 +999,11 @@ int main(int argc, char **argv)
     imuExecutor.cancel();
     imuThread.join();
     pSLAM->Shutdown();
+
+    // X2 amendment: every run writes ORB-SLAM3's own keyframe trajectory next to the streamed
+    // ego.tum. The path comes from the environment so mono-imu.launch.py stays untouched.
+    if (const char *kfPath = std::getenv("VSGRAPHS_KEYFRAME_TRAJECTORY_TUM"); kfPath && *kfPath)
+        pSLAM->SaveKeyFrameTrajectoryAtShutdown(kfPath, 20.0);
 
     rclcpp::shutdown();
     return 0;

@@ -211,6 +211,13 @@ namespace ORB_SLAM3
         // See format details at: http://vision.in.tum.de/data/datasets/rgbd-dataset
         void SaveKeyFrameTrajectoryTUM(const string &filename);
 
+        // X2 amendment (object_motion_estimator docs/evaluation/results/y1_scale_retry/): after
+        // Shutdown(), wait up to timeoutS for LocalMapping and LoopClosing to finish, then write the
+        // ACTIVE map's keyframe trajectory -- ORB-SLAM3's own final-map poses, which carry every
+        // retroactive rescale -- with SaveKeyFrameTrajectoryTUM. Returns false if the threads did
+        // not finish in time (the file is still written, and says so on stdout).
+        bool SaveKeyFrameTrajectoryAtShutdown(const string &filename, double timeoutS);
+
         void SaveTrajectoryEuRoC(const string &filename);
         void SaveKeyFrameTrajectoryEuRoC(const string &filename);
 
@@ -303,9 +310,10 @@ namespace ORB_SLAM3
          *        the same factor Map::ApplyScaledRotation takes. NOT its inverse.
          * @param sigma standard error of that measurement
          * @param stamp measurement timestamp, on the same clock as keyframe timestamps
+         * @param windowS the observer's measurement window, the Y1 no-reversal horizon
          * See docs/evaluation/results/w2_scale_controller/criterion.md sec 3.
          */
-        void setScaleMeasurement(double scale, double sigma, double stamp);
+        void setScaleMeasurement(double scale, double sigma, double stamp, double windowS);
 
         /**
          * @brief Update the GNN room candidates list

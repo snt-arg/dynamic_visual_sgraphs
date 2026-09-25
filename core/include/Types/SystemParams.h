@@ -185,12 +185,19 @@ namespace ORB_SLAM3
         // configs predating W2 load unchanged and the feature stays off.
         struct scale_feedback
         {
-            // OFF, and stays off: the W2 campaign returned SCALE_FEEDBACK_HARMFUL (office ATE
-            // 0.660 -> 1.112 m, subway 1.8 % of the gap, every multi-correction run oscillated).
-            // object_motion_estimator docs/evaluation/results/w2_scale_campaign/findings.md, the
-            // X1 reconciliation in x1_w2_reconciliation/findings.md, and the decision on this
-            // line's future in docs/architecture/scale_line_decision.md. Do not enable without
-            // reading all three.
+            // OFF by default (Z2). Who may turn it on depends on who consumes the result:
+            //  * a consumer of the FINAL MAP (ORB-SLAM3's keyframe map / keyframe.tum): justified,
+            //    with the Y2 single checkpoint (checkpoint_stamp_s > 0) -- subway keyframe SE(3)
+            //    ATE 3.488 -> 1.850 m, map Sim(3) scale 1.140 -> 1.031. The MAGNITUDE is
+            //    conditional on the observer's calibration_c: 0-97 % of the gap across defensible
+            //    c values (Z1, RESULT_CALIBRATION_SENSITIVE). Re-derive c for any new environment.
+            //  * a consumer of STREAMED odometry (/ego/joint_odometry, ego.tum): NOT justified. The
+            //    correction lands after the scale error has been streamed (Y2: -7.7 %, p = 0.31).
+            //  * the W2 continuous controller (checkpoint_stamp_s = 0): never -- W2 returned
+            //    SCALE_FEEDBACK_HARMFUL (office 0.660 -> 1.112 m, oscillation) and Y1's guarded
+            //    level controller is inert on subway.
+            // object_motion_estimator docs/evaluation/results/{w2_scale_campaign,x1_w2_reconciliation,
+            // y2_checkpoint,z1_c_sensitivity}/findings.md and docs/architecture/scale_line_decision.md.
             bool enabled = false;
             float deadband = 0.06f;        // criterion Addendum A: above W1's worst measurement SE
             float sigma_margin = 1.0f;     // act only if |s-1| - sigma_margin*sigma > deadband
@@ -198,8 +205,21 @@ namespace ORB_SLAM3
             float max_step = 0.15f;        // |ln s_apply| <= ln(1 + max_step)
             float min_interval_s = 90.0f;  // rate limit between applied corrections
             float t_min_s = 120.0f;        // no correction before this much map time
-            unsigned int min_measurements = 1;   // K_meas
             float measurement_max_age_s = 60.0f; // a measurement older than this is stale
+
+            // Y1 (object_motion_estimator docs/evaluation/results/y1_scale_retry/criterion.md),
+            // each traceable to an X1 finding. They replace W2's K_meas = 1 single-reading trigger.
+            float plausibility_bound = 0.25f; // reject |s_meas - 1| > this before any other test
+            unsigned int level_n = 9;         // act on the median of the last N valid readings...
+            float level_max_span_s = 100.0f;  // ...which must span at most this long (10 s publishes)
+            bool sigma_guard = true;          // also refuse when sigma_level > deadband (W2 sec 2.1)
+            bool no_reversal = true;          // no opposite-sign correction within one window length
+
+            // Y2 (y2_checkpoint/criterion.md): > 0 replaces the controller with ONE go/no-go at
+            // the first keyframe stamped at or after this time (same clock as the measurement
+            // stamps). Uses plausibility_bound, sigma_guard and deadband; gain/max_step still
+            // shape the applied step (Y2 runs gain 1, max_step = plausibility_bound).
+            float checkpoint_stamp_s = 0.0f;
         } scale_feedback;
 
     private:
