@@ -155,6 +155,8 @@ namespace ORB_SLAM3
                     scale_feedback.sigma_guard = sf["sigma_guard"].as<bool>();
                 if (sf["no_reversal"])
                     scale_feedback.no_reversal = sf["no_reversal"].as<bool>();
+                if (sf["checkpoint_stamp_s"])
+                    scale_feedback.checkpoint_stamp_s = sf["checkpoint_stamp_s"].as<float>();
             }
             std::cout << "[SysParams] scale_feedback.enabled=" << scale_feedback.enabled
                       << " deadband=" << scale_feedback.deadband
@@ -167,7 +169,8 @@ namespace ORB_SLAM3
                       << " level_n=" << scale_feedback.level_n
                       << " level_max_span_s=" << scale_feedback.level_max_span_s
                       << " sigma_guard=" << scale_feedback.sigma_guard
-                      << " no_reversal=" << scale_feedback.no_reversal << std::endl;
+                      << " no_reversal=" << scale_feedback.no_reversal
+                      << " checkpoint_stamp_s=" << scale_feedback.checkpoint_stamp_s << std::endl;
         }
         catch (YAML::Exception &e)
         {

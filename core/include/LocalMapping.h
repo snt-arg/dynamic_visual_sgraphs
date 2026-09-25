@@ -230,6 +230,12 @@ namespace ORB_SLAM3
         // one (trigger/level 1.05-1.23). Y1 queues every reading and acts on the median of the last
         // level_n that survived the plausibility bound and postdate the last correction.
         void MaybeApplyScaleCorrection();
+        void ApplyScaleCorrection(Map *pMap, double now, double mapTime,
+                                  const ScaleMeasurement &meas, double level, double sigmaLevel);
+        // Y2 single checkpoint state
+        ScaleMeasurement mLatestScaleMeas;
+        bool mbHaveLatestScaleMeas = false;
+        bool mbScaleCheckpointDecided = false;
         std::mutex mMutexScaleMeas;
         std::vector<ScaleMeasurement> mvScaleMeasPending;
         std::deque<ScaleMeasurement> mdqScaleLevel;

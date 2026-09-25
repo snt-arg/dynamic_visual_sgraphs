@@ -207,6 +207,12 @@ namespace ORB_SLAM3
             float level_max_span_s = 100.0f;  // ...which must span at most this long (10 s publishes)
             bool sigma_guard = true;          // also refuse when sigma_level > deadband (W2 sec 2.1)
             bool no_reversal = true;          // no opposite-sign correction within one window length
+
+            // Y2 (y2_checkpoint/criterion.md): > 0 replaces the controller with ONE go/no-go at
+            // the first keyframe stamped at or after this time (same clock as the measurement
+            // stamps). Uses plausibility_bound, sigma_guard and deadband; gain/max_step still
+            // shape the applied step (Y2 runs gain 1, max_step = plausibility_bound).
+            float checkpoint_stamp_s = 0.0f;
         } scale_feedback;
 
     private:

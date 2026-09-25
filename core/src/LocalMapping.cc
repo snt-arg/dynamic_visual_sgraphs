@@ -1611,6 +1611,8 @@ namespace ORB_SLAM3
         {
             if (!std::isfinite(m.scale) || m.scale <= 0.0)
                 continue;
+            mLatestScaleMeas = m; // Y2 checkpoint: the newest reading, whatever it says
+            mbHaveLatestScaleMeas = true;
             // A reading that predates the last correction describes a map that no longer exists.
             if (m.stamp <= mdLastScaleCorrectionStamp)
             {
@@ -1630,6 +1632,37 @@ namespace ORB_SLAM3
             while (mdqScaleLevel.size() > sf.level_n)
                 mdqScaleLevel.pop_front();
         }
+        // Y2 (object_motion_estimator y2_checkpoint/criterion.md): ONE decision, at the first
+        // keyframe at or after checkpoint_stamp_s, on the observer's newest whole-run estimate.
+        // No level, no rate limit, no reversal rule -- there is no second correction.
+        if (sf.checkpoint_stamp_s > 0.0f)
+        {
+            if (mbScaleCheckpointDecided || now < sf.checkpoint_stamp_s)
+                return;
+            mbScaleCheckpointDecided = true;
+            std::string why;
+            if (!mbHaveLatestScaleMeas)
+                why = "no_valid_measurement";
+            else if (now - mLatestScaleMeas.stamp > sf.measurement_max_age_s)
+                why = "stale_measurement";
+            else if (std::fabs(mLatestScaleMeas.scale - 1.0) > sf.plausibility_bound)
+                why = "plausibility";
+            else if (sf.sigma_guard && mLatestScaleMeas.sigma > sf.deadband)
+                why = "sigma_guard";
+            else if (std::fabs(mLatestScaleMeas.scale - 1.0) <= sf.deadband)
+                why = "deadband";
+            std::cout << "[Mapping][Y2] checkpoint t=" << std::fixed << std::setprecision(3) << now
+                      << " s_meas=" << (mbHaveLatestScaleMeas ? mLatestScaleMeas.scale : 0.0)
+                      << " sigma=" << (mbHaveLatestScaleMeas ? mLatestScaleMeas.sigma : 0.0)
+                      << " meas_age=" << (mbHaveLatestScaleMeas ? now - mLatestScaleMeas.stamp : -1.0)
+                      << " decision=" << (why.empty() ? "APPLY" : "NO_GO") << " reason="
+                      << (why.empty() ? "-" : why) << std::endl;
+            if (why.empty())
+                ApplyScaleCorrection(pMap, now, mapTime, mLatestScaleMeas, mLatestScaleMeas.scale,
+                                     mLatestScaleMeas.sigma);
+            return;
+        }
+
         if (pending.empty())
             return; // decisions are taken only when a new reading arrives
 
@@ -1709,6 +1742,22 @@ namespace ORB_SLAM3
             return;
         }
 
+        ApplyScaleCorrection(pMap, now, mapTime, newest, level, sigmaLevel);
+    }
+
+    void LocalMapping::ApplyScaleCorrection(Map *pMap, double now, double mapTime,
+                                            const ScaleMeasurement &meas, double level,
+                                            double sigmaLevel)
+    {
+        const auto &sf = SystemParams::GetParams()->scale_feedback;
+        auto census = [&]()
+        {
+            std::ostringstream o;
+            o << " rej{plaus=" << mnScaleRejPlausibility << " stale=" << mnScaleRejStale
+              << " level_not_ready=" << mnScaleRejLevelNotReady << " sigma=" << mnScaleRejSigma
+              << " deadband=" << mnScaleRejDeadband << " reversal=" << mnScaleRejReversal << "}";
+            return o.str();
+        };
         // Log-domain gain, then clamp the step (criterion.md sec 2/3.2).
         double logApply = sf.gain * std::log(level);
         const double logMax = std::log(1.0 + sf.max_step);
@@ -1717,7 +1766,6 @@ namespace ORB_SLAM3
         else if (logApply < -logMax)
             logApply = -logMax;
         const float sApply = static_cast<float>(std::exp(logApply));
-        const ScaleMeasurement meas = newest;
 
         {
             unique_lock<mutex> lock(pMap->mMutexMapUpdate);
@@ -1731,7 +1779,7 @@ namespace ORB_SLAM3
         }
 
         mdLastScaleCorrectionStamp = now;
-        mnLastScaleCorrectionSign = sign;
+        mnLastScaleCorrectionSign = level > 1.0 ? 1 : -1;
         mdqScaleLevel.clear(); // every buffered reading describes the map before this correction
         mnScaleCorrections++;
         {
