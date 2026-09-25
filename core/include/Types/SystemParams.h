@@ -185,12 +185,19 @@ namespace ORB_SLAM3
         // configs predating W2 load unchanged and the feature stays off.
         struct scale_feedback
         {
-            // OFF, and stays off: the W2 campaign returned SCALE_FEEDBACK_HARMFUL (office ATE
-            // 0.660 -> 1.112 m, subway 1.8 % of the gap, every multi-correction run oscillated).
-            // object_motion_estimator docs/evaluation/results/w2_scale_campaign/findings.md, the
-            // X1 reconciliation in x1_w2_reconciliation/findings.md, and the decision on this
-            // line's future in docs/architecture/scale_line_decision.md. Do not enable without
-            // reading all three.
+            // OFF by default (Z2). Who may turn it on depends on who consumes the result:
+            //  * a consumer of the FINAL MAP (ORB-SLAM3's keyframe map / keyframe.tum): justified,
+            //    with the Y2 single checkpoint (checkpoint_stamp_s > 0) -- subway keyframe SE(3)
+            //    ATE 3.488 -> 1.850 m, map Sim(3) scale 1.140 -> 1.031. The MAGNITUDE is
+            //    conditional on the observer's calibration_c: 0-97 % of the gap across defensible
+            //    c values (Z1, RESULT_CALIBRATION_SENSITIVE). Re-derive c for any new environment.
+            //  * a consumer of STREAMED odometry (/ego/joint_odometry, ego.tum): NOT justified. The
+            //    correction lands after the scale error has been streamed (Y2: -7.7 %, p = 0.31).
+            //  * the W2 continuous controller (checkpoint_stamp_s = 0): never -- W2 returned
+            //    SCALE_FEEDBACK_HARMFUL (office 0.660 -> 1.112 m, oscillation) and Y1's guarded
+            //    level controller is inert on subway.
+            // object_motion_estimator docs/evaluation/results/{w2_scale_campaign,x1_w2_reconciliation,
+            // y2_checkpoint,z1_c_sensitivity}/findings.md and docs/architecture/scale_line_decision.md.
             bool enabled = false;
             float deadband = 0.06f;        // criterion Addendum A: above W1's worst measurement SE
             float sigma_margin = 1.0f;     // act only if |s-1| - sigma_margin*sigma > deadband
