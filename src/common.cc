@@ -72,6 +72,7 @@ rclcpp::Publisher<situational_graphs_msgs::msg::PlanesData>::SharedPtr pubAllWal
 rclcpp::Publisher<vs_graphs::msg::MapResetEvent>::SharedPtr pubMapReset;
 rclcpp::Publisher<vs_graphs::msg::MapReadyEvent>::SharedPtr pubMapReady;
 rclcpp::Publisher<vs_graphs::msg::MapRescaleEvent>::SharedPtr pubMapRescale;
+rclcpp::Publisher<vs_graphs::msg::MapCorrectionEvent>::SharedPtr pubMapCorrection;
 
 // Marker ids published in the previous cycle, keyed by RViz marker namespace. An entity stops
 // appearing in the SLAM system's GetAllX() lists either because it was individually pruned, or
@@ -299,6 +300,11 @@ void setupPublishers(std::shared_ptr<rclcpp::Node> node, std::shared_ptr<image_t
     // going stale relative to the (now rescaled) map.
     pubMapRescale = node->create_publisher<vs_graphs::msg::MapRescaleEvent>(node_name + "/map_rescale", 1);
 
+    // Loop-correction notifications (LoopClosing::CorrectLoop() completed), so downstream nodes
+    // that buffer world-frame state can discard it: the correction is non-rigid, so unlike
+    // map_rescale there is no single transform to apply.
+    pubMapCorrection = node->create_publisher<vs_graphs::msg::MapCorrectionEvent>(node_name + "/map_correction", 10);
+
     // Get body odometry if IMU data is also available
     if (sensorType == ORB_SLAM3::System::IMU_MONOCULAR || sensorType == ORB_SLAM3::System::IMU_STEREO ||
         sensorType == ORB_SLAM3::System::IMU_RGBD)
@@ -429,6 +435,37 @@ void publishMapRescaleIfChanged(rclcpp::Time msgTime)
     pubMapRescale->publish(event);
 }
 
+// Announces each completed loop correction on the current map, from Map::GetLoopCorrectionVersion()
+// (incremented at the end of LoopClosing::CorrectLoop()), with the same per-map bookkeeping as
+// publishMapRescaleIfChanged.
+void publishMapCorrectionIfChanged(rclcpp::Time msgTime)
+{
+    static uint64_t lastMapId = std::numeric_limits<uint64_t>::max();
+    static uint64_t lastVersion = 0;
+
+    ORB_SLAM3::Map *pMap = pSLAM->GetCurrentMap();
+    uint64_t currentMapId = pMap->GetId();
+    if (currentMapId != lastMapId)
+    {
+        lastMapId = currentMapId;
+        lastVersion = 0;
+    }
+
+    uint64_t currentVersion = pMap->GetLoopCorrectionVersion();
+    if (currentVersion == lastVersion)
+        return;
+    lastVersion = currentVersion;
+    if (currentVersion == 0)
+        return; // no loop correction yet on this map
+
+    vs_graphs::msg::MapCorrectionEvent event;
+    event.header.stamp = msgTime;
+    event.header.frame_id = frameWorld;
+    event.map_id = currentMapId;
+    event.correction_count = currentVersion;
+    pubMapCorrection->publish(event);
+}
+
 void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb, const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msgPCL)
 {
     // Detect and announce a map reset/readiness/rescale change as early as possible in the cycle,
@@ -438,6 +475,7 @@ void publishTopics(rclcpp::Time msgTime, Eigen::Vector3f Wbb, const sensor_msgs:
     publishMapResetIfChanged(msgTime);
     publishMapReadyIfChanged(msgTime);
     publishMapRescaleIfChanged(msgTime);
+    publishMapCorrectionIfChanged(msgTime);
 
     Sophus::SE3f Twc = pSLAM->GetCamTwc();
 

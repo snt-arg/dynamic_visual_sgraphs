@@ -603,6 +603,18 @@ namespace ORB_SLAM3
         return mnScaleCorrectionVersion;
     }
 
+    void Map::IncreaseLoopCorrectionVersion()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        mnLoopCorrectionVersion++;
+    }
+
+    uint64_t Map::GetLoopCorrectionVersion()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        return mnLoopCorrectionVersion;
+    }
+
     void Map::SetInertialSensor()
     {
         unique_lock<mutex> lock(mMutexMap);

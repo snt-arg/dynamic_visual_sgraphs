@@ -174,6 +174,12 @@ namespace ORB_SLAM3
         void GetLastScaleCorrection(Sophus::SE3f &T, float &s);
         uint64_t GetScaleCorrectionVersion();
 
+        // Loop-correction counter, in the style of the scale-correction one above: incremented once
+        // each time LoopClosing::CorrectLoop() finishes correcting this map, so external consumers
+        // that keep their own world-frame state (e.g. object_motion_estimator) can detect it.
+        void IncreaseLoopCorrectionVersion();
+        uint64_t GetLoopCorrectionVersion();
+
         bool IsInertial();
         void SetIniertialBA1();
         void SetIniertialBA2();
@@ -268,6 +274,7 @@ namespace ORB_SLAM3
         Sophus::SE3f mLastScaleCorrectionT;
         float mLastScaleCorrectionS = 1.0f;
         uint64_t mnScaleCorrectionVersion = 0;
+        uint64_t mnLoopCorrectionVersion = 0;
 
         // Mutex
         std::mutex mMutexMap;
