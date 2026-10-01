@@ -1178,6 +1178,10 @@ namespace ORB_SLAM3
         mpLocalMapper->Release();
 
         mLastLoopKFid = mpCurrentKF->mnId; // TODO old varible, it is not use in the new algorithm
+
+        // The loop correction is complete (essential graph optimised, local mapping released):
+        // announce it to external consumers via the map's loop-correction counter.
+        pLoopMap->IncreaseLoopCorrectionVersion();
     }
 
     void LoopClosing::MergeLocal()

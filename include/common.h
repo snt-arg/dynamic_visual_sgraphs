@@ -121,6 +121,7 @@
 #include <vs_graphs/msg/map_reset_event.hpp>
 #include <vs_graphs/msg/map_ready_event.hpp>
 #include <vs_graphs/msg/map_rescale_event.hpp>
+#include <vs_graphs/msg/map_correction_event.hpp>
 #include <vs_graphs/msg/imu_bias_estimate.hpp>
 #include <vs_graphs/msg/scale_measurement.hpp>
 
