@@ -59,6 +59,11 @@ namespace ORB_SLAM3
         // Main function
         void Run();
 
+        // [P9-B] Deterministic mode: the mapper has no thread; the tracking thread drains its queue.
+        void SetSynchronous();
+        void RunSynchronously();
+        bool CheckNewKeyFrames();
+
         void InsertKeyFrame(KeyFrame *pKF);
         void EmptyQueue();
 
@@ -164,7 +169,7 @@ namespace ORB_SLAM3
         int nLBA_abort;
 #endif
     protected:
-        bool CheckNewKeyFrames();
+        bool RunOnce();
         void ProcessNewKeyFrame();
         void CreateNewMapPoints();
 
@@ -187,6 +192,8 @@ namespace ORB_SLAM3
         void SetFinish();
         bool mbFinishRequested;
         bool mbFinished;
+        // [P9-B] true when the mapper runs inside the tracking thread (System.Deterministic)
+        bool mbSynchronous = false;
         std::mutex mMutexFinish;
 
         Atlas *mpAtlas;

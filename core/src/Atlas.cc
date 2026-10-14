@@ -21,6 +21,8 @@
 */
 
 #include "Atlas.h"
+#include "Deterministic.h"
+#include <stdexcept>
 #include "Viewer.h"
 
 #include "Pinhole.h"
@@ -425,7 +427,12 @@ namespace ORB_SLAM3
         if (!mpCurrentMap)
             CreateNewMap();
         while (mpCurrentMap->IsBad())
+        {
+            // [P9-B] Nothing else can clear the bad flag when everything runs in one thread.
+            if (Deterministic::Enabled())
+                throw std::runtime_error("[Deterministic] Atlas::GetCurrentMap: current map is bad and no other thread can fix it");
             usleep(3000);
+        }
 
         return mpCurrentMap;
     }

@@ -28,6 +28,7 @@
 #include "GeometricTools.h"
 
 #include <mutex>
+#include <stdexcept>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
@@ -72,7 +73,17 @@ namespace ORB_SLAM3
     {
         mbFinished = false;
 
-        while (1)
+        while (RunOnce())
+            usleep(3000);
+
+        SetFinish();
+    }
+
+    // One iteration of the mapper loop. Returns false when the thread has to finish.
+    // [P9-B] Body of the former `while (1)` in Run(), unchanged apart from `break` -> `return false`;
+    // the deterministic mode calls it from the tracking thread (RunSynchronously).
+    bool LocalMapping::RunOnce()
+    {
         {
             // Tracking will see that Local Mapping is busy
             SetAcceptKeyFrames(false);
@@ -292,10 +303,12 @@ namespace ORB_SLAM3
                 // Safe area to stop
                 while (isStopped() && !CheckFinish())
                 {
+                    if (mbSynchronous)
+                        throw std::runtime_error("[Deterministic] LocalMapping would wait for a Release() inside the tracking thread");
                     usleep(3000);
                 }
                 if (CheckFinish())
-                    break;
+                    return false;
             }
 
             ResetIfRequested();
@@ -304,12 +317,42 @@ namespace ORB_SLAM3
             SetAcceptKeyFrames(true);
 
             if (CheckFinish())
-                break;
-
-            usleep(3000);
+                return false;
         }
 
-        SetFinish();
+        return true;
+    }
+
+    void LocalMapping::SetSynchronous()
+    {
+        // The mapper never gets its own thread: Release() returns early while mbFinished is true
+        // (constructor value), which would leave mbStopped latched after the first loop closure.
+        mbSynchronous = true;
+        mbFinished = false;
+    }
+
+    void LocalMapping::RunSynchronously()
+    {
+        // Called by the tracking thread after a keyframe insertion until the queue is empty.
+        while (CheckNewKeyFrames())
+        {
+            const KeyFrame *pHead;
+            const std::size_t nBefore = [&]()
+            {
+                unique_lock<mutex> lock(mMutexNewKFs);
+                pHead = mlNewKeyFrames.front();
+                return mlNewKeyFrames.size();
+            }();
+            if (!RunOnce())
+                throw std::runtime_error("[Deterministic] LocalMapping::RunOnce asked to finish inside the synchronous drain");
+            const bool stalled = [&]()
+            {
+                unique_lock<mutex> lock(mMutexNewKFs);
+                return !mlNewKeyFrames.empty() && mlNewKeyFrames.size() == nBefore && mlNewKeyFrames.front() == pHead;
+            }();
+            if (stalled)
+                throw std::runtime_error("[Deterministic] LocalMapping made no progress on a non-empty keyframe queue (mbBadImu or stop latched)");
+        }
     }
 
     void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
@@ -864,6 +907,14 @@ namespace ORB_SLAM3
         mbStopRequested = true;
         unique_lock<mutex> lock2(mMutexNewKFs);
         mbAbortBA = true;
+        if (mbSynchronous)
+        {
+            // [P9-B] The mapper is idle by construction (it only runs inside the tracking thread), so
+            // the stop that Stop() would latch from the mapper thread takes effect immediately.
+            if (mbNotStop)
+                throw std::runtime_error("[Deterministic] LocalMapping::RequestStop while the tracker holds SetNotStop(true)");
+            mbStopped = true;
+        }
     }
 
     bool LocalMapping::Stop()
@@ -1096,6 +1147,12 @@ namespace ORB_SLAM3
             mbResetRequested = true;
         }
 
+        if (mbSynchronous)
+        {
+            ResetIfRequested();
+            return;
+        }
+
         // Wait until the mutex is free
         while (1)
         {
@@ -1115,6 +1172,12 @@ namespace ORB_SLAM3
             // Request to reset the active map
             mbResetRequestedActiveMap = true;
             mpMapToReset = pMap;
+        }
+
+        if (mbSynchronous)
+        {
+            ResetIfRequested();
+            return;
         }
 
         // Wait until the mutex is free

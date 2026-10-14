@@ -61,6 +61,11 @@ namespace ORB_SLAM3
         // Main function
         void Run();
 
+        // [P9-B] Deterministic mode: no thread; the tracking thread drains the queue and runs global BA inline.
+        void SetSynchronous();
+        void RunSynchronously();
+        bool HasPendingKeyFrames();
+
         void InsertKeyFrame(KeyFrame *pKF);
 
         void RequestReset();
@@ -120,6 +125,9 @@ namespace ORB_SLAM3
 
     protected:
         bool CheckNewKeyFrames();
+        int RunOnce();
+        void LaunchGlobalBundleAdjustment(Map *pMap, unsigned long nLoopKF);
+        bool mbSynchronous = false;
 
         // Methods to implement the new place recognition algorithm
         bool NewDetectCommonRegions();

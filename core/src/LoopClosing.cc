@@ -30,6 +30,8 @@
 
 #include <mutex>
 #include <thread>
+#include <stdexcept>
+#include "Deterministic.h"
 
 namespace ORB_SLAM3
 {
@@ -91,7 +93,23 @@ namespace ORB_SLAM3
     {
         mbFinished = false;
 
-        while (1)
+        for (;;)
+        {
+            const int next = RunOnce();
+            if (next == 0)
+                break;
+            if (next == 1)
+                usleep(5000);
+        }
+
+        SetFinish();
+    }
+
+    // One iteration of the loop-closing loop. 0: finish, 1: sleep then iterate, 2: iterate at once.
+    // [P9-B] Body of the former `while (1)` in Run(), unchanged apart from `break`/`continue`/end of
+    // body -> return codes; the deterministic mode calls it from the tracking thread.
+    int LoopClosing::RunOnce()
+    {
         {
 
             // NEW LOOP AND MERGE DETECTION ALGORITHM
@@ -149,7 +167,7 @@ namespace ORB_SLAM3
                                     mnMergeNumNotFound = 0;
                                     mbMergeDetected = false;
                                     Verbose::PrintMess("scale bad estimated. Abort merging", Verbose::VERBOSITY_NORMAL);
-                                    continue;
+                                    return 2;
                                 }
                                 // If inertial, force only yaw
                                 if ((mpTracker->mSensor == System::IMU_MONOCULAR || mpTracker->mSensor == System::IMU_STEREO || mpTracker->mSensor == System::IMU_RGBD) &&
@@ -291,13 +309,43 @@ namespace ORB_SLAM3
 
             if (CheckFinish())
             {
-                break;
+                return 0;
             }
-
-            usleep(5000);
         }
 
-        SetFinish();
+        return 1;
+    }
+
+    void LoopClosing::SetSynchronous()
+    {
+        mbSynchronous = true;
+        mbFinished = false;
+    }
+
+    void LoopClosing::RunSynchronously()
+    {
+        // Called by the tracking thread, after the mapper queue is empty, until the loop-closing queue is empty.
+        while (CheckNewKeyFrames())
+        {
+            if (RunOnce() == 0)
+                throw std::runtime_error("[Deterministic] LoopClosing::RunOnce asked to finish inside the synchronous drain");
+        }
+    }
+
+    bool LoopClosing::HasPendingKeyFrames() { return CheckNewKeyFrames(); }
+
+    void LoopClosing::LaunchGlobalBundleAdjustment(Map *pMap, unsigned long nLoopKF)
+    {
+        if (mbSynchronous)
+        {
+            // [P9-B] Global BA inline. The mapper is stopped at both call sites (CorrectLoop / MergeLocal*),
+            // and RunGlobalBundleAdjustment itself stops/releases it, so this is the serialisation
+            // "the global BA finishes before the mapper resumes".
+            RunGlobalBundleAdjustment(pMap, nLoopKF);
+            return;
+        }
+        Deterministic::ThrowIfThreadStart("global bundle adjustment");
+        mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment, this, pMap, nLoopKF);
     }
 
     void LoopClosing::InsertKeyFrame(KeyFrame *pKF)
@@ -1171,7 +1219,7 @@ namespace ORB_SLAM3
             mbStopGBA = false;
             mnCorrectionGBA = mnNumCorrection;
 
-            mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment, this, pLoopMap, mpCurrentKF->mnId);
+            LaunchGlobalBundleAdjustment(pLoopMap, mpCurrentKF->mnId);
         }
 
         // Loop closed. Release Local Mapping.
@@ -1746,7 +1794,7 @@ namespace ORB_SLAM3
             mbRunningGBA = true;
             mbFinishedGBA = false;
             mbStopGBA = false;
-            mpThreadGBA = new thread(&LoopClosing::RunGlobalBundleAdjustment, this, pMergeMap, mpCurrentKF->mnId);
+            LaunchGlobalBundleAdjustment(pMergeMap, mpCurrentKF->mnId);
         }
 
         mpMergeMatchedKF->AddMergeEdge(mpCurrentKF);
@@ -2091,6 +2139,12 @@ namespace ORB_SLAM3
             mbResetRequested = true;
         }
 
+        if (mbSynchronous)
+        {
+            ResetIfRequested();
+            return;
+        }
+
         while (1)
         {
             {
@@ -2108,6 +2162,12 @@ namespace ORB_SLAM3
             unique_lock<mutex> lock(mMutexReset);
             mbResetActiveMapRequested = true;
             mpMapToReset = pMap;
+        }
+
+        if (mbSynchronous)
+        {
+            ResetIfRequested();
+            return;
         }
 
         while (1)

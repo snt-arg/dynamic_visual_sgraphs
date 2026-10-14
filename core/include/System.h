@@ -273,6 +273,11 @@ namespace ORB_SLAM3
         // racing far ahead of what it has actually processed.
         int GetLocalMappingQueueSize();
 
+        // [P9-B] Deterministic mode. The mapper and loop closer have no thread; the tracking thread calls this
+        // after each frame (TrackMonocular does it itself) until both queues are empty. Global BA runs inline.
+        bool IsDeterministic() const { return mbDeterministic; }
+        void RunBackendSynchronously();
+
         void ChangeDataset();
 
         float GetImageScale();
@@ -381,12 +386,18 @@ namespace ORB_SLAM3
         // System threads: Local Mapping, Loop Closing, Viewer.
         // 🚀 [vS-Graphs v.2.0] Two new threads: Geometric Segmentation and Semantic Segmentation
         // The Tracking thread "lives" in the main execution thread that creates the System object.
-        std::thread *mptViewer;
-        std::thread *mptLoopClosing;
-        std::thread *mptLocalMapping;
-        std::thread *mptSemanticSegmentation;
-        std::thread *mptSemanticsManager;
-        std::thread *mptGeometricSegmentation;
+        std::thread *mptViewer = nullptr;
+        std::thread *mptLoopClosing = nullptr;
+        std::thread *mptLocalMapping = nullptr;
+        std::thread *mptSemanticSegmentation = nullptr;
+        std::thread *mptSemanticsManager = nullptr;
+        std::thread *mptGeometricSegmentation = nullptr;
+
+        // [P9-B] System.Deterministic: LocalMapping, LoopClosing and global BA run inside the tracking
+        // thread and no other thread starts (see Deterministic.h, docs in eval/phase9/P9-B).
+        bool mbDeterministic = false;
+        void ConfigureDeterministicMode(cv::FileStorage &fsSettings, bool bUseViewer);
+        void RejectAsyncInput(const char *what) const;
 
         // Reset flag
         std::mutex mMutexReset;

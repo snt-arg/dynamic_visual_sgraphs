@@ -22,6 +22,11 @@
 
 #include "System.h"
 #include "Converter.h"
+#include "Deterministic.h"
+#include "Thirdparty/DBoW2/DUtils/Random.h"
+#include <sys/personality.h>
+#include <cstdlib>
+#include <stdexcept>
 #include <thread>
 #include <chrono>
 #include <pangolin/pangolin.h>
@@ -104,6 +109,9 @@ namespace ORB_SLAM3
             activeLC = static_cast<int>(fsSettings["loopClosing"]) != 0;
         }
 
+        // [P9-B] Deterministic mode is configured before any module that could start a thread exists
+        ConfigureDeterministicMode(fsSettings, bUseViewer);
+
         mStrVocabularyFilePath = strVocFile;
 
         // ORB Vocabulary
@@ -147,6 +155,8 @@ namespace ORB_SLAM3
         // Setup the system parameters
         SystemParams *sysParams = SystemParams::GetParams();
         sysParams->SetParams(strSysParamsFile);
+        if (mbDeterministic && sysParams->scale_feedback.enabled)
+            throw std::runtime_error("[Deterministic] system_params scale_feedback.enabled is set: it consumes asynchronous ROS input");
 
         // Parse the environment database, if provided
         parseJsonDatabase(sysParams->general.env_database);
@@ -169,7 +179,13 @@ namespace ORB_SLAM3
         // Initialize the Local Mapping thread and launch
         mpLocalMapper = new LocalMapping(this, mpAtlas, mSensor == MONOCULAR || mSensor == IMU_MONOCULAR,
                                          mSensor == IMU_MONOCULAR || mSensor == IMU_STEREO || mSensor == IMU_RGBD, strSequence);
-        mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run, mpLocalMapper);
+        if (mbDeterministic)
+            mpLocalMapper->SetSynchronous();
+        else
+        {
+            Deterministic::ThrowIfThreadStart("LocalMapping");
+            mptLocalMapping = new thread(&ORB_SLAM3::LocalMapping::Run, mpLocalMapper);
+        }
         mpLocalMapper->mInitFr = initFr;
         if (settings_)
             mpLocalMapper->mThFarPoints = settings_->thFarPoints();
@@ -185,21 +201,39 @@ namespace ORB_SLAM3
 
         // Initialize the Loop Closing thread and launch
         mpLoopCloser = new LoopClosing(mpAtlas, mpKeyFrameDatabase, mpVocabulary, mSensor != MONOCULAR, activeLC);
-        mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
+        if (mbDeterministic)
+            mpLoopCloser->SetSynchronous();
+        else
+        {
+            Deterministic::ThrowIfThreadStart("LoopClosing");
+            mptLoopClosing = new thread(&ORB_SLAM3::LoopClosing::Run, mpLoopCloser);
+        }
 
         // 🚀 [vS-Graphs v.2.0] Initialize Geometric Segmentation thread and launch
         bool hasDepthCloud = (mSensor == System::RGBD || mSensor == System::IMU_RGBD);
         mpGeometricSegmentation = new GeometricSegmentation(mpAtlas, hasDepthCloud, envDoors, envRooms);
-        mptGeometricSegmentation = new thread(&GeometricSegmentation::Run, mpGeometricSegmentation);
+        if (!mbDeterministic) // [P9-B] vS-Graphs segmentation/semantic modules are off in deterministic mode
+        {
+            Deterministic::ThrowIfThreadStart("GeometricSegmentation");
+            mptGeometricSegmentation = new thread(&GeometricSegmentation::Run, mpGeometricSegmentation);
+        }
 
         // 🚀 [vS-Graphs v.2.0] Initialize Semantic Segmentation thread and launch
         // [TODO] - launch threads based on flags
         mpSemanticSegmentation = new SemanticSegmentation(mpAtlas);
-        mptSemanticSegmentation = new thread(&SemanticSegmentation::Run, mpSemanticSegmentation);
+        if (!mbDeterministic)
+        {
+            Deterministic::ThrowIfThreadStart("SemanticSegmentation");
+            mptSemanticSegmentation = new thread(&SemanticSegmentation::Run, mpSemanticSegmentation);
+        }
 
         // 🚀 [vS-Graphs v.2.0] Initialize Semantics Manager thread and launch
         mpSemanticsManager = new SemanticsManager(mpAtlas);
-        mptSemanticsManager = new thread(&SemanticsManager::Run, mpSemanticsManager);
+        if (!mbDeterministic)
+        {
+            Deterministic::ThrowIfThreadStart("SemanticsManager");
+            mptSemanticsManager = new thread(&SemanticsManager::Run, mpSemanticsManager);
+        }
 
         // Set pointers between threads
         mpTracker->SetLoopClosing(mpLoopCloser);
@@ -216,6 +250,7 @@ namespace ORB_SLAM3
         if (bUseViewer)
         {
             mpViewer = new Viewer(this, mpFrameDrawer, mpMapDrawer, mpTracker, strSettingsFile, settings_);
+            Deterministic::ThrowIfThreadStart("Viewer");
             mptViewer = new thread(&Viewer::Run, mpViewer);
             mpTracker->SetViewer(mpViewer);
             mpLoopCloser->mpViewer = mpViewer;
@@ -247,6 +282,7 @@ namespace ORB_SLAM3
 
     void System::addSegmentedImage(std::tuple<uint64_t, cv::Mat, pcl::PCLPointCloud2::Ptr> *tuple)
     {
+        RejectAsyncInput("addSegmentedImage");
         // Adding the segmented image to the buffer of the SemanticSegmentation
         if (SystemParams::GetParams()->general.mode_of_operation == SystemParams::general::ModeOfOperation::GEO)
         {
@@ -264,6 +300,7 @@ namespace ORB_SLAM3
                                           float auxDepthMin, float auxDepthMax, int auxDepthStride,
                                           const std::string &auxDepthScaleMode)
     {
+        RejectAsyncInput("AttachAuxDepthToKeyFrame");
         ORB_SLAM3::KeyFrame *pKF = mpAtlas->GetKeyFrameById(keyFrameId);
         if (pKF == nullptr || pKF->isBad())
         {
@@ -284,12 +321,14 @@ namespace ORB_SLAM3
 
     void System::setSkeletonCluster(const std::vector<std::vector<Eigen::Vector3d>> &skeletonClusterPoints)
     {
+        RejectAsyncInput("setSkeletonCluster");
         // Adding the skeleton cluster to the SemanticsManager
         mpAtlas->SetSkeletonClusterPoints(skeletonClusterPoints);
     }
 
     void System::setScaleMeasurement(double scale, double sigma, double stamp, double windowS)
     {
+        RejectAsyncInput("setScaleMeasurement");
         // W2 (docs/evaluation/results/w2_scale_controller/criterion.md sec 3.4). Follows the
         // setSkeletonCluster precedent: ROS callback -> System setter -> core state. The
         // controller itself lives in LocalMapping and runs on the LocalMapping thread.
@@ -535,6 +574,10 @@ namespace ORB_SLAM3
 
         Sophus::SE3f Tcw = mpTracker->GrabImageMonocular(imToFeed, timestamp, filename, markers, envDoors, envRooms, maskToFeed);
 
+        // [P9-B] the mapper and loop closer finish before the next frame is tracked
+        if (mbDeterministic)
+            RunBackendSynchronously();
+
         unique_lock<mutex> lock2(mMutexState);
         mTrackingState = mpTracker->mState;
         UpdateTrackedPointsFromCurrentFrame();
@@ -735,8 +778,8 @@ namespace ORB_SLAM3
         // running would race a BA or a scale correction.
         const auto deadline = std::chrono::steady_clock::now() +
                               std::chrono::milliseconds(static_cast<long>(timeoutS * 1000.0));
-        bool finished = false;
-        while (std::chrono::steady_clock::now() < deadline)
+        bool finished = mbDeterministic; // [P9-B] no threads to wait for
+        while (!finished && std::chrono::steady_clock::now() < deadline)
         {
             if (mpLocalMapper->isFinished() && mpLoopCloser->isFinished())
             {
@@ -1210,6 +1253,83 @@ namespace ORB_SLAM3
     bool System::isFinished()
     {
         return (GetTimeFromIMUInit() > 0.1);
+    }
+
+    void System::RejectAsyncInput(const char *what) const
+    {
+        if (mbDeterministic)
+            throw std::runtime_error(std::string("[Deterministic] asynchronous input rejected: ") + what);
+    }
+
+    void System::RunBackendSynchronously()
+    {
+        if (!mbDeterministic)
+            throw std::runtime_error("[Deterministic] RunBackendSynchronously called without System.Deterministic");
+        // The mapper first, then the loop closer; a loop correction / merge can queue mapper work, so repeat
+        // until both are idle (each pass is a serialisation the threaded system could also produce).
+        do
+        {
+            mpLocalMapper->RunSynchronously();
+            mpLoopCloser->RunSynchronously();
+        } while (mpLocalMapper->CheckNewKeyFrames() || mpLoopCloser->HasPendingKeyFrames());
+    }
+
+    void System::ConfigureDeterministicMode(cv::FileStorage &fsSettings, bool bUseViewer)
+    {
+        const cv::FileNode nDet = fsSettings["System.Deterministic"];
+        mbDeterministic = !nDet.empty() && static_cast<int>(nDet) != 0;
+
+        const cv::FileNode nSigma = fsSettings["System.KeypointJitterSigmaPx"];
+        const double jitterSigma = nSigma.empty() ? 0.0 : static_cast<double>(nSigma);
+        const cv::FileNode nJSeed = fsSettings["System.KeypointJitterSeed"];
+        const long jitterSeed = nJSeed.empty() ? 0 : static_cast<long>(static_cast<int>(nJSeed));
+
+        if (!mbDeterministic)
+        {
+            // Left strictly alone: the jitter is a stage-2 instrument of the deterministic mode only.
+            if (jitterSigma != 0.0)
+                throw std::runtime_error("[Deterministic] System.KeypointJitterSigmaPx requires System.Deterministic");
+            Deterministic::Set(false);
+            return;
+        }
+
+        Deterministic::Set(true);
+        if (bUseViewer)
+            Deterministic::ThrowIfThreadStart("Viewer"); // throws
+
+        // ASLR: pointer-keyed std::set/std::map order depends on heap addresses (audit.md sec. 5)
+        const int persona = personality(0xffffffff);
+        if (persona == -1 || (persona & ADDR_NO_RANDOMIZE) == 0)
+            throw std::runtime_error("[Deterministic] ASLR is on: launch under `setarch $(uname -m) -R`");
+
+        // Math libraries single-threaded: the launcher must have exported these before the process started
+        const char *vars[] = {"OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"};
+        std::string envLog;
+        for (const char *name : vars)
+        {
+            const char *v = std::getenv(name);
+            envLog += std::string(name) + "=" + (v ? v : "<unset>") + " ";
+            if (!v || std::string(v) != "1")
+                throw std::runtime_error(std::string("[Deterministic] ") + name + " must be 1, is " + (v ? v : "<unset>"));
+        }
+        cv::setNumThreads(1);
+        Eigen::setNbThreads(1);
+
+        // Every RNG gets a fixed, logged seed. rand() is shared by Sim3Solver / MLPnPsolver / TwoViewReconstruction;
+        // SeedRandOnce(seed) also turns TwoViewReconstruction's later SeedRandOnce(0) into a no-op.
+        const cv::FileNode nSeed = fsSettings["System.DeterministicSeed"];
+        const int seed = nSeed.empty() ? 0 : static_cast<int>(nSeed);
+        DUtils::Random::SeedRandOnce(seed);
+
+        if (jitterSigma < 0.0)
+            throw std::runtime_error("[Deterministic] System.KeypointJitterSigmaPx must be >= 0");
+        if (jitterSigma > 0.0 && mSensor != MONOCULAR && mSensor != IMU_MONOCULAR)
+            throw std::runtime_error("[Deterministic] keypoint jitter is implemented for monocular frames only");
+        Deterministic::GetJitter().Configure(jitterSigma, static_cast<std::uint64_t>(jitterSeed));
+
+        std::cout << "[Deterministic] on: synchronous LocalMapping/LoopClosing/global BA, no threads, ASLR off (personality=0x"
+                  << std::hex << persona << std::dec << "), cv threads=" << cv::getNumThreads() << ", " << envLog
+                  << "rand_seed=" << seed << " jitter_sigma_px=" << jitterSigma << " jitter_seed=" << jitterSeed << std::endl;
     }
 
     int System::GetLocalMappingQueueSize()

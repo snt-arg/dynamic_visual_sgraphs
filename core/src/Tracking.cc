@@ -21,6 +21,7 @@
  */
 
 #include "Tracking.h"
+#include "Deterministic.h"
 
 #include "ORBmatcher.h"
 #include "FrameDrawer.h"
@@ -3470,6 +3471,10 @@ namespace ORB_SLAM3
 
     void Tracking::AddKeyFrameToGeoSegKFBuffer(KeyFrame *pKF)
     {
+        // [P9-B] Geometric segmentation has no thread in deterministic mode; do not queue into an unread buffer.
+        if (Deterministic::Enabled())
+            return;
+
         // Add the current KeyFrame to the buffer in GeometrySegmentation
         mpGeometricSegmentation->AddKeyFrameToBuffer(pKF);
     }

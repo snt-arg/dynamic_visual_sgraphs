@@ -21,6 +21,7 @@
 */
 
 #include "Frame.h"
+#include "Deterministic.h"
 
 #include "G2oTypes.h"
 #include "MapPoint.h"
@@ -449,6 +450,18 @@ namespace ORB_SLAM3
             return;
 
         UndistortKeyPoints();
+
+        // [P9-B] Seeded Gaussian jitter of the undistorted keypoint coordinates (off unless configured,
+        // System.KeypointJitterSigmaPx). Drawn in keypoint order, x then y, on the tracking thread.
+        if (Deterministic::GetJitter().sigmaPx > 0.0)
+        {
+            Deterministic::Jitter &jitter = Deterministic::GetJitter();
+            for (int i = 0; i < N; i++)
+            {
+                mvKeysUn[i].pt.x += jitter.Next();
+                mvKeysUn[i].pt.y += jitter.Next();
+            }
+        }
 
         // Set no stereo information
         mnCloseMPs = 0;
