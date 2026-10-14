@@ -131,10 +131,19 @@ namespace ORB_SLAM3
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_StartExtORB = std::chrono::steady_clock::now();
 #endif
-        thread threadLeft(&Frame::ExtractORB, this, 0, imLeft, 0, 0, cv::Mat());
-        thread threadRight(&Frame::ExtractORB, this, 1, imRight, 0, 0, cv::Mat());
-        threadLeft.join();
-        threadRight.join();
+        if (Deterministic::Enabled())
+        {
+            // [P9-B] stereo path: no threads in deterministic mode
+            ExtractORB(0, imLeft, 0, 0, cv::Mat());
+            ExtractORB(1, imRight, 0, 0, cv::Mat());
+        }
+        else
+        {
+            thread threadLeft(&Frame::ExtractORB, this, 0, imLeft, 0, 0, cv::Mat());
+            thread threadRight(&Frame::ExtractORB, this, 1, imRight, 0, 0, cv::Mat());
+            threadLeft.join();
+            threadRight.join();
+        }
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndExtORB = std::chrono::steady_clock::now();
 

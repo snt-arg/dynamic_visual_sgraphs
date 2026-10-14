@@ -21,6 +21,7 @@
 #include "Thirdparty/DBoW2/DUtils/Random.h"
 
 #include <thread>
+#include "Deterministic.h"
 
 using namespace std;
 namespace ORB_SLAM3
@@ -98,12 +99,23 @@ namespace ORB_SLAM3
         float SH, SF;
         Eigen::Matrix3f H, F;
 
-        thread threadH(&TwoViewReconstruction::FindHomography, this, ref(vbMatchesInliersH), ref(SH), ref(H));
-        thread threadF(&TwoViewReconstruction::FindFundamental, this, ref(vbMatchesInliersF), ref(SF), ref(F));
+        if (Deterministic::Enabled())
+        {
+            // [P9-B] No threads. Two threads allocating concurrently leave timing-dependent chunks in the
+            // caller's tcache, which changes the heap layout and with it the pointer order of every later
+            // std::set<KeyFrame*>/std::map<MapPoint*,...> (audit.md erratum E1, checks.md F-TWOVIEW).
+            FindHomography(vbMatchesInliersH, SH, H);
+            FindFundamental(vbMatchesInliersF, SF, F);
+        }
+        else
+        {
+            thread threadH(&TwoViewReconstruction::FindHomography, this, ref(vbMatchesInliersH), ref(SH), ref(H));
+            thread threadF(&TwoViewReconstruction::FindFundamental, this, ref(vbMatchesInliersF), ref(SF), ref(F));
 
-        // Wait until both threads have finished
-        threadH.join();
-        threadF.join();
+            // Wait until both threads have finished
+            threadH.join();
+            threadF.join();
+        }
 
         // Compute ratio of scores
         if (SH + SF == 0.f)
