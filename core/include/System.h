@@ -278,6 +278,18 @@ namespace ORB_SLAM3
         bool IsDeterministic() const { return mbDeterministic; }
         void RunBackendSynchronously();
 
+        // [P9-B] Called by the tracker right before a map's content is discarded (Tracking::ResetActiveMap / Reset),
+        // while its keyframes are still intact, so an evaluation can export the trajectory a reset would destroy.
+        // No effect (and no cost) unless a callback is set.
+        using MapRetireCallback = std::function<void(Map *, const char *)>;
+        void SetMapRetireCallback(MapRetireCallback callback) { mMapRetireCallback = std::move(callback); }
+        bool HasMapRetireCallback() const { return static_cast<bool>(mMapRetireCallback); }
+        void NotifyMapRetire(Map *pMap, const char *reason)
+        {
+            if (mMapRetireCallback)
+                mMapRetireCallback(pMap, reason);
+        }
+
         void ChangeDataset();
 
         float GetImageScale();
@@ -396,6 +408,7 @@ namespace ORB_SLAM3
         // [P9-B] System.Deterministic: LocalMapping, LoopClosing and global BA run inside the tracking
         // thread and no other thread starts (see Deterministic.h, docs in eval/phase9/P9-B).
         bool mbDeterministic = false;
+        MapRetireCallback mMapRetireCallback;
         void ConfigureDeterministicMode(cv::FileStorage &fsSettings, bool bUseViewer);
         void RejectAsyncInput(const char *what) const;
 

@@ -4153,6 +4153,11 @@ namespace ORB_SLAM3
                 usleep(3000);
         }
 
+        // [P9-B] every map is about to be cleared: let an evaluation export them first
+        if (mpSystem->HasMapRetireCallback())
+            for (Map *pRetiring : mpAtlas->GetAllMaps())
+                mpSystem->NotifyMapRetire(pRetiring, "reset_all");
+
         // Reset Local Mapping
         if (!bLocMap)
         {
@@ -4213,6 +4218,9 @@ namespace ORB_SLAM3
         }
 
         Map *pMap = mpAtlas->GetCurrentMap();
+
+        // [P9-B] the map is about to be cleared: let an evaluation export it first
+        mpSystem->NotifyMapRetire(pMap, "reset_active_map");
 
         if (!bLocMap)
         {
