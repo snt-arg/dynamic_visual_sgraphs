@@ -88,16 +88,38 @@ namespace ORB_SLAM3
                 continue;
             std::istringstream ss(line);
             std::string tag;
-            PedObs o;
-            int cl, cr;
-            ss >> tag >> o.trackId >> o.rootU >> o.rootV >> o.lpx >> o.maskH >> o.boxH >> cl >> cr >> o.toeU[0] >> o.toeV[0] >> o.toeU[1] >> o.toeV[1];
-            if (tag != "P" || ss.fail())
-                throw std::runtime_error("[Pedestrians] malformed line in " + path + ": " + line);
-            if (o.trackId <= lastTrack)
-                throw std::runtime_error("[Pedestrians] track ids must be strictly increasing in " + path);
-            lastTrack = o.trackId;
-            o.claim = {cl != 0, cr != 0};
-            pf->obs.push_back(o);
+            ss >> tag;
+            if (tag == "P")
+            {
+                PedObs o;
+                ss >> o.trackId >> o.rootU >> o.rootV >> o.lpx >> o.maskH;
+                if (ss.fail())
+                    throw std::runtime_error("[Pedestrians] malformed line in " + path + ": " + line);
+                if (o.trackId <= lastTrack)
+                    throw std::runtime_error("[Pedestrians] track ids must be strictly increasing in " + path);
+                lastTrack = o.trackId;
+                pf->obs.push_back(o);
+            }
+            else if (tag == "C")
+            {
+                // C claimed_stamp track claimL claimR toeLu toeLv toeRu toeRv box_h
+                double cs;
+                PedClaim c;
+                int cl, cr;
+                ss >> cs >> c.trackId >> cl >> cr >> c.toeU[0] >> c.toeV[0] >> c.toeU[1] >> c.toeV[1] >> c.boxH;
+                if (ss.fail())
+                    throw std::runtime_error("[Pedestrians] malformed line in " + path + ": " + line);
+                c.claim = {cl != 0, cr != 0};
+                if (pf->lateClaims.empty() || std::abs(pf->lateClaims.back().stamp - cs) > 1e-9)
+                {
+                    PedLateClaims lc;
+                    lc.stamp = cs;
+                    pf->lateClaims.push_back(lc);
+                }
+                pf->lateClaims.back().claims.push_back(c);
+            }
+            else
+                throw std::runtime_error("[Pedestrians] unknown row tag in " + path + ": " + line);
         }
         return pf;
     }

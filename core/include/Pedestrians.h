@@ -24,15 +24,29 @@ namespace ORB_SLAM3
         double rootU = 0, rootV = 0; // mask root (cu, vb - 0.55 h) [px]
         double lpx = 0;             // |nose - mean(heels)| in the image [px] (P1-B l_px); <= 0 -> no range measurement
         double maskH = 0;           // mask pixel height [px]; only used to initialise a state's depth when lpx <= 0
-        std::array<bool, 2> claim = {false, false};      // stance claim per foot (L, R), gated by the producer on scores
-        std::array<double, 2> toeU = {0, 0}, toeV = {0, 0}; // toe-midpoint pixel of the claimed foot
-        double boxH = 0;            // person box height [px] (visibility gate for stance, P4-S1)
+    };
+
+    // Stance claim of one track at one image, delivered LATE: the P4-S1 agree+timing claim at image t is final only 6 images later
+    // (stance_foot_poc stance/fusion.py:72 TIMING_WINDOW_FRAMES = 6, :92 window, :110 near_in_time looks 6 images ahead).
+    struct PedClaim
+    {
+        int trackId = -1;
+        std::array<bool, 2> claim = {false, false};         // left, right foot
+        std::array<double, 2> toeU = {0, 0}, toeV = {0, 0}; // toe-midpoint pixel of that foot at the claimed image
+        double boxH = 0;                                     // person box height [px] (visibility gate for stance, P4-S1)
+    };
+
+    struct PedLateClaims
+    {
+        double stamp = 0;               // the CLAIMED image (the claims were finalised 6 images after it)
+        std::vector<PedClaim> claims;
     };
 
     struct PedFrame
     {
         double stamp = 0;
         std::vector<PedObs> obs;    // sorted by trackId (the loader enforces it)
+        std::vector<PedLateClaims> lateClaims; // claims finalised at this image, for earlier images (System::SetPedestrianFrame applies them)
     };
 
     // Settings (all required when Pedestrians.Enabled; no defaults). Sources are listed in eval/phase9/P9-C/factors.md.

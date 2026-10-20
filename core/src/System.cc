@@ -1282,6 +1282,22 @@ namespace ORB_SLAM3
     {
         if (!PedestrianParams::Enabled())
             throw std::runtime_error("[Pedestrians] SetPedestrianFrame called with Pedestrians.Enabled: 0");
+        // late stance claims finalised at this image belong to keyframes created earlier (the claimed image, 6 images back)
+        for (const PedLateClaims &lc : frame->lateClaims)
+        {
+            const std::vector<KeyFrame *> kfs = mpAtlas->GetCurrentMap()->GetAllKeyFrames(); // ascending keyframe id = ascending time
+            for (auto it = kfs.rbegin(); it != kfs.rend(); ++it)
+            {
+                if (std::abs((*it)->mTimeStamp - lc.stamp) < 5e-7)
+                {
+                    for (const PedClaim &c : lc.claims)
+                        (*it)->SetPedClaim(c);
+                    break;
+                }
+                if ((*it)->mTimeStamp < lc.stamp - 1.0)
+                    break;
+            }
+        }
         mpTracker->mpPendingPedFrame = std::move(frame);
     }
 

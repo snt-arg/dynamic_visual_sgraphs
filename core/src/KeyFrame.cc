@@ -1435,6 +1435,22 @@ namespace ORB_SLAM3
         mPedStates[trackId] = s;
     }
 
+    bool KeyFrame::GetPedClaim(int trackId, PedClaim &c)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        auto it = mPedClaims.find(trackId);
+        if (it == mPedClaims.end())
+            return false;
+        c = it->second;
+        return true;
+    }
+
+    void KeyFrame::SetPedClaim(const PedClaim &c)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        mPedClaims[c.trackId] = c;
+    }
+
     void KeyFrame::ClearPedStates()
     {
         std::unique_lock<std::mutex> lock(mMutexPed);

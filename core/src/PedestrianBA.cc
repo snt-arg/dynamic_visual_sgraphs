@@ -36,7 +36,14 @@ namespace ORB_SLAM3
             bool fixed;
             const PedObs *obs;
             ped::VertexPedState *v;
+            PedClaim cl;     // late stance claim of this track at this keyframe (valid iff hasCl)
+            bool hasCl = false;
         };
+        void Tag(PedGraph &G, PedGraph::Type ty, g2o::OptimizableGraph::Edge *e)
+        {
+            G.edges.push_back(e);
+            G.byType[ty].push_back(e);
+        }
 
         struct Cam
         {
@@ -77,7 +84,11 @@ namespace ORB_SLAM3
                     // first smoke run). It is not a measurement of this system and is skipped.
                     if (o.lpx <= 0)
                         continue;
-                    tracks[o.trackId].push_back({g.kf, g.fixed, &o, nullptr});
+                    {
+                        Entry en{g.kf, g.fixed, &o, nullptr, PedClaim(), false};
+                        en.hasCl = g.kf->GetPedClaim(o.trackId, en.cl);
+                        tracks[o.trackId].push_back(en);
+                    }
                 }
             }
 
@@ -116,7 +127,7 @@ namespace ORB_SLAM3
                     prior->setMeasurement(P.statureMean);
                     prior->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.statureSigma * P.statureSigma));
                     opt.addEdge(prior);
-                    G.edges.push_back(prior);
+                    Tag(G, PedGraph::STATURE, prior);
                 }
 
                 // 2. state vertices (existing estimate, else initialised from the keyframe's pose, the root pixel and the range)
@@ -171,7 +182,7 @@ namespace ORB_SLAM3
                             rk->setDelta(kHuber2D);
                             edge->setRobustKernel(rk);
                             opt.addEdge(edge);
-                            G.edges.push_back(edge);
+                            Tag(G, PedGraph::ROOT, edge);
                             ++G.nRoot;
                         }
                     }
@@ -187,7 +198,7 @@ namespace ORB_SLAM3
                         rk->setDelta(kHuber1D);
                         edge->setRobustKernel(rk);
                         opt.addEdge(edge);
-                        G.edges.push_back(edge);
+                        Tag(G, PedGraph::RANGE, edge);
                         ++G.nRange;
                     }
                 }
@@ -209,7 +220,7 @@ namespace ORB_SLAM3
                     edge->setMeasurement(ped::Vec6::Zero());
                     edge->SetDt(dt, P.qv);
                     opt.addEdge(edge);
-                    G.edges.push_back(edge);
+                    Tag(G, PedGraph::WNA, edge);
                     ++G.nWna;
                 }
 
@@ -219,7 +230,7 @@ namespace ORB_SLAM3
                     size_t i = 0;
                     while (i < E.size())
                     {
-                        auto ok = [&](const Entry &e) { return e.obs->claim[foot] && e.obs->boxH >= P.minStanceBoxPx; };
+                        auto ok = [&](const Entry &e) { return e.hasCl && e.cl.claim[foot] && e.cl.boxH >= P.minStanceBoxPx; };
                         if (!ok(E[i]))
                         {
                             ++i;
@@ -234,7 +245,7 @@ namespace ORB_SLAM3
                             const Entry &e0 = E[i];
                             const Cam c = CameraOf(e0.kf);
                             const Sophus::SE3f Twc = e0.kf->GetPoseInverse();
-                            const Eigen::Vector3d b((e0.obs->toeU[foot] - c.cx) / c.fx, (e0.obs->toeV[foot] - c.cy) / c.fy, 1.0);
+                            const Eigen::Vector3d b((e0.cl.toeU[foot] - c.cx) / c.fx, (e0.cl.toeV[foot] - c.cy) / c.fy, 1.0);
                             const Eigen::Vector3d d = (Twc.rotationMatrix() * b.cast<float>()).cast<double>();
                             const Eigen::Vector3d C = Twc.translation().cast<double>();
                             const Eigen::Vector3d p0 = e0.v->p();
@@ -260,13 +271,13 @@ namespace ORB_SLAM3
                                 auto *re = new ped::EdgePedReproj<g2o::VertexSBAPointXYZ, PoseV>(ck.fx, ck.fy, ck.cx, ck.cy);
                                 re->setVertex(0, VX);
                                 re->setVertex(1, vpose);
-                                re->setMeasurement(Eigen::Vector2d(e.obs->toeU[foot], e.obs->toeV[foot]));
+                                re->setMeasurement(Eigen::Vector2d(e.cl.toeU[foot], e.cl.toeV[foot]));
                                 re->setInformation(Eigen::Matrix2d::Identity() / (P.footPxSigma * P.footPxSigma));
                                 auto *rk = new g2o::RobustKernelHuber();
                                 rk->setDelta(kHuber2D);
                                 re->setRobustKernel(rk);
                                 opt.addEdge(re);
-                                G.edges.push_back(re);
+                                Tag(G, PedGraph::FOOT, re);
                                 ++G.nFoot;
 
                                 auto *t1 = new ped::EdgePedTie1(P.cRoot);
@@ -279,7 +290,7 @@ namespace ORB_SLAM3
                                 rk1->setDelta(kHuber1D);
                                 t1->setRobustKernel(rk1);
                                 opt.addEdge(t1);
-                                G.edges.push_back(t1);
+                                Tag(G, PedGraph::T1, t1);
 
                                 auto *t2 = new ped::EdgePedTie2(P.cLeg);
                                 t2->setVertex(0, e.v);
@@ -291,7 +302,7 @@ namespace ORB_SLAM3
                                 rk2->setDelta(kHuber1D);
                                 t2->setRobustKernel(rk2);
                                 opt.addEdge(t2);
-                                G.edges.push_back(t2);
+                                Tag(G, PedGraph::T2, t2);
                                 G.nTie += 2;
                             }
                         }
@@ -310,6 +321,64 @@ namespace ORB_SLAM3
         if (!PedestrianParams::Enabled())
             throw std::runtime_error("[Pedestrians] PedestrianBA::Add called with Pedestrians.Enabled: 0");
         return inertialPoses ? AddImpl<VertexPose>(opt, kfs, pMap, metric) : AddImpl<g2o::VertexSE3Expmap>(opt, kfs, pMap, metric);
+    }
+
+    namespace
+    {
+        struct CallRec
+        {
+            const char *kind;
+            double stamp;
+            long created[PedGraph::NTYPES], active[PedGraph::NTYPES];
+        };
+        std::vector<CallRec> gCalls;
+        long gCreatedT[PedGraph::NTYPES] = {0}, gActiveT[PedGraph::NTYPES] = {0};
+        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "stature", "wna", "foot", "t1", "t2"};
+        // inside the robust-kernel threshold: the Huber deltas of PedestrianBA.cc (chi2 95 %: 5.991 for 2 dof, 3.841 for 1 dof);
+        // edges without a kernel (stature prior, WNA 6 dof) use their own 95 % chi2 (3.841, 12.592)
+        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 3.841, 12.592, 5.991, 3.841, 3.841};
+    } // namespace
+
+    void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
+    {
+        CallRec r;
+        r.kind = kind;
+        r.stamp = stamp;
+        for (int ty = 0; ty < PedGraph::NTYPES; ++ty)
+        {
+            long act = 0;
+            for (g2o::OptimizableGraph::Edge *e : g.byType[ty])
+                if (e->chi2() <= kActiveChi2[ty])
+                    ++act;
+            r.created[ty] = static_cast<long>(g.byType[ty].size());
+            r.active[ty] = act;
+            gCreatedT[ty] += r.created[ty];
+            gActiveT[ty] += act;
+        }
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        gCalls.push_back(r);
+    }
+
+    void PedestrianBA::DumpCounters(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "call,kind,stamp";
+        for (int ty = 0; ty < PedGraph::NTYPES; ++ty)
+            f << "," << kTypeName[ty] << "_created," << kTypeName[ty] << "_active";
+        f << "\n";
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        long n = 0;
+        for (const CallRec &r : gCalls)
+        {
+            f << n++ << "," << r.kind << "," << std::fixed << r.stamp << std::defaultfloat;
+            for (int ty = 0; ty < PedGraph::NTYPES; ++ty)
+                f << "," << r.created[ty] << "," << r.active[ty];
+            f << "\n";
+        }
+        f << "total,-,0";
+        for (int ty = 0; ty < PedGraph::NTYPES; ++ty)
+            f << "," << gCreatedT[ty] << "," << gActiveT[ty];
+        f << "\n";
     }
 
     void PedestrianBA::Counters(long &vertices, long &edges)

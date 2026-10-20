@@ -2781,7 +2781,10 @@ namespace ORB_SLAM3
         // }
 
         if (PedestrianParams::Enabled())
+        {
+            PedestrianBA::Account(pedGraph, "LBA", pKF->mTimeStamp);
             PedestrianBA::WriteBack(pedGraph, pMap);
+        }
 
         pMap->IncreaseChangeIndex();
     }
@@ -4444,7 +4447,10 @@ namespace ORB_SLAM3
         }
 
         if (PedestrianParams::Enabled())
+        {
+            PedestrianBA::Account(pedGraph, "LIBA", pKF->mTimeStamp);
             PedestrianBA::WriteBack(pedGraph, pMap);
+        }
 
         pMap->IncreaseChangeIndex();
     }

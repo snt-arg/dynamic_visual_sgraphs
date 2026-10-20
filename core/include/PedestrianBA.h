@@ -33,7 +33,9 @@ namespace ORB_SLAM3
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
         std::vector<std::pair<int, ped::VertexStature *>> statures;
+        enum Type { ROOT = 0, RANGE, STATURE, WNA, FOOT, T1, T2, NTYPES };
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
+        std::vector<g2o::OptimizableGraph::Edge *> byType[NTYPES];
         // counters (also printed once per call when non-zero)
         int nTracks = 0, nSkippedTracks = 0, nRoot = 0, nRange = 0, nWna = 0, nFoot = 0, nFootVertices = 0, nTie = 0, nDroppedDepth = 0;
     };
@@ -56,6 +58,11 @@ namespace ORB_SLAM3
         // map resets; the final map export only holds keyframes that are still alive). Hexfloat text, ordered by (keyframe id, track).
         // Columns: kf_id stamp track px py pz vx vy vz tx ty tz qx qy qz qw (Twc)
         static void DumpLog(const std::string &path);
+
+        // Per-factor-type accounting (P9-C2 step 2). Call after the solve: counts, per type, the edges created in this call and the
+        // ones inside their robust threshold; keeps one record per call and process-wide totals.
+        static void Account(const PedGraph &g, const char *kind, double stamp);
+        static void DumpCounters(const std::string &path); // CSV: one row per BA call + a `total` row
     };
 } // namespace ORB_SLAM3
 

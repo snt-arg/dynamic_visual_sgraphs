@@ -553,10 +553,13 @@ namespace ORB_SLAM3
         bool GetPedState(int trackId, PedState &s);
         void SetPedState(int trackId, const PedState &s);
         void ClearPedStates();
+        bool GetPedClaim(int trackId, PedClaim &c);
+        void SetPedClaim(const PedClaim &c);
 
     protected:
         std::mutex mMutexPed;
         std::map<int, PedState> mPedStates;
+        std::map<int, PedClaim> mPedClaims; // late stance claims (not cleared by ResetPedestrians: they are measurements)
 
         // Mutex
         std::mutex mMutexPose; // for pose, velocity and biases
