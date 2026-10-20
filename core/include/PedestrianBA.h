@@ -5,6 +5,7 @@
 
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "KeyFrame.h"
@@ -50,6 +51,11 @@ namespace ORB_SLAM3
 
         // Process-wide totals of person vertices / edges ever created (the flag-off check: both must stay 0).
         static void Counters(long &vertices, long &edges);
+
+        // Last written estimate of every (keyframe, track) ever optimised, with the keyframe pose at that write (survives culling and
+        // map resets; the final map export only holds keyframes that are still alive). Hexfloat text, ordered by (keyframe id, track).
+        // Columns: kf_id stamp track px py pz vx vy vz tx ty tz qx qy qz qw (Twc)
+        static void DumpLog(const std::string &path);
     };
 } // namespace ORB_SLAM3
 

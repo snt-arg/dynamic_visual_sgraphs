@@ -4,6 +4,8 @@
 #include <atomic>
 #include <cmath>
 #include <iostream>
+#include <fstream>
+#include <mutex>
 #include <stdexcept>
 
 #include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
@@ -13,10 +15,20 @@ namespace ORB_SLAM3
     namespace
     {
         std::atomic<long> gVertices(0), gEdges(0);
+        struct LogRec
+        {
+            double stamp;
+            Eigen::Matrix<double, 6, 1> x;
+            Eigen::Matrix<double, 7, 1> twc;
+        };
+        std::map<std::pair<unsigned long, int>, LogRec> gLog; // ordered: deterministic dump
+        std::mutex gLogMutex;
 
-        // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1993-1994 thHuber1D / thHuberMono).
+        // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1994-1995 thHuber1D / thHuberMono).
         const double kHuber1D = std::sqrt(3.841);
         const double kHuber2D = std::sqrt(5.991);
+        // A person state closer than this to the image plane is not a usable measurement (root reprojection has a 1/z Jacobian).
+        const double kMinDepthM = 0.5;
 
         struct Entry
         {
@@ -59,7 +71,14 @@ namespace ORB_SLAM3
                 if (!g.kf->mpPedFrame || g.kf->isBad())
                     continue;
                 for (const PedObs &o : g.kf->mpPedFrame->obs)
+                {
+                    // An observation without a nose->heel length has no depth cue: its state would be free along the pixel ray
+                    // (root reprojection is flat along it, the 1/z Jacobians diverge as the state approaches the camera; seen in the
+                    // first smoke run). It is not a measurement of this system and is skipped.
+                    if (o.lpx <= 0)
+                        continue;
                     tracks[o.trackId].push_back({g.kf, g.fixed, &o, nullptr});
+                }
             }
 
             int nextId = 0; // above every id in the graph (the container is unordered; the maximum does not depend on its order)
@@ -139,7 +158,7 @@ namespace ORB_SLAM3
                         edge->setVertex(1, vpose);
                         edge->setMeasurement(Eigen::Vector2d(e.obs->rootU, e.obs->rootV));
                         edge->setInformation(Eigen::Matrix2d::Identity() / (P.rootPxSigma * P.rootPxSigma));
-                        if (!edge->isDepthPositive())
+                        if (edge->Xc()(2) < kMinDepthM)
                         {
                             ++G.nDroppedDepth;
                             delete edge;
@@ -299,6 +318,21 @@ namespace ORB_SLAM3
         edges = gEdges;
     }
 
+    void PedestrianBA::DumpLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "# kf_id stamp track px py pz vx vy vz tx ty tz qx qy qz qw (world positions/velocities; Twc of the keyframe at the write)\n";
+        char buf[512];
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        for (const auto &kv : gLog)
+        {
+            const LogRec &r = kv.second;
+            std::snprintf(buf, sizeof(buf), "%lu %.9f %d %a %a %a %a %a %a %a %a %a %a %a %a %a\n", kv.first.first, r.stamp, kv.first.second, r.x(0), r.x(1),
+                          r.x(2), r.x(3), r.x(4), r.x(5), r.twc(0), r.twc(1), r.twc(2), r.twc(3), r.twc(4), r.twc(5), r.twc(6));
+            f << buf;
+        }
+    }
+
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
     {
         for (const auto &s : g.states)
@@ -309,6 +343,14 @@ namespace ORB_SLAM3
             st.p = s.v->estimate().head<3>();
             st.v = s.v->estimate().tail<3>();
             s.kf->SetPedState(s.track, st);
+            const Sophus::SE3f Twc = s.kf->GetPoseInverse();
+            const Eigen::Quaternionf q = Twc.unit_quaternion();
+            LogRec r;
+            r.stamp = s.kf->mTimeStamp;
+            r.x << st.p, st.v;
+            r.twc << Twc.translation().cast<double>(), q.x(), q.y(), q.z(), q.w();
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            gLog[{s.kf->mnId, s.track}] = r;
         }
         for (const auto &h : g.statures)
             pMap->SetPedStature(h.first, h.second->estimate());
