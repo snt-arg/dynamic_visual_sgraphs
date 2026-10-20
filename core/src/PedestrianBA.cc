@@ -38,6 +38,7 @@ namespace ORB_SLAM3
             ped::VertexPedState *v;
             PedClaim cl;     // late stance claim of this track at this keyframe (valid iff hasCl)
             bool hasCl = false;
+            bool rangeOk = true; // false: the two range cues disagree (5b.2); the nose->heel range factor is dropped, root reprojection stays
         };
         void Tag(PedGraph &G, PedGraph::Type ty, g2o::OptimizableGraph::Edge *e)
         {
@@ -85,8 +86,14 @@ namespace ORB_SLAM3
                     if (o.lpx <= 0 || o.lpx < PedestrianParams::Get().minLpx)
                         continue;
                     {
-                        Entry en{g.kf, g.fixed, &o, nullptr, PedClaim(), false};
+                        Entry en{g.kf, g.fixed, &o, nullptr, PedClaim(), false, true};
                         en.hasCl = g.kf->GetPedClaim(o.trackId, en.cl);
+                        if (PedestrianParams::Get().gateK > 0 && o.maskH > 0)
+                        {
+                            const PedestrianParams &Q = PedestrianParams::Get();
+                            const double d = std::log(Q.skelOverStature * Q.statureMean / o.lpx) - std::log(Q.maskHeightM / o.maskH); // f cancels
+                            en.rangeOk = std::abs(d - Q.gateCenter) <= Q.gateK * Q.gateSigma;
+                        }
                         tracks[o.trackId].push_back(en);
                     }
                 }
@@ -100,7 +107,8 @@ namespace ORB_SLAM3
             {
                 std::vector<Entry> &E = tr.second;
                 const bool anyFree = std::any_of(E.begin(), E.end(), [](const Entry &e) { return !e.fixed; });
-                if (static_cast<int>(E.size()) < P.minTrackKeyframes || !anyFree)
+                const int nValid = static_cast<int>(std::count_if(E.begin(), E.end(), [](const Entry &e) { return e.rangeOk; }));
+                if (nValid < P.minTrackKeyframes || !anyFree)
                 {
                     ++G.nSkippedTracks;
                     continue;
@@ -140,8 +148,8 @@ namespace ORB_SLAM3
                         const Eigen::Vector3d b((e.obs->rootU - c.cx) / c.fx, (e.obs->rootV - c.cy) / c.fy, 1.0);
                         // depth along the optical axis: range r = f cL H / l_px along the unit ray, z = r / |b~|;
                         // without a skeleton length the mask height gives an initial depth only (the estimate is refined by the BA)
-                        const double z = e.obs->lpx > 0 ? (c.fx * P.skelOverStature * Hcur / e.obs->lpx) / b.norm()
-                                                        : c.fx * Hcur / std::max(e.obs->maskH, 1.0);
+                        const double z = e.rangeOk ? (c.fx * P.skelOverStature * Hcur / e.obs->lpx) / b.norm()
+                                                   : (c.fx * P.maskHeightM / std::max(e.obs->maskH, 1.0)) / b.norm();
                         const Sophus::SE3f Twc = e.kf->GetPoseInverse();
                         s.p = (Twc.rotationMatrix() * (z * b).cast<float>() + Twc.translation()).cast<double>();
                         s.v.setZero();
@@ -186,7 +194,7 @@ namespace ORB_SLAM3
                             ++G.nRoot;
                         }
                     }
-                    if (metric && e.obs->lpx > 0)
+                    if (metric && e.rangeOk)
                     {
                         auto *edge = new ped::EdgePedLogRange<PoseV>();
                         edge->setVertex(0, e.v);

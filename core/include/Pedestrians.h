@@ -65,6 +65,9 @@ namespace ORB_SLAM3
         double minStanceBoxPx = 0;   // stance only when the person box is at least this tall (P4-S1 visibility gate)
         int minFootObservations = 0; // a footprint vertex needs this many observations
         double minLpx = 0;           // observations with a nose->heel length below this [px] are not used (0: any valid length); tuning gate
+        // range-consistency gate (P9-C2 5b.2): the nose->heel range and the mask-height range are independent cues; an observation whose log
+        // difference d = log r_lpx - log r_mask is further than gateK * gateSigma from gateCenter loses its range factor (root reprojection stays).
+        double maskHeightM = 0, gateCenter = 0, gateSigma = 0, gateK = 0; // gateK <= 0: gate off
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 

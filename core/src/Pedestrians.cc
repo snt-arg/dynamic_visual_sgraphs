@@ -49,6 +49,10 @@ namespace ORB_SLAM3
         p.minFootObservations = static_cast<int>(Req(fs, "Pedestrians.MinFootObservations"));
         p.minLpx = Req(fs, "Pedestrians.MinLpx", true);
         p.huberScale = Req(fs, "Pedestrians.HuberScale");
+        p.maskHeightM = Req(fs, "Pedestrians.MaskHeightM");
+        p.gateCenter = Req(fs, "Pedestrians.GateCenter", true);
+        p.gateSigma = Req(fs, "Pedestrians.GateSigma");
+        p.gateK = Req(fs, "Pedestrians.GateK", true);
         const cv::FileNode d = fs["Pedestrians.Dir"];
         if (d.empty())
             throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.Dir is missing from the settings file");
@@ -61,7 +65,7 @@ namespace ORB_SLAM3
                   << ", stature " << p.statureMean << "+-" << p.statureSigma << " m, q_v " << p.qv << ", foot " << p.footPxSigma
                   << " px, T1 " << p.t1Sigma << ", T2 " << p.t2Sigma << ", c_root " << p.cRoot << ", c_leg " << p.cLeg
                   << ", min track KFs " << p.minTrackKeyframes << ", min stance box " << p.minStanceBoxPx << " px, min foot obs "
-                  << p.minFootObservations << ", min l_px " << p.minLpx << ", huber scale " << p.huberScale << ", dir " << p.dir << std::endl;
+                  << p.minFootObservations << ", min l_px " << p.minLpx << ", huber scale " << p.huberScale << ", gate k " << p.gateK << " (center " << p.gateCenter << ", sigma " << p.gateSigma << ", H_mask " << p.maskHeightM << ")" << ", dir " << p.dir << std::endl;
         return true;
     }
 
