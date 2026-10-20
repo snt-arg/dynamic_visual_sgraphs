@@ -171,6 +171,9 @@ namespace ORB_SLAM3
                                     const vector<IMU::Point> &vImuMeas = vector<IMU::Point>(), string filename = "",
                                     const vector<Marker *> markers = vector<Marker *>{}, const cv::Mat &mask = cv::Mat());
 
+        // [P9-C] pedestrian measurements of the image passed to the NEXT TrackMonocular call. Only legal with Pedestrians.Enabled: 1.
+        void SetPedestrianFrame(std::shared_ptr<const PedFrame> frame);
+
         void SetKeyFrameCreatedCallback(std::function<void(const KeyFrame *)> callback);
 
         // This stops local mapping thread (map building) and performs only camera tracking.

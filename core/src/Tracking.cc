@@ -1687,6 +1687,10 @@ namespace ORB_SLAM3
         mCurrentFrame.mNameFile = filename;
         mCurrentFrame.mnDataset = mnNumDataset;
 
+        // [P9-C] attach the pedestrian measurements handed over by System::SetPedestrianFrame for this image
+        mCurrentFrame.mpPedFrame = mpPendingPedFrame;
+        mpPendingPedFrame.reset();
+
 #ifdef REGISTER_TIMES
         vdORBExtract_ms.push_back(mCurrentFrame.mTimeORB_Ext);
 #endif

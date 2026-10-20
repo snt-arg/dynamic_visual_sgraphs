@@ -31,6 +31,7 @@
 #include "Frame.h"
 #include "KeyFrameDatabase.h"
 #include "ImuTypes.h"
+#include "Pedestrians.h"
 #include "Semantic/Marker.h"
 #include "Geometric/Plane.h"
 #include "Semantic/Door.h"
@@ -546,8 +547,16 @@ namespace ORB_SLAM3
         // Calibration
         Eigen::Matrix3f mK_;
 
+        // [P9-C] pedestrian measurements of this keyframe's image and the persistent per-track state estimated for it.
+        std::shared_ptr<const PedFrame> mpPedFrame;
+        bool GetPedState(int trackId, PedState &s);
+        void SetPedState(int trackId, const PedState &s);
+        void ClearPedStates();
+
         // Mutex
         std::mutex mMutexPose; // for pose, velocity and biases
+        std::mutex mMutexPed;
+        std::map<int, PedState> mPedStates;
         std::mutex mMutexConnections;
         std::mutex mMutexFeatures;
         std::mutex mMutexMap;

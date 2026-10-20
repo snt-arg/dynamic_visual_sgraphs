@@ -156,6 +156,11 @@ namespace ORB_SLAM3
         bool IsBad();
         void SetBad();
 
+        // [P9-C] persistent per-track stature, and the reset used on loop correction / merge / scale-rotation of the map
+        bool GetPedStature(int trackId, double &H);
+        void SetPedStature(int trackId, double H);
+        void ResetPedestrians(); // locks mMutexMap
+
         void clear();
 
         int GetLastMapChange();
@@ -196,6 +201,9 @@ namespace ORB_SLAM3
 
         KeyFrame *mpFirstRegionKF;
         std::mutex mMutexMapUpdate;
+        std::mutex mMutexPedMap;
+        std::map<int, double> mPedStature;
+        void ResetPedestriansLocked(); // caller holds mMutexMap
         vector<KeyFrame *> mvpKeyFrameOrigins;
         vector<unsigned long int> mvBackupKeyFrameOriginsId;
 

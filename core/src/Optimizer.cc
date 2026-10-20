@@ -23,6 +23,7 @@
 #include "G2oTypes.h"
 #include "Converter.h"
 #include "Optimizer.h"
+#include "PedestrianBA.h"
 #include "OptimizableTypes.h"
 
 #include <mutex>
@@ -2524,6 +2525,18 @@ namespace ORB_SLAM3
             if (*pbStopFlag)
                 return;
 
+        // [P9-C] pedestrians: scale-free root reprojection only (this BA runs before IMU initialisation, the map has arbitrary scale)
+        PedGraph pedGraph;
+        if (PedestrianParams::Enabled())
+        {
+            std::vector<PedGraphKF> pedKFs;
+            for (KeyFrame *k : localKeyFrameList)
+                pedKFs.push_back({k, k->mnId == pMap->GetInitKFid()});
+            for (KeyFrame *k : lFixedCameras)
+                pedKFs.push_back({k, true});
+            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/false, /*inertialPoses=*/false);
+        }
+
         optimizer.initializeOptimization();
         optimizer.optimize(10);
 
@@ -2766,6 +2779,9 @@ namespace ORB_SLAM3
         //         continue;
         //     }
         // }
+
+        if (PedestrianParams::Enabled())
+            PedestrianBA::WriteBack(pedGraph, pMap);
 
         pMap->IncreaseChangeIndex();
     }
@@ -4301,6 +4317,20 @@ namespace ORB_SLAM3
             assert(mit->second >= 3);
         }
 
+        // [P9-C] pedestrians: full factor set (this BA runs only after IMU initialisation: metric map, gravity along -z)
+        PedGraph pedGraph;
+        if (PedestrianParams::Enabled())
+        {
+            std::vector<PedGraphKF> pedKFs;
+            for (KeyFrame *k : vpOptimizableKFs)
+                pedKFs.push_back({k, false});
+            for (KeyFrame *k : lpOptVisKFs)
+                pedKFs.push_back({k, false});
+            for (KeyFrame *k : lFixedKeyFrames)
+                pedKFs.push_back({k, true});
+            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/true, /*inertialPoses=*/true);
+        }
+
         optimizer.initializeOptimization();
         optimizer.computeActiveErrors();
         float err = optimizer.activeRobustChi2();
@@ -4412,6 +4442,9 @@ namespace ORB_SLAM3
             pMP->SetWorldPos(vPoint->estimate().cast<float>());
             pMP->UpdateNormalAndDepth();
         }
+
+        if (PedestrianParams::Enabled())
+            PedestrianBA::WriteBack(pedGraph, pMap);
 
         pMap->IncreaseChangeIndex();
     }

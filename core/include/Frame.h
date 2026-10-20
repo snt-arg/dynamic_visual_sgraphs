@@ -31,6 +31,7 @@
 #include "Thirdparty/Sophus/sophus/geometry.hpp"
 
 #include "ImuTypes.h"
+#include "Pedestrians.h"
 #include "ORBVocabulary.h"
 
 #include "Converter.h"
@@ -224,6 +225,9 @@ namespace ORB_SLAM3
 
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+        // [P9-C] pedestrian measurements of this image (null unless Pedestrians.Enabled)
+        std::shared_ptr<const PedFrame> mpPedFrame;
 
         // Vocabulary used for relocalization.
         ORBVocabulary *mpORBvocabulary;

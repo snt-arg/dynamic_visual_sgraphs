@@ -112,6 +112,10 @@ namespace ORB_SLAM3
         // [P9-B] Deterministic mode is configured before any module that could start a thread exists
         ConfigureDeterministicMode(fsSettings, bUseViewer);
 
+        // [P9-C] pedestrian factors: mono-inertial only, every Pedestrians.* key required when enabled
+        if (PedestrianParams::Configure(fsSettings) && mSensor != IMU_MONOCULAR)
+            throw std::runtime_error("[Pedestrians] Pedestrians.Enabled requires the mono-inertial sensor (P9-C scope)");
+
         mStrVocabularyFilePath = strVocFile;
 
         // ORB Vocabulary
@@ -1272,6 +1276,13 @@ namespace ORB_SLAM3
             mpLocalMapper->RunSynchronously();
             mpLoopCloser->RunSynchronously();
         } while (mpLocalMapper->CheckNewKeyFrames() || mpLoopCloser->HasPendingKeyFrames());
+    }
+
+    void System::SetPedestrianFrame(std::shared_ptr<const PedFrame> frame)
+    {
+        if (!PedestrianParams::Enabled())
+            throw std::runtime_error("[Pedestrians] SetPedestrianFrame called with Pedestrians.Enabled: 0");
+        mpTracker->mpPendingPedFrame = std::move(frame);
     }
 
     void System::ConfigureDeterministicMode(cv::FileStorage &fsSettings, bool bUseViewer)

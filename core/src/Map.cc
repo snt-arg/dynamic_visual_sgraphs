@@ -482,6 +482,7 @@ namespace ORB_SLAM3
     void Map::ApplyScaledRotation(const Sophus::SE3f &T, const float s, const bool bScaledVel)
     {
         unique_lock<mutex> lock(mMutexMap);
+        ResetPedestriansLocked(); // [P9-C] person states are world-frame: the transform below invalidates them
 
         // Body position (IMU) of first keyframe is fixed to (0,0,0)
         Sophus::SE3f Tyw = T;
@@ -829,3 +830,38 @@ namespace ORB_SLAM3
     }
 
 }
+
+namespace ORB_SLAM3
+{
+    bool Map::GetPedStature(int trackId, double &H)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        auto it = mPedStature.find(trackId);
+        if (it == mPedStature.end())
+            return false;
+        H = it->second;
+        return true;
+    }
+
+    void Map::SetPedStature(int trackId, double H)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        mPedStature[trackId] = H;
+    }
+
+    void Map::ResetPedestriansLocked()
+    {
+        {
+            unique_lock<mutex> lock(mMutexPedMap);
+            mPedStature.clear();
+        }
+        for (KeyFrame *pKF : mspKeyFrames)
+            pKF->ClearPedStates();
+    }
+
+    void Map::ResetPedestrians()
+    {
+        unique_lock<mutex> lock(mMutexMap);
+        ResetPedestriansLocked();
+    }
+} // namespace ORB_SLAM3

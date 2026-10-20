@@ -67,6 +67,7 @@ namespace ORB_SLAM3
                                                                        mCurrentFrameMarkers(F.mvpMapMarkers), mCurrentFrameMapPoints(F.mvpMapPoints), mCurrentFramePointClouds(F.mvpPointClouds), mImage(F.colorImg), isPublished(false)
     {
         mnId = nNextId++;
+        mpPedFrame = F.mpPedFrame;
 
         mGrid.resize(mnGridCols);
         if (F.Nleft != -1)
@@ -1415,3 +1416,28 @@ namespace ORB_SLAM3
     }
 
 } // namespace ORB_SLAM
+
+namespace ORB_SLAM3
+{
+    bool KeyFrame::GetPedState(int trackId, PedState &s)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        auto it = mPedStates.find(trackId);
+        if (it == mPedStates.end())
+            return false;
+        s = it->second;
+        return true;
+    }
+
+    void KeyFrame::SetPedState(int trackId, const PedState &s)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        mPedStates[trackId] = s;
+    }
+
+    void KeyFrame::ClearPedStates()
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        mPedStates.clear();
+    }
+} // namespace ORB_SLAM3

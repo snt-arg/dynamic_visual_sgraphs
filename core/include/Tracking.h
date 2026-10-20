@@ -53,6 +53,8 @@
 #include <pcl/filters/extract_indices.h>
 
 #include <mutex>
+#include <memory>
+#include "Pedestrians.h"
 #include <unordered_set>
 
 namespace ORB_SLAM3
@@ -93,6 +95,8 @@ namespace ORB_SLAM3
                                    const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &pointcloud,
                                    const double &timestamp, string filename, const std::vector<Marker *> markers,
                                    const std::vector<Door *> doors, const std::vector<Room *> rooms);
+        // [P9-C] pedestrian measurements for the NEXT image handed to GrabImageMonocular (consumed there)
+        std::shared_ptr<const PedFrame> mpPendingPedFrame;
         Sophus::SE3f GrabImageMonocular(const cv::Mat &im, const double &timestamp, string filename,
                                         const std::vector<Marker *> markers, const std::vector<Door *> doors,
                                         const std::vector<Room *> rooms, const cv::Mat &mask = cv::Mat());

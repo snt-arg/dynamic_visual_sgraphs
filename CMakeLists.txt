@@ -136,6 +136,8 @@ add_library(${PROJECT_NAME}_lib SHARED
   core/src/GeometricTools.cc
   core/src/TwoViewReconstruction.cc
   core/src/Utils.cc
+  core/src/Pedestrians.cc
+  core/src/PedestrianBA.cc
   core/src/Config.cc
   core/src/Settings.cc
   core/src/GeoSemHelpers.cc

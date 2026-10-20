@@ -1,0 +1,53 @@
+// P9-C: the one helper that adds pedestrian vertices and edges to a local BA graph. Called from
+// Optimizer::LocalBundleAdjustment (poses = g2o::VertexSE3Expmap) and Optimizer::LocalInertialBA (poses = VertexPose).
+#ifndef PEDESTRIAN_BA_H
+#define PEDESTRIAN_BA_H
+
+#include <map>
+#include <memory>
+#include <vector>
+
+#include "KeyFrame.h"
+#include "Map.h"
+#include "PedestrianFactors.h"
+#include "Pedestrians.h"
+#include "Thirdparty/g2o/g2o/core/sparse_optimizer.h"
+
+namespace ORB_SLAM3
+{
+    struct PedGraphKF
+    {
+        KeyFrame *kf;
+        bool fixed; // pose vertex is fixed in the graph; its person states are then fixed too (as ORB-SLAM3 fixes keyframes)
+    };
+
+    struct PedGraph
+    {
+        struct StateHandle
+        {
+            int track;
+            KeyFrame *kf;
+            ped::VertexPedState *v;
+            bool fixed;
+        };
+        std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
+        std::vector<std::pair<int, ped::VertexStature *>> statures;
+        std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
+        // counters (also printed once per call when non-zero)
+        int nTracks = 0, nSkippedTracks = 0, nRoot = 0, nRange = 0, nWna = 0, nFoot = 0, nFootVertices = 0, nTie = 0, nDroppedDepth = 0;
+    };
+
+    class PedestrianBA
+    {
+    public:
+        // `kfs` is the full graph: free and fixed keyframes whose pose vertices already exist in `opt` with id = KeyFrame::mnId.
+        // `metric` = the map is metric and gravity-aligned (IMU initialised): range, stature, motion and stance factors are added;
+        // otherwise only the scale-free root reprojection is (pre-IMU-init maps have arbitrary scale; Marco, 20 Oct).
+        static PedGraph Add(g2o::SparseOptimizer &opt, const std::vector<PedGraphKF> &kfs, Map *pMap, bool metric, bool inertialPoses);
+
+        // Writes the optimised person states of free keyframes and the statures back. Call only after the BA succeeded.
+        static void WriteBack(const PedGraph &g, Map *pMap);
+    };
+} // namespace ORB_SLAM3
+
+#endif

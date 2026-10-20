@@ -997,6 +997,10 @@ namespace ORB_SLAM3
 
     void LoopClosing::CorrectLoop()
     {
+        // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
+        if (PedestrianParams::Enabled())
+            mpCurrentKF->GetMap()->ResetPedestrians();
+
         // Avoid new keyframes are inserted while correcting the loop
         mpLocalMapper->RequestStop();
         mpLocalMapper->EmptyQueue();
@@ -1234,6 +1238,12 @@ namespace ORB_SLAM3
 
     void LoopClosing::MergeLocal()
     {
+        // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
+        if (PedestrianParams::Enabled())
+            mpCurrentKF->GetMap()->ResetPedestrians();
+        if (PedestrianParams::Enabled())
+            mpMergeMatchedKF->GetMap()->ResetPedestrians();
+
         // Variables
         int numTemporalKFs = 25;
         sysParams = SystemParams::GetParams();
@@ -1808,6 +1818,12 @@ namespace ORB_SLAM3
 
     void LoopClosing::MergeLocalInertial()
     {
+        // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
+        if (PedestrianParams::Enabled())
+            mpCurrentKF->GetMap()->ResetPedestrians();
+        if (PedestrianParams::Enabled())
+            mpMergeMatchedKF->GetMap()->ResetPedestrians();
+
         int numTemporalKFs = 11; // [TODO] Set by parameter
 
         // Relationship to rebuild the essential graph, it is used two times, first in the local window and later in the rest of the map
