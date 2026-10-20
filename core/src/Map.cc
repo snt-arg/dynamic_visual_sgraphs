@@ -833,28 +833,8 @@ namespace ORB_SLAM3
 
 namespace ORB_SLAM3
 {
-    bool Map::GetPedStature(int trackId, double &H)
-    {
-        unique_lock<mutex> lock(mMutexPedMap);
-        auto it = mPedStature.find(trackId);
-        if (it == mPedStature.end())
-            return false;
-        H = it->second;
-        return true;
-    }
-
-    void Map::SetPedStature(int trackId, double H)
-    {
-        unique_lock<mutex> lock(mMutexPedMap);
-        mPedStature[trackId] = H;
-    }
-
     void Map::ResetPedestriansLocked()
     {
-        {
-            unique_lock<mutex> lock(mMutexPedMap);
-            mPedStature.clear();
-        }
         for (KeyFrame *pKF : mspKeyFrames)
             pKF->ClearPedStates();
     }

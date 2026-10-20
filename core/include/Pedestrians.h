@@ -55,8 +55,8 @@ namespace ORB_SLAM3
         bool enabled = false;
         double rootPxSigma = 0;      // root keypoint reprojection [px]
         double logDepthSigma = 0;    // nose->heel log-depth factor
-        double statureMean = 0, statureSigma = 0; // [m]
-        double skelOverStature = 0;  // L_skel / stature: nose->heel-mid length as a fraction of stature (P1-B_report.md:96-100)
+        double statureFixedM = 0;    // fixed stature H0 [m] (1.70: the convention of cL = L_skel / 1.70); not a state (P9-C2 5d)
+        double skelOverStature = 0;  // L_skel / 1.70: nose->heel-mid length as a fraction of the fixed stature (P1-B_report.md:96-100)
         double qv = 0;               // white-noise-acceleration PSD [m^2/s^3]
         double footPxSigma = 0;      // stance footprint reprojection [px]
         double t1Sigma = 0, t2Sigma = 0; // root-over-footprint ties [m]

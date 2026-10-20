@@ -5,14 +5,14 @@
 //   * Xc = Rcw Xw + tcw. The camera pose vertex is either g2o::VertexSE3Expmap (LocalBundleAdjustment, update = exp([w;u]) * T)
 //     or ORB_SLAM3::VertexPose (LocalInertialBA, camera index 0, update = ImuCamPose::Update). `PoseTraits<V>` gives
 //     (Rcw, tcw) and dXc/d(pose update) for both.
-//   * Person root state: VertexPedState = (p, v), world frame. Stature: VertexStature. Footprint: g2o::VertexSBAPointXYZ.
+//   * Person root state: VertexPedState = (p, v), world frame. Footprint: g2o::VertexSBAPointXYZ. The stature is NOT a state: it is the constant H0
+//     (P9-C2 5d: a free per-track stature is not identifiable from monocular measurements and the motion prior shrinks it; see step5d_report.md).
 //   * Pinhole camera, no distortion (checked by PedestrianBA at graph build).
 //
 // Provenance of the math (reuse of object_motion_estimator, branch p9c-eval, include/object_motion_estimator/):
 //   EdgePedRootReproj    <- EdgeMonoObject (object_reprojection_factor.hpp:43,57,90); same residual obs - pi(Xc), SE3deriv
 //   EdgePedLogRange      <- EdgeObjectRangeBearing (object_range_bearing_factor.hpp:68-150), re-expressed as a log-range
 //                           measurement on the nose->heel length (P7-A A3) and on a world-frame state instead of H_jk
-//   VertexStature/Prior  <- VertexPersonHeight, EdgePersonHeightPrior (object_range_bearing_factor.hpp:37,49)
 //   EdgePedWna           : new edge (white-noise-acceleration kernel, P7-A p7a_lib.py:213 dwna_q2 / addendum_A8.md:5-6)
 //   EdgePedFootRoot T1,T2: new edges (P7-A p7a_lib.py:293,298; criterion_G.md:80-81)
 #ifndef PEDESTRIAN_FACTORS_H
@@ -106,33 +106,8 @@ namespace ORB_SLAM3
             Eigen::Vector3d v() const { return _estimate.tail<3>(); }
         };
 
-        // Stature of one track [m]; persistent across BAs (Map::mPedStature).
-        class VertexStature : public g2o::BaseVertex<1, double>
-        {
-        public:
-            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            VertexStature() {}
-            bool read(std::istream &) override { return false; }
-            bool write(std::ostream &) const override { return false; }
-            void setToOriginImpl() override { _estimate = 1.70; }
-            void oplusImpl(const double *u) override { _estimate += u[0]; }
-        };
-
         inline Eigen::Vector3d PosOf(const VertexPedState *v) { return v->p(); }
         inline Eigen::Vector3d PosOf(const g2o::VertexSBAPointXYZ *v) { return v->estimate(); }
-
-        // ---------------------------------------------------------------- stature prior (unary)
-        // e = H - mean; information 1/sigma^2 (set by the caller). Not robustified: it is a prior.
-        class EdgeStaturePrior : public g2o::BaseUnaryEdge<1, double, VertexStature>
-        {
-        public:
-            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            EdgeStaturePrior() {}
-            bool read(std::istream &) override { return false; }
-            bool write(std::ostream &) const override { return false; }
-            void computeError() override { _error(0) = static_cast<const VertexStature *>(_vertices[0])->estimate() - _measurement; }
-            void linearizeOplus() override { _jacobianOplusXi(0, 0) = 1.0; }
-        };
 
         // ---------------------------------------------------------------- pixel reprojection of a world point
         // PV = VertexPedState (root, sigma = rootPxSigma) or g2o::VertexSBAPointXYZ (footprint, sigma = footPxSigma).
@@ -183,16 +158,16 @@ namespace ORB_SLAM3
         };
 
         // ---------------------------------------------------------------- nose->heel log-range
-        // Vertices: (0) VertexPedState, (1) camera pose, (2) VertexStature.
-        //   e = log|Xc| - (log f + log(cL) + log H - log l_px)       (P7-A A3: range along the ray from the nose->heel length,
-        //   sigma = 0.031 in log range; cL = L_skel / stature, P1-B_report.md:96-100)
-        // _measurement = log f + log cL - log l_px.
+        // Vertices: (0) VertexPedState, (1) camera pose.
+        //   e = log|Xc| - (log f + log(cL) + log H0 - log l_px)      (P7-A A3: range along the ray from the nose->heel length with the fixed stature
+        //   H0 = 1.70 m, the convention under which cL = L_skel / 1.70 was defined; P1-B_report.md:96-100)
+        // _measurement = log f + log cL + log H0 - log l_px.
         template <class PoseV>
         class EdgePedLogRange : public g2o::BaseMultiEdge<1, double>
         {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            EdgePedLogRange() { this->resize(3); }
+            EdgePedLogRange() { this->resize(2); }
             Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
@@ -211,8 +186,7 @@ namespace ORB_SLAM3
 
             void computeError() override
             {
-                const double H = static_cast<const VertexStature *>(this->_vertices[2])->estimate();
-                this->_error(0) = std::log(Xc().norm()) - (_measurement + std::log(H));
+                this->_error(0) = std::log(Xc().norm()) - _measurement;
             }
 
             void linearizeOplus() override
@@ -224,7 +198,6 @@ namespace ORB_SLAM3
                 this->_jacobianOplus[0].setZero();
                 this->_jacobianOplus[0].template leftCols<3>() = dlog * Rcw;
                 this->_jacobianOplus[1] = dlog * PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), X);
-                this->_jacobianOplus[2](0, 0) = -1.0 / static_cast<const VertexStature *>(this->_vertices[2])->estimate();
             }
         };
 
@@ -274,14 +247,14 @@ namespace ORB_SLAM3
         };
 
         // ---------------------------------------------------------------- root-over-footprint ties
-        // Vertices: (0) VertexPedState, (1) footprint g2o::VertexSBAPointXYZ, (2) VertexStature. UP = world z (gravity-aligned after IMU init).
-        //   T1: e = UP.(t - X_f) - cRoot H                              sigma 0.02   (criterion_G.md:80)
-        //   T2: e = max(0, |(I-UP UP^T)(t - X_f)| - cLeg H)  (hinge)   sigma 0.10   (criterion_G.md:81)
+        // Vertices: (0) VertexPedState, (1) footprint g2o::VertexSBAPointXYZ; the stature is the constant H0. UP = world z (gravity-aligned after IMU init).
+        //   T1: e = UP.(t - X_f) - cRoot H0                              sigma 0.02   (criterion_G.md:80)
+        //   T2: e = max(0, |(I-UP UP^T)(t - X_f)| - cLeg H0)  (hinge)   sigma 0.10   (criterion_G.md:81)
         class EdgePedTie1 : public g2o::BaseMultiEdge<1, double>
         {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            explicit EdgePedTie1(double cRoot_) : cRoot(cRoot_) { this->resize(3); }
+            EdgePedTie1(double cRoot_, double H0_) : cRoot(cRoot_), H0(H0_) { this->resize(2); }
             Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
@@ -289,8 +262,7 @@ namespace ORB_SLAM3
             {
                 const Eigen::Vector3d t = static_cast<const VertexPedState *>(this->_vertices[0])->p();
                 const Eigen::Vector3d X = static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[1])->estimate();
-                const double H = static_cast<const VertexStature *>(this->_vertices[2])->estimate();
-                this->_error(0) = (t(2) - X(2)) - cRoot * H;
+                this->_error(0) = (t(2) - X(2)) - cRoot * H0;
             }
             void linearizeOplus() override
             {
@@ -298,16 +270,15 @@ namespace ORB_SLAM3
                 this->_jacobianOplus[0](0, 2) = 1.0;
                 this->_jacobianOplus[1].setZero();
                 this->_jacobianOplus[1](0, 2) = -1.0;
-                this->_jacobianOplus[2](0, 0) = -cRoot;
             }
-            double cRoot;
+            double cRoot, H0;
         };
 
         class EdgePedTie2 : public g2o::BaseMultiEdge<1, double>
         {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            explicit EdgePedTie2(double cLeg_) : cLeg(cLeg_) { this->resize(3); }
+            EdgePedTie2(double cLeg_, double H0_) : cLeg(cLeg_), H0(H0_) { this->resize(2); }
             Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
@@ -316,11 +287,10 @@ namespace ORB_SLAM3
             {
                 const Eigen::Vector3d t = static_cast<const VertexPedState *>(this->_vertices[0])->p();
                 const Eigen::Vector3d X = static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[1])->estimate();
-                const double H = static_cast<const VertexStature *>(this->_vertices[2])->estimate();
                 const Eigen::Vector2d h = (t - X).head<2>();
                 const double n = h.norm();
                 u = n > 0 ? Eigen::Vector2d(h / n) : Eigen::Vector2d(Eigen::Vector2d::Zero());
-                return n - cLeg * H;
+                return n - cLeg * H0;
             }
             void computeError() override
             {
@@ -334,15 +304,13 @@ namespace ORB_SLAM3
                 const double ex = Excess(u);
                 this->_jacobianOplus[0].setZero();
                 this->_jacobianOplus[1].setZero();
-                this->_jacobianOplus[2].setZero();
                 if (ex > 0)
                 {
                     this->_jacobianOplus[0].template block<1, 2>(0, 0) = u.transpose();
                     this->_jacobianOplus[1].template block<1, 2>(0, 0) = -u.transpose();
-                    this->_jacobianOplus[2](0, 0) = -cLeg;
                 }
             }
-            double cLeg;
+            double cLeg, H0;
         };
 
     } // namespace ped

@@ -32,8 +32,7 @@ namespace ORB_SLAM3
             bool fixed;
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
-        std::vector<std::pair<int, ped::VertexStature *>> statures;
-        enum Type { ROOT = 0, RANGE, STATURE, WNA, FOOT, T1, T2, NTYPES };
+        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, NTYPES };
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
         std::vector<g2o::OptimizableGraph::Edge *> byType[NTYPES];
         // counters (also printed once per call when non-zero)
@@ -44,11 +43,11 @@ namespace ORB_SLAM3
     {
     public:
         // `kfs` is the full graph: free and fixed keyframes whose pose vertices already exist in `opt` with id = KeyFrame::mnId.
-        // `metric` = the map is metric and gravity-aligned (IMU initialised): range, stature, motion and stance factors are added;
+        // `metric` = the map is metric and gravity-aligned (IMU initialised): range, motion and stance factors are added;
         // otherwise only the scale-free root reprojection is (pre-IMU-init maps have arbitrary scale; Marco, 20 Oct).
         static PedGraph Add(g2o::SparseOptimizer &opt, const std::vector<PedGraphKF> &kfs, Map *pMap, bool metric, bool inertialPoses);
 
-        // Writes the optimised person states of free keyframes and the statures back. Call only after the BA succeeded.
+        // Writes the optimised person states of free keyframes back. Call only after the BA succeeded.
         static void WriteBack(const PedGraph &g, Map *pMap);
 
         // Process-wide totals of person vertices / edges ever created (the flag-off check: both must stay 0).

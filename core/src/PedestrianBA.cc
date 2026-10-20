@@ -91,7 +91,7 @@ namespace ORB_SLAM3
                         if (PedestrianParams::Get().gateK > 0 && o.maskH > 0)
                         {
                             const PedestrianParams &Q = PedestrianParams::Get();
-                            const double d = std::log(Q.skelOverStature * Q.statureMean / o.lpx) - std::log(Q.maskHeightM / o.maskH); // f cancels
+                            const double d = std::log(Q.skelOverStature * Q.statureFixedM / o.lpx) - std::log(Q.maskHeightM / o.maskH); // f cancels
                             en.rangeOk = std::abs(d - Q.gateCenter) <= Q.gateK * Q.gateSigma;
                         }
                         tracks[o.trackId].push_back(en);
@@ -116,27 +116,7 @@ namespace ORB_SLAM3
                 ++G.nTracks;
                 const int track = tr.first;
 
-                // stature (metric factors only)
-                ped::VertexStature *VH = nullptr;
-                double Hcur = P.statureMean;
-                if (metric)
-                {
-                    double H;
-                    if (pMap->GetPedStature(track, H))
-                        Hcur = H;
-                    VH = new ped::VertexStature();
-                    VH->setId(nextId++);
-                    VH->setEstimate(Hcur);
-                    VH->setFixed(false);
-                    opt.addVertex(VH);
-                    G.statures.push_back({track, VH});
-                    auto *prior = new ped::EdgeStaturePrior();
-                    prior->setVertex(0, VH);
-                    prior->setMeasurement(P.statureMean);
-                    prior->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.statureSigma * P.statureSigma));
-                    opt.addEdge(prior);
-                    Tag(G, PedGraph::STATURE, prior);
-                }
+                const double Hcur = P.statureFixedM; // fixed stature (P9-C2 5d): not a state
 
                 // 2. state vertices (existing estimate, else initialised from the keyframe's pose, the root pixel and the range)
                 for (Entry &e : E)
@@ -199,8 +179,7 @@ namespace ORB_SLAM3
                         auto *edge = new ped::EdgePedLogRange<PoseV>();
                         edge->setVertex(0, e.v);
                         edge->setVertex(1, vpose);
-                        edge->setVertex(2, VH);
-                        edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) - std::log(e.obs->lpx));
+                        edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx));
                         edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.logDepthSigma * P.logDepthSigma));
                         auto *rk = new g2o::RobustKernelHuber();
                         rk->setDelta(kHuber1D * P.huberScale);
@@ -288,10 +267,9 @@ namespace ORB_SLAM3
                                 Tag(G, PedGraph::FOOT, re);
                                 ++G.nFoot;
 
-                                auto *t1 = new ped::EdgePedTie1(P.cRoot);
+                                auto *t1 = new ped::EdgePedTie1(P.cRoot, P.statureFixedM);
                                 t1->setVertex(0, e.v);
                                 t1->setVertex(1, VX);
-                                t1->setVertex(2, VH);
                                 t1->setMeasurement(0.0);
                                 t1->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.t1Sigma * P.t1Sigma));
                                 auto *rk1 = new g2o::RobustKernelHuber();
@@ -300,10 +278,9 @@ namespace ORB_SLAM3
                                 opt.addEdge(t1);
                                 Tag(G, PedGraph::T1, t1);
 
-                                auto *t2 = new ped::EdgePedTie2(P.cLeg);
+                                auto *t2 = new ped::EdgePedTie2(P.cLeg, P.statureFixedM);
                                 t2->setVertex(0, e.v);
                                 t2->setVertex(1, VX);
-                                t2->setVertex(2, VH);
                                 t2->setMeasurement(0.0);
                                 t2->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.t2Sigma * P.t2Sigma));
                                 auto *rk2 = new g2o::RobustKernelHuber();
@@ -318,7 +295,7 @@ namespace ORB_SLAM3
                     }
                 }
             }
-            gVertices += static_cast<long>(G.states.size() + G.statures.size()) + G.nFootVertices;
+            gVertices += static_cast<long>(G.states.size()) + G.nFootVertices;
             gEdges += static_cast<long>(G.edges.size());
             return G;
         }
@@ -341,10 +318,10 @@ namespace ORB_SLAM3
         };
         std::vector<CallRec> gCalls;
         long gCreatedT[PedGraph::NTYPES] = {0}, gActiveT[PedGraph::NTYPES] = {0};
-        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "stature", "wna", "foot", "t1", "t2"};
+        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2"};
         // inside the robust-kernel threshold: the Huber deltas of PedestrianBA.cc (chi2 95 %: 5.991 for 2 dof, 3.841 for 1 dof);
-        // edges without a kernel (stature prior, WNA 6 dof) use their own 95 % chi2 (3.841, 12.592)
-        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 3.841, 12.592, 5.991, 3.841, 3.841};
+        // the WNA prior (6 dof, no kernel) uses its own 95 % chi2 (12.592)
+        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841};
     } // namespace
 
     void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
@@ -429,7 +406,5 @@ namespace ORB_SLAM3
             std::lock_guard<std::mutex> lk(gLogMutex);
             gLog[{s.kf->mnId, s.track}] = r;
         }
-        for (const auto &h : g.statures)
-            pMap->SetPedStature(h.first, h.second->estimate());
     }
 } // namespace ORB_SLAM3

@@ -134,10 +134,6 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
         TryMulti<EdgePedTie2>(e, vi, J))
         return J;
-    if (auto *b = dynamic_cast<EdgeStaturePrior *>(e))
-    {
-        return Eigen::MatrixXd(b->jacobianOplusXi());
-    }
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
 
@@ -171,8 +167,6 @@ static void JacobianTests(const char *tag)
     Vec6 x;
     x << Xw, V3(1.0);
     state.setEstimate(x);
-    VertexStature H;
-    H.setEstimate(1.74);
     g2o::VertexSBAPointXYZ foot;
     foot.setEstimate(Xw + Eigen::Vector3d(0.2, -0.1, -0.9));
 
@@ -194,8 +188,7 @@ static void JacobianTests(const char *tag)
         EdgePedLogRange<PoseV> e;
         e.setVertex(0, &state);
         e.setVertex(1, pose);
-        e.setVertex(2, &H);
-        e.setMeasurement(std::log(415.7) + std::log(0.91) - std::log(150.0));
+        e.setMeasurement(std::log(415.7) + std::log(0.91) + std::log(1.70) - std::log(150.0));
         CheckEdge(&e, std::string("nose-heel log range [") + tag + "]");
     }
     // vertex ownership: the stack objects above are not owned by a graph
@@ -229,32 +222,20 @@ int main()
         CHECK((e.information() * Q - Eigen::Matrix<double, 6, 6>::Identity()).cwiseAbs().maxCoeff() < 1e-10, "WNA information == Q^-1 (closed form)");
     }
     {
-        VertexStature H;
-        H.setEstimate(1.8);
-        EdgeStaturePrior e;
-        e.setVertex(0, &H);
-        e.setMeasurement(1.70);
-        CheckEdge(&e, "stature prior");
-    }
-    {
         VertexPedState s;
         Vec6 x;
         x << 3.0, 2.0, 1.1, 0.0, 0.0, 0.0;
         s.setEstimate(x);
         g2o::VertexSBAPointXYZ f;
         f.setEstimate(Eigen::Vector3d(2.6, 1.7, 0.2));
-        VertexStature H;
-        H.setEstimate(1.72);
-        EdgePedTie1 t1(0.55);
+        EdgePedTie1 t1(0.55, 1.72);
         t1.setVertex(0, &s);
         t1.setVertex(1, &f);
-        t1.setVertex(2, &H);
         t1.setMeasurement(0.0);
         CheckEdge(&t1, "tie T1");
-        EdgePedTie2 t2(0.55); // horizontal offset 0.5 m < c_leg H = 0.946 m: inactive (hinge) -> exactly zero Jacobian
+        EdgePedTie2 t2(0.55, 1.72); // horizontal offset 0.5 m < c_leg H0 = 0.946 m: inactive (hinge) -> exactly zero Jacobian
         t2.setVertex(0, &s);
         t2.setVertex(1, &f);
-        t2.setVertex(2, &H);
         t2.setMeasurement(0.0);
         CheckEdge(&t2, "tie T2, inactive branch");
         f.setEstimate(Eigen::Vector3d(1.5, 0.9, 0.2)); // horizontal offset 1.7 m: active
@@ -266,7 +247,7 @@ int main()
     // ------------------------------------------------------------------------------------------------ 2. absorption
     // Camera block of the information matrix after eliminating everything else, with and without a person.
     //   cameras K=5 (SE3), landmarks M=40 observed by all cameras (EdgePedReproj<PointXYZ> as the static-feature factor),
-    //   person: one state per camera, root reprojection + log range + stature prior (camera-relative factors only).
+    //   person: one state per camera, root reprojection + log range (camera-relative factors only; the stature is a constant).
     {
         const int K = 5, M = 40;
         const double fx = 415.7, cx = 360.0, cy = 240.0;
@@ -285,8 +266,6 @@ int main()
             p->setEstimate(Eigen::Vector3d(U(-3, 3), U(-2, 2), U(4, 12)));
             pts.push_back(p);
         }
-        VertexStature Hst;
-        Hst.setEstimate(1.70);
         std::vector<VertexPedState *> ps;
         for (int k = 0; k < K; ++k)
         {
@@ -297,11 +276,10 @@ int main()
             ps.push_back(s);
         }
         // dense assembly: variable offsets
-        const int nC = 6 * K, nP = 3 * M, nS = 6 * K, nH = 1, N = nC + nP + nS + nH;
+        const int nC = 6 * K, nP = 3 * M, nS = 6 * K, N = nC + nP + nS;
         auto offC = [&](int k) { return 6 * k; };
         auto offP = [&](int m) { return nC + 3 * m; };
         auto offS = [&](int k) { return nC + nP + 6 * k; };
-        const int offH = nC + nP + nS;
         auto addEdge = [&](Eigen::MatrixXd &Hm, g2o::OptimizableGraph::Edge *e, const std::vector<int> &offs) {
             e->computeError();
             const int m = e->dimension();
@@ -340,16 +318,10 @@ int main()
             EdgePedLogRange<g2o::VertexSE3Expmap> el;
             el.setVertex(0, ps[k]);
             el.setVertex(1, cams[k]);
-            el.setVertex(2, &Hst);
-            el.setMeasurement(std::log(Xc.norm()) - std::log(1.70) + 0.02);
+            el.setMeasurement(std::log(Xc.norm()) + 0.02);
             el.setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (0.031 * 0.031));
-            addEdge(H1, &el, {offS(k), offC(k), offH});
+            addEdge(H1, &el, {offS(k), offC(k)});
         }
-        EdgeStaturePrior pr;
-        pr.setVertex(0, &Hst);
-        pr.setMeasurement(1.70);
-        pr.setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (0.09 * 0.09));
-        addEdge(H1, &pr, {offH});
 
         auto cameraBlock = [&](const Eigen::MatrixXd &Hm, bool withPerson) {
             const int nKeep = nC;

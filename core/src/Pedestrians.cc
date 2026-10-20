@@ -36,8 +36,7 @@ namespace ORB_SLAM3
         p.rootPxSigma = Req(fs, "Pedestrians.RootPxSigma");
         p.logDepthSigma = Req(fs, "Pedestrians.LogDepthSigma");
         p.skelOverStature = Req(fs, "Pedestrians.SkeletonOverStature");
-        p.statureMean = Req(fs, "Pedestrians.StatureMean");
-        p.statureSigma = Req(fs, "Pedestrians.StatureSigma");
+        p.statureFixedM = Req(fs, "Pedestrians.StatureFixedM");
         p.qv = Req(fs, "Pedestrians.Qv");
         p.footPxSigma = Req(fs, "Pedestrians.FootprintPxSigma");
         p.t1Sigma = Req(fs, "Pedestrians.T1Sigma");
@@ -57,12 +56,12 @@ namespace ORB_SLAM3
         if (d.empty())
             throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.Dir is missing from the settings file");
         p.dir = static_cast<std::string>(d);
-        for (double v : {p.rootPxSigma, p.logDepthSigma, p.skelOverStature, p.statureMean, p.statureSigma, p.qv, p.footPxSigma, p.t1Sigma,
+        for (double v : {p.rootPxSigma, p.logDepthSigma, p.skelOverStature, p.statureFixedM, p.qv, p.footPxSigma, p.t1Sigma,
                          p.t2Sigma, p.cRoot, p.cLeg, p.huberScale})
             if (!(v > 0))
                 throw std::runtime_error("[Pedestrians] every sigma / constant must be > 0");
         std::cout << "[Pedestrians] on: root " << p.rootPxSigma << " px, log-range " << p.logDepthSigma << ", L/H " << p.skelOverStature
-                  << ", stature " << p.statureMean << "+-" << p.statureSigma << " m, q_v " << p.qv << ", foot " << p.footPxSigma
+                  << ", fixed stature " << p.statureFixedM << " m, q_v " << p.qv << ", foot " << p.footPxSigma
                   << " px, T1 " << p.t1Sigma << ", T2 " << p.t2Sigma << ", c_root " << p.cRoot << ", c_leg " << p.cLeg
                   << ", min track KFs " << p.minTrackKeyframes << ", min stance box " << p.minStanceBoxPx << " px, min foot obs "
                   << p.minFootObservations << ", min l_px " << p.minLpx << ", huber scale " << p.huberScale << ", gate k " << p.gateK << " (center " << p.gateCenter << ", sigma " << p.gateSigma << ", H_mask " << p.maskHeightM << ")" << ", dir " << p.dir << std::endl;
