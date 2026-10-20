@@ -64,6 +64,8 @@ namespace ORB_SLAM3
         int minTrackKeyframes = 0;   // measurements of a track seen in fewer graph keyframes are skipped
         double minStanceBoxPx = 0;   // stance only when the person box is at least this tall (P4-S1 visibility gate)
         int minFootObservations = 0; // a footprint vertex needs this many observations
+        double minLpx = 0;           // observations with a nose->heel length below this [px] are not used (0: any valid length); tuning gate
+        double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 
         static PedestrianParams &Get();

@@ -16,7 +16,7 @@ namespace ORB_SLAM3
 
     namespace
     {
-        double Req(cv::FileStorage &fs, const char *key)
+        double Req(cv::FileStorage &fs, const char *key, bool allowZero = false)
         {
             const cv::FileNode n = fs[key];
             if (n.empty())
@@ -47,19 +47,21 @@ namespace ORB_SLAM3
         p.minTrackKeyframes = static_cast<int>(Req(fs, "Pedestrians.MinTrackKeyframes"));
         p.minStanceBoxPx = Req(fs, "Pedestrians.MinStanceBoxPx");
         p.minFootObservations = static_cast<int>(Req(fs, "Pedestrians.MinFootObservations"));
+        p.minLpx = Req(fs, "Pedestrians.MinLpx", true);
+        p.huberScale = Req(fs, "Pedestrians.HuberScale");
         const cv::FileNode d = fs["Pedestrians.Dir"];
         if (d.empty())
             throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.Dir is missing from the settings file");
         p.dir = static_cast<std::string>(d);
         for (double v : {p.rootPxSigma, p.logDepthSigma, p.skelOverStature, p.statureMean, p.statureSigma, p.qv, p.footPxSigma, p.t1Sigma,
-                         p.t2Sigma, p.cRoot, p.cLeg})
+                         p.t2Sigma, p.cRoot, p.cLeg, p.huberScale})
             if (!(v > 0))
                 throw std::runtime_error("[Pedestrians] every sigma / constant must be > 0");
         std::cout << "[Pedestrians] on: root " << p.rootPxSigma << " px, log-range " << p.logDepthSigma << ", L/H " << p.skelOverStature
                   << ", stature " << p.statureMean << "+-" << p.statureSigma << " m, q_v " << p.qv << ", foot " << p.footPxSigma
                   << " px, T1 " << p.t1Sigma << ", T2 " << p.t2Sigma << ", c_root " << p.cRoot << ", c_leg " << p.cLeg
                   << ", min track KFs " << p.minTrackKeyframes << ", min stance box " << p.minStanceBoxPx << " px, min foot obs "
-                  << p.minFootObservations << ", dir " << p.dir << std::endl;
+                  << p.minFootObservations << ", min l_px " << p.minLpx << ", huber scale " << p.huberScale << ", dir " << p.dir << std::endl;
         return true;
     }
 

@@ -82,7 +82,7 @@ namespace ORB_SLAM3
                     // An observation without a nose->heel length has no depth cue: its state would be free along the pixel ray
                     // (root reprojection is flat along it, the 1/z Jacobians diverge as the state approaches the camera; seen in the
                     // first smoke run). It is not a measurement of this system and is skipped.
-                    if (o.lpx <= 0)
+                    if (o.lpx <= 0 || o.lpx < PedestrianParams::Get().minLpx)
                         continue;
                     {
                         Entry en{g.kf, g.fixed, &o, nullptr, PedClaim(), false};
@@ -179,7 +179,7 @@ namespace ORB_SLAM3
                         else
                         {
                             auto *rk = new g2o::RobustKernelHuber();
-                            rk->setDelta(kHuber2D);
+                            rk->setDelta(kHuber2D * P.huberScale);
                             edge->setRobustKernel(rk);
                             opt.addEdge(edge);
                             Tag(G, PedGraph::ROOT, edge);
@@ -195,7 +195,7 @@ namespace ORB_SLAM3
                         edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) - std::log(e.obs->lpx));
                         edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.logDepthSigma * P.logDepthSigma));
                         auto *rk = new g2o::RobustKernelHuber();
-                        rk->setDelta(kHuber1D);
+                        rk->setDelta(kHuber1D * P.huberScale);
                         edge->setRobustKernel(rk);
                         opt.addEdge(edge);
                         Tag(G, PedGraph::RANGE, edge);
@@ -274,7 +274,7 @@ namespace ORB_SLAM3
                                 re->setMeasurement(Eigen::Vector2d(e.cl.toeU[foot], e.cl.toeV[foot]));
                                 re->setInformation(Eigen::Matrix2d::Identity() / (P.footPxSigma * P.footPxSigma));
                                 auto *rk = new g2o::RobustKernelHuber();
-                                rk->setDelta(kHuber2D);
+                                rk->setDelta(kHuber2D * P.huberScale);
                                 re->setRobustKernel(rk);
                                 opt.addEdge(re);
                                 Tag(G, PedGraph::FOOT, re);
@@ -287,7 +287,7 @@ namespace ORB_SLAM3
                                 t1->setMeasurement(0.0);
                                 t1->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.t1Sigma * P.t1Sigma));
                                 auto *rk1 = new g2o::RobustKernelHuber();
-                                rk1->setDelta(kHuber1D);
+                                rk1->setDelta(kHuber1D * P.huberScale);
                                 t1->setRobustKernel(rk1);
                                 opt.addEdge(t1);
                                 Tag(G, PedGraph::T1, t1);
@@ -299,7 +299,7 @@ namespace ORB_SLAM3
                                 t2->setMeasurement(0.0);
                                 t2->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.t2Sigma * P.t2Sigma));
                                 auto *rk2 = new g2o::RobustKernelHuber();
-                                rk2->setDelta(kHuber1D);
+                                rk2->setDelta(kHuber1D * P.huberScale);
                                 t2->setRobustKernel(rk2);
                                 opt.addEdge(t2);
                                 Tag(G, PedGraph::T2, t2);
