@@ -193,6 +193,7 @@ namespace ORB_SLAM3
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
             EdgePedLogRange() { this->resize(3); }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
 
@@ -281,6 +282,7 @@ namespace ORB_SLAM3
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
             explicit EdgePedTie1(double cRoot_) : cRoot(cRoot_) { this->resize(3); }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
             void computeError() override
@@ -306,6 +308,7 @@ namespace ORB_SLAM3
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
             explicit EdgePedTie2(double cLeg_) : cLeg(cLeg_) { this->resize(3); }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
 

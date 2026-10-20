@@ -15,3 +15,11 @@ target_link_libraries(deterministic_guard_test ${ORB_SLAM3_DIR}/lib/libvs_graphs
   ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
 set_target_properties(deterministic_guard_test PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
+
+add_executable(test_pedestrian_factors test_pedestrian_factors.cc)
+target_include_directories(test_pedestrian_factors PRIVATE ${ORB_SLAM3_DIR} ${ORB_SLAM3_DIR}/include ${ORB_SLAM3_DIR}/include/CameraModels
+  ${ORB_SLAM3_DIR}/Thirdparty/Sophus ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} ${Pangolin_INCLUDE_DIRS})
+target_link_libraries(test_pedestrian_factors ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+  ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
+set_target_properties(test_pedestrian_factors PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")

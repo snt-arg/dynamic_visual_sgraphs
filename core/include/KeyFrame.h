@@ -547,16 +547,19 @@ namespace ORB_SLAM3
         // Calibration
         Eigen::Matrix3f mK_;
 
+    public:
         // [P9-C] pedestrian measurements of this keyframe's image and the persistent per-track state estimated for it.
         std::shared_ptr<const PedFrame> mpPedFrame;
         bool GetPedState(int trackId, PedState &s);
         void SetPedState(int trackId, const PedState &s);
         void ClearPedStates();
 
-        // Mutex
-        std::mutex mMutexPose; // for pose, velocity and biases
+    protected:
         std::mutex mMutexPed;
         std::map<int, PedState> mPedStates;
+
+        // Mutex
+        std::mutex mMutexPose; // for pose, velocity and biases
         std::mutex mMutexConnections;
         std::mutex mMutexFeatures;
         std::mutex mMutexMap;

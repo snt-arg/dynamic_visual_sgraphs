@@ -47,6 +47,9 @@ namespace ORB_SLAM3
 
         // Writes the optimised person states of free keyframes and the statures back. Call only after the BA succeeded.
         static void WriteBack(const PedGraph &g, Map *pMap);
+
+        // Process-wide totals of person vertices / edges ever created (the flag-off check: both must stay 0).
+        static void Counters(long &vertices, long &edges);
     };
 } // namespace ORB_SLAM3
 

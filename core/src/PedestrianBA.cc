@@ -1,6 +1,7 @@
 #include "PedestrianBA.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
@@ -11,6 +12,8 @@ namespace ORB_SLAM3
 {
     namespace
     {
+        std::atomic<long> gVertices(0), gEdges(0);
+
         // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1993-1994 thHuber1D / thHuberMono).
         const double kHuber1D = std::sqrt(3.841);
         const double kHuber2D = std::sqrt(5.991);
@@ -59,7 +62,9 @@ namespace ORB_SLAM3
                     tracks[o.trackId].push_back({g.kf, g.fixed, &o, nullptr});
             }
 
-            int nextId = opt.vertices().empty() ? 0 : opt.vertices().rbegin()->first + 1;
+            int nextId = 0; // above every id in the graph (the container is unordered; the maximum does not depend on its order)
+            for (const auto &kv : opt.vertices())
+                nextId = std::max(nextId, kv.first + 1);
 
             for (auto &tr : tracks)
             {
@@ -275,6 +280,8 @@ namespace ORB_SLAM3
                     }
                 }
             }
+            gVertices += static_cast<long>(G.states.size() + G.statures.size()) + G.nFootVertices;
+            gEdges += static_cast<long>(G.edges.size());
             return G;
         }
     } // namespace
@@ -284,6 +291,12 @@ namespace ORB_SLAM3
         if (!PedestrianParams::Enabled())
             throw std::runtime_error("[Pedestrians] PedestrianBA::Add called with Pedestrians.Enabled: 0");
         return inertialPoses ? AddImpl<VertexPose>(opt, kfs, pMap, metric) : AddImpl<g2o::VertexSE3Expmap>(opt, kfs, pMap, metric);
+    }
+
+    void PedestrianBA::Counters(long &vertices, long &edges)
+    {
+        vertices = gVertices;
+        edges = gEdges;
     }
 
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
