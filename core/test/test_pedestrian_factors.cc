@@ -19,6 +19,7 @@
 
 #include "PedestrianBA.h"
 #include "PedestrianFactors.h"
+#include "PedestrianGate.h"
 #include "Pedestrians.h"
 
 using namespace ORB_SLAM3;
@@ -387,7 +388,7 @@ static void FloorIoTests()
         "Pedestrians.StatureFixedM: 1.7\nPedestrians.Qv: 0.1386\nPedestrians.FootprintPxSigma: 2.0\nPedestrians.T1Sigma: 0.02\nPedestrians.T2Sigma: 0.1\n"
         "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
         "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
-        "Pedestrians.GateK: 0.0\nPedestrians.Dir: /x\n";
+        "Pedestrians.GateK: 0.0\nPedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 0\nPedestrians.Dir: /x\n";
     const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\nPedestrians.BiasSigma: 0.042\nPedestrians.BiasMinContacts: 0\n"
                            "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
     auto cfg = [&](const std::string &extra) {
@@ -414,8 +415,166 @@ static void FloorIoTests()
     PedestrianParams::Get() = PedestrianParams();
 }
 
+// ---- P9-C4: anisotropic WNA prior, innovation gate, settings ---------------------------------------------------------
+static void C4Tests()
+{
+    // 1. anisotropic WNA: information == Q^-1 with Q = diag(qh, qh, qz) kron [[dt^3/3, dt^2/2],[dt^2/2, dt]] (state order p(3), v(3))
+    {
+        const double dt = 0.37, qh = 0.1383, qz = 0.0096;
+        VertexPedState a, b;
+        Vec6 xa, xb;
+        xa << V3(2), V3(1);
+        xb << V3(2), V3(1);
+        a.setEstimate(xa);
+        b.setEstimate(xb);
+        EdgePedWna e;
+        e.setVertex(0, &a);
+        e.setVertex(1, &b);
+        e.setMeasurement(Vec6::Zero());
+        e.SetDt(dt, Eigen::Vector3d(qh, qh, qz));
+        CheckEdge(&e, "anisotropic white-noise-acceleration prior");
+        const Eigen::Vector3d q(qh, qh, qz);
+        Eigen::Matrix<double, 6, 6> Q = Eigen::Matrix<double, 6, 6>::Zero();
+        for (int k = 0; k < 3; ++k)
+        {
+            Q(k, k) = q(k) * dt * dt * dt / 3;
+            Q(k, 3 + k) = Q(3 + k, k) = q(k) * dt * dt / 2;
+            Q(3 + k, 3 + k) = q(k) * dt;
+        }
+        const Eigen::Matrix<double, 6, 6> Qinv = Q.inverse();
+        CHECK((e.information() - Qinv).cwiseAbs().maxCoeff() / Qinv.cwiseAbs().maxCoeff() < 1e-12, "aniso WNA: information == Q^-1 with Q = diag(q_h, q_h, q_z) (x) [[dt^3/3, dt^2/2],[dt^2/2, dt]]");
+        CHECK((e.information() * Q - Eigen::Matrix<double, 6, 6>::Identity()).cwiseAbs().maxCoeff() < 1e-10, "aniso WNA: information * Q == I");
+        // the z axis is stiffer by qh/qz exactly; x and y are identical
+        CHECK(std::abs(e.information()(2, 2) / e.information()(0, 0) - qh / qz) < 1e-9 && e.information()(0, 0) == e.information()(1, 1), "aniso WNA: z block = (q_h / q_z) x the horizontal block; x == y");
+        // isotropic path bit-identical to the pre-C4 closed form
+        EdgePedWna iso;
+        iso.SetDt(dt, 0.1386);
+        const double q0 = 0.1386;
+        Eigen::Matrix<double, 6, 6> I = Eigen::Matrix<double, 6, 6>::Zero();
+        const double A = 12.0 / (q0 * dt * dt * dt), B = -6.0 / (q0 * dt * dt), C = 4.0 / (q0 * dt);
+        I.topLeftCorner<3, 3>() = A * Eigen::Matrix3d::Identity();
+        I.topRightCorner<3, 3>() = B * Eigen::Matrix3d::Identity();
+        I.bottomLeftCorner<3, 3>() = B * Eigen::Matrix3d::Identity();
+        I.bottomRightCorner<3, 3>() = C * Eigen::Matrix3d::Identity();
+        CHECK((iso.information() - I).cwiseAbs().maxCoeff() == 0.0, "isotropic WNA information is bit-identical to the pre-C4 closed form");
+    }
+    // 2. settings
+    {
+        const std::string base =
+            "%YAML:1.0\n---\nPedestrians.Enabled: 1\nPedestrians.RootPxSigma: 1.5\nPedestrians.LogDepthSigma: 0.031\nPedestrians.SkeletonOverStature: 0.9027\n"
+            "Pedestrians.StatureFixedM: 1.7\nPedestrians.Qv: 0.1386\nPedestrians.FootprintPxSigma: 2.0\nPedestrians.T1Sigma: 0.02\nPedestrians.T2Sigma: 0.1\n"
+            "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
+            "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
+            "Pedestrians.GateK: 0.0\nPedestrians.FloorContact: none\nPedestrians.Dir: /x\n";
+        const std::string gate = "Pedestrians.InnovGate: 1\nPedestrians.InnovChi2Dof2: 9.21034\nPedestrians.InnovChi2Dof3: 11.34487\nPedestrians.InnovFreeKeyframes: 2\n"
+                                 "Pedestrians.InnovReinitRejections: 3\nPedestrians.InnovP0PosXY: 0.2\nPedestrians.InnovP0PosZ: 0.06\nPedestrians.InnovP0VelXY: 0.19\nPedestrians.InnovP0VelZ: 0.08\n";
+        auto cfg = [&](const std::string &extra) {
+            cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);
+            return PedestrianParams::Configure(fs);
+        };
+        auto throws = [&](const std::string &extra) {
+            try { cfg(extra); } catch (const std::runtime_error &) { return true; }
+            return false;
+        };
+        CHECK(throws(""), "C4 settings: Pedestrians.MotionPrior is required (no default)");
+        CHECK(throws("Pedestrians.MotionPrior: isotropic\n"), "C4 settings: Pedestrians.InnovGate is required (no default)");
+        CHECK(cfg("Pedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 0\n") && PedestrianParams::Get().motionPrior == PedestrianParams::MotionPrior::Isotropic && !PedestrianParams::Get().innovGate,
+              "C4 settings: isotropic, gate off reads no other key");
+        CHECK(throws("Pedestrians.MotionPrior: anisotropic\nPedestrians.InnovGate: 0\n"), "C4 settings: anisotropic without QvH / QvZ throws");
+        CHECK(cfg("Pedestrians.MotionPrior: anisotropic\nPedestrians.QvH: 0.1383\nPedestrians.QvZ: 0.0096\nPedestrians.InnovGate: 0\n") && PedestrianParams::Get().qvH == 0.1383 && PedestrianParams::Get().qvZ == 0.0096,
+              "C4 settings: anisotropic");
+        CHECK(throws("Pedestrians.MotionPrior: bogus\nPedestrians.InnovGate: 0\n"), "C4 settings: unknown MotionPrior throws");
+        CHECK(throws("Pedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 1\n"), "C4 settings: gate on without its keys throws");
+        CHECK(cfg("Pedestrians.MotionPrior: isotropic\n" + gate) && PedestrianParams::Get().innovGate && PedestrianParams::Get().innovReinitRejections == 3, "C4 settings: gate on");
+        PedestrianParams::Get() = PedestrianParams();
+    }
+    // 3. innovation gate: analytic cases of the production test (PedestrianGate.h)
+    {
+        PedestrianParams P;
+        P.rootPxSigma = 1.5;
+        P.logDepthSigma = 0.031;
+        P.qv = 0.1386;
+        P.motionPrior = PedestrianParams::MotionPrior::Isotropic;
+        P.innovChi2Dof2 = 9.21034;
+        P.innovChi2Dof3 = 11.34487;
+        P.innovFreeKeyframes = 2;
+        P.innovReinitRejections = 3;
+        P.innovP0PosXY = 0.2;
+        P.innovP0PosZ = 0.06;
+        P.innovP0VelXY = 0.19;
+        P.innovP0VelZ = 0.08;
+        const double fx = 415.7, fy = 415.7, cx = 360, cy = 240;
+        const Eigen::Matrix3d Rcw = Eigen::Matrix3d::Identity();
+        const Eigen::Vector3d tcw(0, 0, 0);
+        const Eigen::Vector3d p(1.0, 0.2, 6.0), v(0.3, -0.1, 0.0);
+        const double dt = 0.2;
+        const Eigen::Vector3d ph = p + v * dt;
+        const double u0 = fx * ph(0) / ph(2) + cx, v0 = fy * ph(1) / ph(2) + cy, lz0 = std::log(ph(2));
+        GateTest t0 = InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0, v0, true, lz0);
+        CHECK(t0.ok && t0.dof == 3 && t0.d2 < 1e-18 && !t0.reject, "gate: a measurement equal to the prediction has d^2 = 0 and is kept (dof 3)");
+        GateTest t2 = InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0, v0, false, 123.0);
+        CHECK(t2.ok && t2.dof == 2 && t2.d2 < 1e-18, "gate: without a range measurement dof = 2 and the log-range value is not read");
+        // d^2 of a pure pixel offset equals the analytic value: y^T S^-1 y with S = J Sigma_pp J^T + R
+        const double du = 7.0;
+        GateTest t1 = InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + du, v0, true, lz0);
+        Eigen::Matrix3d Jc = Eigen::Matrix3d::Zero();
+        Jc(0, 0) = fx / ph(2); Jc(0, 2) = -fx * ph(0) / (ph(2) * ph(2)); Jc(1, 1) = fy / ph(2); Jc(1, 2) = -fy * ph(1) / (ph(2) * ph(2)); Jc(2, 2) = 1.0 / ph(2);
+        Eigen::Matrix3d Spp = Eigen::Matrix3d::Zero();   // F P0 F^T + Q, position block, per axis
+        for (int a = 0; a < 3; ++a)
+        {
+            const double sp = a < 2 ? P.innovP0PosXY : P.innovP0PosZ, sv = a < 2 ? P.innovP0VelXY : P.innovP0VelZ;
+            Spp(a, a) = sp * sp + dt * dt * sv * sv + P.qv * dt * dt * dt / 3.0;
+        }
+        Eigen::Matrix3d S = Jc * Spp * Jc.transpose();
+        S.diagonal() += Eigen::Vector3d(1.5 * 1.5, 1.5 * 1.5, 0.031 * 0.031);
+        const Eigen::Vector3d y(du, 0, 0);
+        const double d2 = y.dot(S.inverse() * y);
+        CHECK(std::abs(t1.d2 - d2) < 1e-9 * d2, "gate: d^2 of a pixel offset equals y^T (J (F P0 F^T + Q) J^T + R)^-1 y");
+        // the threshold: scale the offset until d^2 crosses chi2(0.99, 3); the rejection flips exactly there
+        const double s_cross = std::sqrt(P.innovChi2Dof3 / d2) * du;
+        CHECK(!InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 0.999 * s_cross, v0, true, lz0).reject && InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0).reject,
+              "gate: rejection flips at d^2 = chi2(0.99, 3)");
+        // anisotropic Q is the active prior: a vertical offset is judged with q_z, not q_h
+        PedestrianParams Pa = P;
+        Pa.motionPrior = PedestrianParams::MotionPrior::Anisotropic;
+        Pa.qvH = 0.1383;
+        Pa.qvZ = 0.0096;
+        const double dv_px = 5.0;
+        CHECK(InnovationTest(Pa, p, v, 2.0, Rcw, tcw, fx, fy, cx, cy, u0, v0 + dv_px, false, 0).d2 != InnovationTest(P, p, v, 2.0, Rcw, tcw, fx, fy, cx, cy, u0, v0 + dv_px, false, 0).d2,
+              "gate: the active (anisotropic) Q enters the covariance");
+        CHECK(!InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0, v0, true, lz0).reject && !InnovationTest(P, Eigen::Vector3d(0, 0, -1), v, dt, Rcw, tcw, fx, fy, cx, cy, 0, 0, true, 0).ok,
+              "gate: a prediction behind the image plane is not testable (kept, counted)");
+        // chain: free keyframes, rejection, re-initialisation after 3 consecutive rejections
+        GateChain ch;
+        GateTest rej;
+        rej.ok = true; rej.dof = 3; rej.d2 = 99; rej.reject = true;
+        GateTest acc = rej; acc.d2 = 1; acc.reject = false;
+        PedGateRec r;
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::ACCEPTED && !r.tested && ch.idx == 1, "gate chain: the first keyframe is not gated (even with an outlier innovation)");
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::ACCEPTED && !r.tested && ch.idx == 2, "gate chain: the second keyframe is not gated");
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::REJECTED && r.tested && ch.idx == 2 && ch.consecRej == 1, "gate chain: the third keyframe is gated and rejected");
+        r = GateStep(P, ch, true, acc, 0.4, 0);
+        CHECK(r.status == PedGateRec::ACCEPTED && ch.idx == 3 && ch.consecRej == 0, "gate chain: an accepted measurement resets the rejection run");
+        GateStep(P, ch, true, rej, 0.2, 0);
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::REJECTED && ch.consecRej == 2, "gate chain: two consecutive rejections do not re-initialise");
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::REINIT && ch.idx == 1 && ch.consecRej == 0, "gate chain: the third consecutive rejection re-initialises (new chain, idx = 1)");
+        r = GateStep(P, ch, true, rej, 0.2, 0);
+        CHECK(r.status == PedGateRec::ACCEPTED && !r.tested && ch.idx == 2, "gate chain: the new chain's second measurement is again free");
+        GateTest notOk;
+        r = GateStep(P, ch, false, notOk, 0.2, 0);
+        CHECK(r.status == PedGateRec::ACCEPTED && !r.tested, "gate chain: no written-back predecessor -> accepted untested");
+    }
+    PedestrianParams::Get() = PedestrianParams();
+}
+
 int main()
 {
+    C4Tests();
     FloorTests<g2o::VertexSE3Expmap>("SE3");
     FloorTests<VertexPose>("VertexPose");
     RegionalFloorTests();

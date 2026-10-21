@@ -1455,5 +1455,22 @@ namespace ORB_SLAM3
     {
         std::unique_lock<std::mutex> lock(mMutexPed);
         mPedStates.clear();
+        mPedGates.clear();
+    }
+
+    bool KeyFrame::GetPedGate(int trackId, PedGateRec &r)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        auto it = mPedGates.find(trackId);
+        if (it == mPedGates.end())
+            return false;
+        r = it->second;
+        return true;
+    }
+
+    void KeyFrame::SetPedGate(int trackId, const PedGateRec &r)
+    {
+        std::unique_lock<std::mutex> lock(mMutexPed);
+        mPedGates[trackId] = r;
     }
 } // namespace ORB_SLAM3

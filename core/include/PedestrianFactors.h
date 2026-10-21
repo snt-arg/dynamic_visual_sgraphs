@@ -249,15 +249,20 @@ namespace ORB_SLAM3
             bool write(std::ostream &) const override { return false; }
 
             // Q^-1 = (1/q) [[12/dt^3, -6/dt^2],[-6/dt^2, 4/dt]] kron I3   (closed form of the 2x2 inverse; det = q^2 dt^4/12)
-            void SetDt(double dt_, double q)
+            void SetDt(double dt_, double q) { SetDt(dt_, Eigen::Vector3d(q, q, q)); }
+
+            // P9-C4: per-axis q = (q_x, q_y, q_z) in the world frame: Q = diag(q) kron [[dt^3/3, dt^2/2],[dt^2/2, dt]]; each axis a carries its own 2x2 inverse
+            // (1/q_a) [[12/dt^3, -6/dt^2],[-6/dt^2, 4/dt]] between (p_a, v_a). With q_x = q_y = q_z this is the isotropic information bit for bit.
+            void SetDt(double dt_, const Eigen::Vector3d &q)
             {
                 dt = dt_;
                 Eigen::Matrix<double, 6, 6> I = Eigen::Matrix<double, 6, 6>::Zero();
-                const double a = 12.0 / (q * dt * dt * dt), b = -6.0 / (q * dt * dt), c = 4.0 / (q * dt);
-                I.topLeftCorner<3, 3>() = a * Eigen::Matrix3d::Identity();
-                I.topRightCorner<3, 3>() = b * Eigen::Matrix3d::Identity();
-                I.bottomLeftCorner<3, 3>() = b * Eigen::Matrix3d::Identity();
-                I.bottomRightCorner<3, 3>() = c * Eigen::Matrix3d::Identity();
+                for (int a = 0; a < 3; ++a)
+                {
+                    I(a, a) = 12.0 / (q(a) * dt * dt * dt);
+                    I(a, 3 + a) = I(3 + a, a) = -6.0 / (q(a) * dt * dt);
+                    I(3 + a, 3 + a) = 4.0 / (q(a) * dt);
+                }
                 this->setInformation(I);
             }
 

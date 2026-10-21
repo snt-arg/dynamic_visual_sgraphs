@@ -89,6 +89,17 @@ namespace ORB_SLAM3
         // at least that many foot observations on free states in the BA window (otherwise b = 0 for that call); 0: always.
         double biasSigma = 0;
         int biasMinContacts = 0;
+        // P9-C4 motion prior (Pedestrians.MotionPrior: isotropic | anisotropic). isotropic: Q = qv (x) [[dt^3/3, dt^2/2],[dt^2/2, dt]] on all three axes (P9-C..C3);
+        // anisotropic: Q = diag(qvH, qvH, qvZ) (x) [[...]] in the gravity-aligned world frame (metric maps only; the prior is only ever added there).
+        enum class MotionPrior { Isotropic, Anisotropic };
+        MotionPrior motionPrior = MotionPrior::Isotropic;
+        double qvH = 0, qvZ = 0;     // read only when anisotropic
+        // P9-C4 prediction-based innovation gate (Pedestrians.InnovGate: 0 | 1; metric maps only). All keys below are read only when the gate is on.
+        bool innovGate = false;
+        double innovChi2Dof2 = 0, innovChi2Dof3 = 0;   // rejection thresholds chi2(0.99, 2) and chi2(0.99, 3)
+        int innovFreeKeyframes = 0;                    // the first this-many accepted measurements of a track are not gated
+        int innovReinitRejections = 0;                 // this many consecutive rejections re-initialise the track
+        double innovP0PosXY = 0, innovP0PosZ = 0, innovP0VelXY = 0, innovP0VelZ = 0; // state standard deviations of P0 = diag(...)^2 (world frame; m, m/s)
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 
@@ -96,6 +107,21 @@ namespace ORB_SLAM3
         static bool Enabled() { return Get().enabled; }
         // Reads the Pedestrians.* keys; throws std::runtime_error naming the first missing key. Returns enabled.
         static bool Configure(cv::FileStorage &fs);
+    };
+
+    // P9-C4 innovation gate: the decision taken once, when a (keyframe, track) measurement first reaches a metric BA call. Persisted on the keyframe so a
+    // later window does not re-decide it (the track's last written-back state moves with every solve).
+    struct PedGateRec
+    {
+        enum Status { ACCEPTED = 1, REJECTED = 2, REINIT = 3 };
+        int status = ACCEPTED;
+        int chainIdx = 0;     // accepted measurements in the track's current chain after this decision (a REINIT starts the chain at 1)
+        int consecRej = 0;    // consecutive rejections after this decision
+        bool tested = false;  // false: accepted without a test (free keyframes, or no written-back predecessor in the window)
+        int dof = 0;
+        double d2 = 0;        // Mahalanobis distance^2 of the innovation (tested only)
+        double dt = 0;        // time to the predecessor state
+        double predStamp = 0; // stamp of the keyframe whose written-back state was propagated
     };
 
     // Persistent per-keyframe state of one track (world frame; the map is metric once the IMU is initialised).

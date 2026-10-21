@@ -1,4 +1,5 @@
 #include "PedestrianBA.h"
+#include "PedestrianGate.h"
 
 #include <algorithm>
 #include <atomic>
@@ -31,6 +32,13 @@ namespace ORB_SLAM3
         };
         std::map<std::pair<unsigned long, int>, FloorRec> gFloorLog;
         long gFloorSkipped[4] = {0, 0, 0, 0}; // no foot observation (not counted), no regional z_f, no neighbours, grazing ray
+        struct GateRow
+        {
+            double stamp;
+            PedGateRec rec;
+        };
+        std::map<std::pair<unsigned long, int>, GateRow> gGateLog; // P9-C4: the first (and only) decision per (keyframe, track)
+        long gGateNoPred = 0;
         std::mutex gLogMutex;
 
         // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1994-1995 thHuber1D / thHuberMono).
@@ -48,6 +56,7 @@ namespace ORB_SLAM3
             PedClaim cl;     // late stance claim of this track at this keyframe (valid iff hasCl)
             bool hasCl = false;
             bool rangeOk = true; // false: the two range cues disagree (5b.2); the nose->heel range factor is dropped, root reprojection stays
+            bool reinit = false; // P9-C4: the innovation gate re-initialised the track at this measurement (no WNA edge to the preceding entry)
         };
         void Tag(PedGraph &G, PedGraph::Type ty, g2o::OptimizableGraph::Edge *e)
         {
@@ -136,6 +145,59 @@ namespace ORB_SLAM3
                     }
                 }
             }
+
+            // P9-C4 prediction-based innovation gate (metric maps only): one decision per new (keyframe, track) measurement, in time order, against the
+            // last written-back state of the track's preceding accepted keyframe; REJECTED measurements leave the graph (no state, no factor), a REINIT starts a new chain.
+            if (metric && P.innovGate)
+                for (auto &tr : tracks)
+                {
+                    const int track = tr.first;
+                    std::vector<Entry> kept;
+                    ped::GateChain ch;
+                    KeyFrame *lastAcc = nullptr;
+                    for (Entry &e : tr.second)
+                    {
+                        PedGateRec rec;
+                        if (e.kf->GetPedGate(track, rec))
+                        {
+                            ch.idx = rec.chainIdx;
+                            ch.consecRej = rec.consecRej;
+                        }
+                        else
+                        {
+                            PedState ps;
+                            bool havePred = lastAcc && lastAcc->GetPedState(track, ps);
+                            ped::GateTest t;
+                            double dt = 0;
+                            if (havePred)
+                            {
+                                dt = e.kf->mTimeStamp - lastAcc->mTimeStamp;
+                                if (!(dt > 1e-6))
+                                    havePred = false;
+                                else
+                                {
+                                    const Cam c = CameraOf(e.kf);
+                                    const Sophus::SE3f Tcw = e.kf->GetPose();
+                                    t = ped::InnovationTest(P, ps.p, ps.v, dt, Tcw.rotationMatrix().cast<double>(), Tcw.translation().cast<double>(), c.fx, c.fy, c.cx, c.cy,
+                                                            e.obs->rootU, e.obs->rootV, e.rangeOk,
+                                                            std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx));
+                                }
+                            }
+                            rec = ped::GateStep(P, ch, havePred, t, dt, lastAcc ? lastAcc->mTimeStamp : 0.0);
+                            e.kf->SetPedGate(track, rec);
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            gGateLog[{e.kf->mnId, track}] = {e.kf->mTimeStamp, rec};
+                            if (!rec.tested && rec.chainIdx > P.innovFreeKeyframes)
+                                ++gGateNoPred;
+                        }
+                        if (rec.status == PedGateRec::REJECTED)
+                            continue;
+                        e.reinit = rec.status == PedGateRec::REINIT;
+                        kept.push_back(e);
+                        lastAcc = e.kf;
+                    }
+                    tr.second = kept;
+                }
 
             int nextId = 0; // above every id in the graph (the container is unordered; the maximum does not depend on its order)
             for (const auto &kv : opt.vertices())
@@ -344,6 +406,8 @@ namespace ORB_SLAM3
                 {
                     if (E[i].fixed && E[i + 1].fixed)
                         continue;
+                    if (E[i + 1].reinit)
+                        continue; // P9-C4: a re-initialised track is a new track: no prior to the state before the jump
                     const double dt = E[i + 1].kf->mTimeStamp - E[i].kf->mTimeStamp;
                     if (!(dt > 1e-6))
                         continue;
@@ -351,7 +415,7 @@ namespace ORB_SLAM3
                     edge->setVertex(0, E[i].v);
                     edge->setVertex(1, E[i + 1].v);
                     edge->setMeasurement(ped::Vec6::Zero());
-                    edge->SetDt(dt, P.qv);
+                    edge->SetDt(dt, ped::ActiveQ(P));
                     opt.addEdge(edge);
                     Tag(G, PedGraph::WNA, edge);
                     ++G.nWna;
@@ -583,6 +647,22 @@ namespace ORB_SLAM3
             const LogRec &r = kv.second;
             std::snprintf(buf, sizeof(buf), "%lu %.9f %d %a %a %a %a %a %a %a %a %a %a %a %a %a\n", kv.first.first, r.stamp, kv.first.second, r.x(0), r.x(1),
                           r.x(2), r.x(3), r.x(4), r.x(5), r.twc(0), r.twc(1), r.twc(2), r.twc(3), r.twc(4), r.twc(5), r.twc(6));
+            f << buf;
+        }
+    }
+
+    void PedestrianBA::DumpGateLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "# P9-C4 innovation gate, one decision per (keyframe, track): status 1 accepted / 2 rejected / 3 re-initialised; tested 0 = accepted without a test; no-predecessor passes after the free keyframes: " << gGateNoPred << "\n";
+        f << "# kf_id stamp track status tested dof d2 dt pred_stamp chain_idx consec_rej\n";
+        char buf[256];
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        for (const auto &kv : gGateLog)
+        {
+            const PedGateRec &r = kv.second.rec;
+            std::snprintf(buf, sizeof(buf), "%lu %.9f %d %d %d %d %a %a %.9f %d %d\n", kv.first.first, kv.second.stamp, kv.first.second, r.status, r.tested ? 1 : 0, r.dof, r.d2, r.dt,
+                          r.predStamp, r.chainIdx, r.consecRej);
             f << buf;
         }
     }

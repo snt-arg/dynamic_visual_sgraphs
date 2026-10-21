@@ -84,6 +84,9 @@ namespace ORB_SLAM3
         // px py pz s nPts  (G = foot-ray / plane intersection, p = optimised root, s = ray depth).
         static void DumpFloorLog(const std::string &path);
 
+        // P9-C4: every innovation-gate decision (written only when Pedestrians.InnovGate: 1): kf_id stamp track status tested dof d2 dt pred_stamp chain_idx consec_rej.
+        static void DumpGateLog(const std::string &path);
+
         // Writes the optimised person states of free keyframes back. Call only after the BA succeeded.
         static void WriteBack(const PedGraph &g, Map *pMap);
 

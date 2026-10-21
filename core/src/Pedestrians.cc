@@ -101,6 +101,47 @@ namespace ORB_SLAM3
                 std::cout << ", k " << p.floorNeighbours << ", neighbour radius " << p.floorNeighbourRadiusM << " m, band " << p.floorBandM << " m";
             std::cout << std::endl;
         }
+        // P9-C4 (keys required, no defaults: a missing key must not silently mean "base")
+        const cv::FileNode mp = fs["Pedestrians.MotionPrior"];
+        if (mp.empty())
+            throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.MotionPrior (isotropic | anisotropic) is missing from the settings file");
+        const std::string mps = static_cast<std::string>(mp);
+        if (mps == "isotropic")
+            p.motionPrior = MotionPrior::Isotropic;
+        else if (mps == "anisotropic")
+        {
+            p.motionPrior = MotionPrior::Anisotropic;
+            p.qvH = Req(fs, "Pedestrians.QvH");
+            p.qvZ = Req(fs, "Pedestrians.QvZ");
+            if (!(p.qvH > 0 && p.qvZ > 0))
+                throw std::runtime_error("[Pedestrians] Pedestrians.QvH and Pedestrians.QvZ must be > 0");
+        }
+        else
+            throw std::runtime_error("[Pedestrians] Pedestrians.MotionPrior must be isotropic or anisotropic, got " + mps);
+        p.innovGate = static_cast<int>(Req(fs, "Pedestrians.InnovGate", true)) != 0;
+        if (p.innovGate)
+        {
+            p.innovChi2Dof2 = Req(fs, "Pedestrians.InnovChi2Dof2");
+            p.innovChi2Dof3 = Req(fs, "Pedestrians.InnovChi2Dof3");
+            p.innovFreeKeyframes = static_cast<int>(Req(fs, "Pedestrians.InnovFreeKeyframes", true));
+            p.innovReinitRejections = static_cast<int>(Req(fs, "Pedestrians.InnovReinitRejections"));
+            p.innovP0PosXY = Req(fs, "Pedestrians.InnovP0PosXY");
+            p.innovP0PosZ = Req(fs, "Pedestrians.InnovP0PosZ");
+            p.innovP0VelXY = Req(fs, "Pedestrians.InnovP0VelXY");
+            p.innovP0VelZ = Req(fs, "Pedestrians.InnovP0VelZ");
+            for (double v : {p.innovChi2Dof2, p.innovChi2Dof3, p.innovP0PosXY, p.innovP0PosZ, p.innovP0VelXY, p.innovP0VelZ})
+                if (!(v > 0))
+                    throw std::runtime_error("[Pedestrians] innovation gate: every threshold / P0 standard deviation must be > 0");
+            if (p.innovFreeKeyframes < 0 || p.innovReinitRejections < 1)
+                throw std::runtime_error("[Pedestrians] innovation gate: InnovFreeKeyframes must be >= 0 and InnovReinitRejections >= 1");
+        }
+        std::cout << "[Pedestrians] motion prior " << mps;
+        if (p.motionPrior == MotionPrior::Anisotropic)
+            std::cout << " (q_h " << p.qvH << ", q_z " << p.qvZ << ")";
+        std::cout << ", innovation gate " << (p.innovGate ? "ON" : "off");
+        if (p.innovGate)
+            std::cout << " (chi2 " << p.innovChi2Dof2 << " / " << p.innovChi2Dof3 << ", free " << p.innovFreeKeyframes << ", reinit after " << p.innovReinitRejections << ", P0 pos " << p.innovP0PosXY << "/" << p.innovP0PosZ << " m, vel " << p.innovP0VelXY << "/" << p.innovP0VelZ << " m/s)";
+        std::cout << std::endl;
         const cv::FileNode d = fs["Pedestrians.Dir"];
         if (d.empty())
             throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.Dir is missing from the settings file");
