@@ -668,6 +668,7 @@ namespace ORB_SLAM3
         mInsertKFsLost = settings->insertKFsWhenLost();
         mbImuAidedReloc = settings->imuAidedReloc();
         mImuPer = 1.0 / static_cast<double>(mImuFreq);
+        mnFramesToResetIMU = mMaxFrames; // P9-C4 I: the legacy-settings branch (line 83) sets it, this one did not
         float Ng = settings->noiseGyro();
         float Na = settings->noiseAcc();
         float Ngw = settings->gyroWalk();

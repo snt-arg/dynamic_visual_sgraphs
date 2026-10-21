@@ -685,8 +685,17 @@ namespace ORB_SLAM3
         {
             long act = 0;
             for (g2o::OptimizableGraph::Edge *e : g.byType[ty])
+            {
+                // P9-C4 I: an edge whose vertices are all fixed is not in g2o's active set, so no solve ever computed its _error; chi2() summed uninitialised memory
+                // (valgrind: DumpCounters). Compute it from the current estimates.
+                bool anyFree = false;
+                for (auto *hv : e->vertices())
+                    anyFree = anyFree || (hv && !static_cast<g2o::OptimizableGraph::Vertex *>(hv)->fixed());
+                if (!anyFree)
+                    e->computeError();
                 if (e->chi2() <= kActiveChi2[ty])
                     ++act;
+            }
             r.created[ty] = static_cast<long>(g.byType[ty].size());
             r.active[ty] = act;
             gCreatedT[ty] += r.created[ty];

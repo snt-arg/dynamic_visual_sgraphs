@@ -107,7 +107,7 @@ namespace ORB_SLAM3
         unsigned int mInitSect;
         unsigned int mIdxInit;
         unsigned int mnKFs;
-        double mFirstTs;
+        double mFirstTs = 0.0; // read by System::GetTimeFromIMUInit() every frame before the IMU is initialised
         int mnMatchesInliers;
 
         // ---- W2 pedestrian scale feedback (docs/evaluation/results/w2_scale_controller/) ----

@@ -381,7 +381,7 @@ namespace ORB_SLAM3
         int mMaxFrames;
 
         int mnFirstImuFrameId;
-        int mnFramesToResetIMU;
+        int mnFramesToResetIMU = 0; // P9-C4 I: was only assigned in the legacy-settings branch; read uninitialised (Tracking.cc:2254, 2293, 2986, 3096) with the Settings class
 
         // Threshold close/far points
         // Points seen as close by the stereo/RGBD sensor are considered reliable

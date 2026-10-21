@@ -236,7 +236,7 @@ namespace ORB_SLAM3
         ORBextractor *mpORBextractorLeft, *mpORBextractorRight;
 
         // Frame timestamp.
-        double mTimeStamp;
+        double mTimeStamp = 0.0; // P9-C4 I: default Frame (Tracking::mLastFrame before the first image) was read by Tracking::PreintegrateIMU uninitialised
 
         // Calibration matrix and OpenCV distortion parameters.
         cv::Mat mK;
@@ -250,14 +250,14 @@ namespace ORB_SLAM3
         cv::Mat mDistCoef;
 
         // Stereo baseline multiplied by fx.
-        float mbf;
+        float mbf = 0.f;
 
         // Stereo baseline in meters.
-        float mb;
+        float mb = 0.f; // read by ORBmatcher::SearchByProjection(Frame&, Frame const&) in mono (before the && !bMono)
 
         // Threshold close/far points. Close points are inserted from 1 view.
         // Far points are inserted as in the monocular case from 2 views.
-        float mThDepth;
+        float mThDepth = 0.f;
 
         // Number of KeyPoints.
         int N;

@@ -170,17 +170,18 @@ namespace ORB_SLAM3
         int nObs;
 
         // Variables used by the tracking
-        float mTrackProjX;
-        float mTrackProjY;
-        float mTrackDepth;
-        float mTrackDepthR;
-        float mTrackProjXR;
-        float mTrackProjYR;
-        bool mbTrackInView, mbTrackInViewR;
-        int mnTrackScaleLevel, mnTrackScaleLevelR;
-        float mTrackViewCos, mTrackViewCosR;
-        long unsigned int mnTrackReferenceForFrame;
-        long unsigned int mnLastFrameSeen;
+        // P9-C4 I: value-initialised. mTrackDepth of a MapPoint created by LocalMapping::CreateNewMapPoints was read uninitialised by LocalInertialBA (bClose, Optimizer.cc:4354)
+        float mTrackProjX = 0.f;
+        float mTrackProjY = 0.f;
+        float mTrackDepth = 0.f;
+        float mTrackDepthR = 0.f;
+        float mTrackProjXR = 0.f;
+        float mTrackProjYR = 0.f;
+        bool mbTrackInView = false, mbTrackInViewR = false;
+        int mnTrackScaleLevel = 0, mnTrackScaleLevelR = 0;
+        float mTrackViewCos = 0.f, mTrackViewCosR = 0.f;
+        long unsigned int mnTrackReferenceForFrame = 0;
+        long unsigned int mnLastFrameSeen = 0;
 
         // Variables used by local mapping
         long unsigned int mnBALocalForKF;
