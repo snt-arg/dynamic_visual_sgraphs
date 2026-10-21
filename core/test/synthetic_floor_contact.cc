@@ -16,8 +16,11 @@
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <map>
 #include <random>
 #include <vector>
+
+#include <Eigen/Sparse>
 
 #include "PedestrianBA.h"
 #include "PedestrianFactors.h"
@@ -166,6 +169,99 @@ static bool MakeWorld(int seed, double Htrue, World &W, int n, double dt = 0.1)
     return false;
 }
 
+// P9-C3b gate erratum: marginal posterior sigma of the bias from the Gaussian information matrix (Huber removed) of the graph at its current estimates.
+// Jacobians by central differences of the production computeError. onlyEdgesWithFreeState: drop the edges that touch no free state vertex (the range
+// edges of the fixed states), keeping the bias prior. Returns sqrt([H^-1]_bb) over the free vertices.
+static double InfoSigmaB(g2o::SparseOptimizer &opt, g2o::OptimizableGraph::Vertex *vb, bool onlyEdgesWithFreeState)
+{
+    std::map<const g2o::OptimizableGraph::Vertex *, int> off;
+    int dim = 0;
+    for (const auto &kv : opt.vertices())
+    {
+        auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(kv.second);
+        if (v->fixed())
+            continue;
+        off[v] = dim;
+        dim += v->dimension();
+    }
+    std::vector<Eigen::Triplet<double>> T;
+    const double eps = 1e-6;
+    for (auto *eb : opt.edges())
+    {
+        auto *e = static_cast<g2o::OptimizableGraph::Edge *>(eb);
+        e->setRobustKernel(nullptr);
+        if (onlyEdgesWithFreeState && !dynamic_cast<EdgePedBiasPrior *>(e))
+        {
+            // drop the edges that carry the bias but no free state vertex (the range edges of the fixed states)
+            bool hasState = false, hasBias = false;
+            for (auto *hv : e->vertices())
+            {
+                auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(hv);
+                if (dynamic_cast<VertexPedState *>(v) && !v->fixed())
+                    hasState = true;
+                if (v == vb)
+                    hasBias = true;
+            }
+            if (hasBias && !hasState)
+                continue;
+        }
+        const int m = e->dimension();
+        std::vector<g2o::OptimizableGraph::Vertex *> fv;
+        std::vector<int> col0;
+        int nc = 0;
+        for (auto *hv : e->vertices())
+        {
+            auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(hv);
+            if (v && !v->fixed())
+            {
+                fv.push_back(v);
+                col0.push_back(nc);
+                nc += v->dimension();
+            }
+        }
+        if (fv.empty())
+            continue;
+        Eigen::MatrixXd J(m, nc);
+        for (size_t a = 0; a < fv.size(); ++a)
+            for (int d = 0; d < fv[a]->dimension(); ++d)
+            {
+                std::vector<double> dl(fv[a]->dimension(), 0.0);
+                Eigen::VectorXd ep(m), em(m);
+                dl[d] = eps;
+                fv[a]->push();
+                fv[a]->oplus(dl.data());
+                e->computeError();
+                ep = Eigen::Map<const Eigen::VectorXd>(e->errorData(), m);
+                fv[a]->pop();
+                dl[d] = -eps;
+                fv[a]->push();
+                fv[a]->oplus(dl.data());
+                e->computeError();
+                em = Eigen::Map<const Eigen::VectorXd>(e->errorData(), m);
+                fv[a]->pop();
+                J.col(col0[a] + d) = (ep - em) / (2 * eps);
+            }
+        e->computeError();
+        const Eigen::MatrixXd Om = Eigen::Map<const Eigen::MatrixXd>(e->informationData(), m, m);
+        const Eigen::MatrixXd Hb = J.transpose() * Om * J;
+        for (size_t a = 0; a < fv.size(); ++a)
+            for (size_t c = 0; c < fv.size(); ++c)
+                for (int i = 0; i < fv[a]->dimension(); ++i)
+                    for (int j = 0; j < fv[c]->dimension(); ++j)
+                        T.emplace_back(off[fv[a]] + i, off[fv[c]] + j, Hb(col0[a] + i, col0[c] + j));
+    }
+    Eigen::SparseMatrix<double> H(dim, dim);
+    H.setFromTriplets(T.begin(), T.end());
+    Eigen::SimplicialLDLT<Eigen::SparseMatrix<double>> ldlt(H);
+    if (ldlt.info() != Eigen::Success)
+        return -1.0;
+    Eigen::VectorXd rhs = Eigen::VectorXd::Zero(dim);
+    const int ib = off[vb];
+    rhs(ib) = 1.0;
+    const Eigen::VectorXd x = ldlt.solve(rhs);
+    return x(ib) > 0 ? std::sqrt(x(ib)) : -1.0;
+}
+
 int main(int argc, char **argv)
 {
     if (argc < 5)
@@ -182,6 +278,8 @@ int main(int argc, char **argv)
     const bool feet = (argc > 6 ? std::atoi(argv[6]) : 1) != 0;
     const double sigRad = argc > 7 ? std::atof(argv[7]) : 0.358, sigTan = argc > 8 ? std::atof(argv[8]) : 0.2755, delta = argc > 9 ? std::atof(argv[9]) : 0.036;
     const int kNb = argc > 10 ? std::atoi(argv[10]) : 5;
+    const bool infoOn = (argc > 12 ? std::atoi(argv[12]) : 0) != 0 && mode != "none" && useBias; // gate erratum: sigma_b,post of the final window
+    std::vector<double> sigI, sigII, sigIII;
     const double logsigModel = argc > 11 ? std::atof(argv[11]) : LOGSIG;   // sigma_log of the range factor in the MODEL (the data always use LOGSIG = 0.031)
     const bool useA = mode == "A", useB = mode == "B";
     std::vector<double> errAll, rangeSigned, rangeAbsM, rangeAbsPct, bErr, bHat30, bHat100;
@@ -206,8 +304,25 @@ int main(int argc, char **argv)
                 ptEst.push_back(p + Eigen::Vector3d(0.05 * N(r2), 0.05 * N(r2), 0.05 * N(r2))); // converged map points: ~5 cm
         }
         for (int i = std::min(2, n - 1); i < n; ++i)
+        for (int pass = 0; pass < ((infoOn && i == n - 1) ? 2 : 1); ++pass)
         {
-            const int first = std::max(0, i - 200), firstFree = std::max(first, i - 9);
+            const bool infoPass = pass == 1; // (II): every state of the window free, at the truth, no solve
+            std::vector<Vec6> estB = est;
+            std::vector<bool> hasB = has;
+            const double bPersB = bPers;
+            const std::vector<Eigen::Vector3d> ptEstB = ptEst;
+            const long nEdgesB = nEdges, nOppB = nOpp;
+            if (infoPass)
+            {
+                for (int k = 0; k < n; ++k)
+                {
+                    est[k] << W.kf[k].p, Eigen::Vector3d::Zero();
+                    has[k] = true;
+                }
+                bPers = bTrue;
+                ptEst = W.pts;
+            }
+            const int first = std::max(0, i - 200), firstFree = infoPass ? first : std::max(first, i - 9);
             g2o::SparseOptimizer opt;
             auto *linear = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
             auto *bs = new g2o::BlockSolverX(linear);
@@ -372,17 +487,50 @@ int main(int argc, char **argv)
                     ++nEdges;
                 }
             }
-            opt.initializeOptimization();
-            opt.optimize(10);
+            if (!infoPass)
+            {
+                opt.initializeOptimization();
+                opt.optimize(10);
+            }
             for (int k = firstFree; k <= i; ++k)
                 est[k] = st[k - first]->estimate();
             if (vb)
                 bPers = vb->estimate();
-            if (i == 29) bHat30.push_back(bPers - bTrue);
-            if (i == 99) bHat100.push_back(bPers - bTrue);
+            if (i == 29 && !infoPass) bHat30.push_back(bPers - bTrue);
+            if (i == 99 && !infoPass) bHat100.push_back(bPers - bTrue);
             for (size_t j = 0; j < ptv.size(); ++j)
                 if (ptv[j])
                     ptEst[j] = ptv[j]->estimate();
+            if (infoOn && i == n - 1)
+            {
+                // the graph as built for the last keyframe, free vertices at the truth
+                for (int k = first; k <= i; ++k)
+                {
+                    Vec6 x;
+                    x << W.kf[k].p, Eigen::Vector3d::Zero();
+                    st[k - first]->setEstimate(x);
+                }
+                vb->setEstimate(bTrue);
+                for (size_t j = 0; j < ptv.size(); ++j)
+                    if (ptv[j])
+                        ptv[j]->setEstimate(W.pts[j]);
+                if (!infoPass)
+                {
+                    sigI.push_back(InfoSigmaB(opt, vb, false));
+                    sigIII.push_back(InfoSigmaB(opt, vb, true));
+                }
+                else
+                    sigII.push_back(InfoSigmaB(opt, vb, false));
+            }
+            if (infoPass)
+            {
+                est = estB;
+                has = hasB;
+                bPers = bPersB;
+                ptEst = ptEstB;
+                nEdges = nEdgesB;
+                nOpp = nOppB;
+            }
         }
         bErr.push_back(bPers - bTrue);
         for (int i = std::min(10, n - 1); i < n; ++i) // skip the first states (no history)
@@ -397,8 +545,9 @@ int main(int argc, char **argv)
     auto med = [](std::vector<double> v) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
     auto medabs = [&](std::vector<double> v) { for (double &x : v) x = std::abs(x); return med(v); };
     std::printf("%s%s\tfeet=%d\tb_true=%+.3f\tNKF=%d\tseeds=%d\tn=%zu\tmedian_abs_range_err_m=%.4f\tmedian_abs_range_err_pct=%.3f\tmedian_signed_range_err_pct=%.3f\t"
+                "sigb_post_I=%.5f\tsigb_post_II=%.5f\tsigb_post_III=%.5f\t"
                 "median_abs_bhat_err=%.4f\tmedian_bhat_err=%+.4f\tmedian_abs_bhat_err_at30=%.4f\tat100=%.4f\tmedian_abs_bhat=%.4f\tfloor_edges=%ld/%ld\n",
                 mode.c_str(), useBias ? "+b" : "", feet ? 1 : 0, bTrue, NKF, nseeds, rangeAbsM.size(), med(rangeAbsM), med(rangeAbsPct), med(rangeSigned),
-                medabs(bErr), med(bErr), medabs(bHat30), medabs(bHat100), useBias ? medabs([&] { std::vector<double> v; for (double e : bErr) v.push_back(e + bTrue); return v; }()) : 0.0, nEdges, nOpp);
+                med(sigI), med(sigII), med(sigIII), medabs(bErr), med(bErr), medabs(bHat30), medabs(bHat100), useBias ? medabs([&] { std::vector<double> v; for (double e : bErr) v.push_back(e + bTrue); return v; }()) : 0.0, nEdges, nOpp);
     return 0;
 }
