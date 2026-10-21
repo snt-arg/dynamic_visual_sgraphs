@@ -8,7 +8,9 @@
 //   * static points: floor points (z ~ N(0, 0.02)) seen by the fixed cameras with 0.5 px noise; they are free vertices (Variant B reads their z; Variant A only the
 //     regional estimate of their heights)
 // modes: frozen | A (regional z_f, pedestrian only) | B (joint: plane through the k nearest live floor points)
-// usage: synthetic_floor_contact MODE H_TRUE NSEEDS [sigRad sigTan delta k logsigModel]
+// P9-C3b: the range model is the depth-z model (erratum) and Variants A / B carry the per-track log-scale bias vertex b (prior N(0, SIGB^2)); the
+// walker's stature is H0 exp(b_true). usage: synthetic_floor_contact MODE B_TRUE NKF NSEEDS [bias=1 feet=1 sigRad sigTan delta k logsigModel]
+//   MODE none | A | B; b only for A / B (bias=1); feet=0: the feet are never visible (no floor edge)
 // prints (one line per call, tab separated): mode H seeds n_states | median 3-D error, RMS, mean signed range error / range [%], median depth-ray error [m]
 #include <algorithm>
 #include <cmath>
@@ -29,7 +31,7 @@ using namespace ORB_SLAM3;
 using namespace ORB_SLAM3::ped;
 
 static const double F = 415.69219381653056, CXP = 360.0, CYP = 240.0;
-static const double CL = 0.9026550273636589, QV = 0.1386, LOGSIG = 0.031, PXSIG = 1.5, H0 = 1.70;
+static const double CL = 0.855387, SIGB = 0.0422, QV = 0.1386, LOGSIG = 0.031, PXSIG = 1.5, H0 = 1.70;
 static const double kHuber2D = std::sqrt(5.991), kHuber1D = std::sqrt(3.841);
 // foot model (synthetic scales of the same order as the calibrated 0c residuals)
 static const double FOOT_DELTA_MEAN = 0.036, FOOT_H_SIGMA = 0.044, FOOT_H_PHI = 0.8;   // keypoint height above the sole
@@ -73,7 +75,7 @@ static bool Project(const KF &k, const Eigen::Vector3d &Xw, Eigen::Vector2d &px,
     return px(0) > 0 && px(0) < 720 && px(1) > 0 && px(1) < 480;
 }
 
-static bool MakeWorld(int seed, double Htrue, World &W, int n = 300, double dt = 0.1)
+static bool MakeWorld(int seed, double Htrue, World &W, int n, double dt = 0.1)
 {
     std::mt19937 rng(seed * 7919 + 13);
     std::normal_distribution<double> N(0, 1);
@@ -108,7 +110,7 @@ static bool MakeWorld(int seed, double Htrue, World &W, int n = 300, double dt =
             double z;
             if (!Project(kf, p, px, z) || (p - c).norm() < 2.0)
                 ok = false;
-            const double range = (kf.Rcw * p + kf.tcw).norm();
+            const double range = (kf.Rcw * p + kf.tcw)(2); // optical-axis depth z (erratum)
             kf.u = px(0) + PXSIG * N(rng);
             kf.v = px(1) + PXSIG * N(rng);
             kf.lpx = F * CL * Htrue / range * std::exp(LOGSIG * N(rng));
@@ -166,24 +168,28 @@ static bool MakeWorld(int seed, double Htrue, World &W, int n = 300, double dt =
 
 int main(int argc, char **argv)
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        std::cerr << "usage: synthetic_floor_contact MODE(frozen|A|B) H_TRUE NSEEDS [sigRad sigTan delta k]\n";
+        std::cerr << "usage: synthetic_floor_contact MODE(none|A|B) B_TRUE NKF NSEEDS [bias feet sigRad sigTan delta k logsigModel]\n";
         return 2;
     }
     const std::string mode = argv[1];
-    const double Htrue = std::atof(argv[2]);
-    const int nseeds = std::atoi(argv[3]);
-    const double sigRad = argc > 4 ? std::atof(argv[4]) : 0.358, sigTan = argc > 5 ? std::atof(argv[5]) : 0.2755, delta = argc > 6 ? std::atof(argv[6]) : 0.036;
-    const int kNb = argc > 7 ? std::atoi(argv[7]) : 5;
-    const double logsigModel = argc > 8 ? std::atof(argv[8]) : LOGSIG;   // sigma_log of the range factor in the MODEL (the data always use LOGSIG = 0.031)
+    const double bTrue = std::atof(argv[2]);
+    const double Htrue = H0 * std::exp(bTrue);
+    const int NKF = std::atoi(argv[3]);
+    const int nseeds = std::atoi(argv[4]);
+    const bool useBias = (argc > 5 ? std::atoi(argv[5]) : 1) != 0 && mode != "none";
+    const bool feet = (argc > 6 ? std::atoi(argv[6]) : 1) != 0;
+    const double sigRad = argc > 7 ? std::atof(argv[7]) : 0.358, sigTan = argc > 8 ? std::atof(argv[8]) : 0.2755, delta = argc > 9 ? std::atof(argv[9]) : 0.036;
+    const int kNb = argc > 10 ? std::atoi(argv[10]) : 5;
+    const double logsigModel = argc > 11 ? std::atof(argv[11]) : LOGSIG;   // sigma_log of the range factor in the MODEL (the data always use LOGSIG = 0.031)
     const bool useA = mode == "A", useB = mode == "B";
-    std::vector<double> errAll, rangeSigned;
+    std::vector<double> errAll, rangeSigned, rangeAbsM, rangeAbsPct, bErr, bHat30, bHat100;
     long nOpp = 0, nEdges = 0;
     for (int seed = 1; seed <= nseeds; ++seed)
     {
         World W;
-        if (!MakeWorld(seed, Htrue, W))
+        if (!MakeWorld(seed, Htrue, W, NKF))
         {
             std::cerr << "no admissible world for seed " << seed << "\n";
             return 3;
@@ -191,6 +197,7 @@ int main(int argc, char **argv)
         const int n = static_cast<int>(W.kf.size());
         std::vector<Vec6> est(n, Vec6::Zero());
         std::vector<bool> has(n, false);
+        double bPers = 0.0;
         std::vector<Eigen::Vector3d> ptEst;
         {
             std::mt19937 r2(seed * 31 + 5);
@@ -198,7 +205,7 @@ int main(int argc, char **argv)
             for (const auto &p : W.pts)
                 ptEst.push_back(p + Eigen::Vector3d(0.05 * N(r2), 0.05 * N(r2), 0.05 * N(r2))); // converged map points: ~5 cm
         }
-        for (int i = 2; i < n; ++i)
+        for (int i = std::min(2, n - 1); i < n; ++i)
         {
             const int first = std::max(0, i - 200), firstFree = std::max(first, i - 9);
             g2o::SparseOptimizer opt;
@@ -225,7 +232,7 @@ int main(int argc, char **argv)
                 if (!has[k])
                 {
                     const Eigen::Vector3d b((W.kf[k].u - CXP) / F, (W.kf[k].v - CYP) / F, 1.0);
-                    const double z = (F * CL * H0 / W.kf[k].lpx) / b.norm();
+                    const double z = F * CL * H0 / W.kf[k].lpx;
                     Vec6 x;
                     x << W.kf[k].Rcw.transpose() * (z * b - W.kf[k].tcw), Eigen::Vector3d::Zero();
                     est[k] = x;
@@ -237,6 +244,19 @@ int main(int argc, char **argv)
                 s->setFixed(k < firstFree);
                 opt.addVertex(s);
                 st.push_back(s);
+            }
+            VertexPedBias *vb = nullptr;
+            if (useBias)
+            {
+                vb = new VertexPedBias();
+                vb->setId(id++);
+                vb->setEstimate(bPers);
+                opt.addVertex(vb);
+                auto *pr = new EdgePedBiasPrior();
+                pr->setVertex(0, vb);
+                pr->setMeasurement(0.0);
+                pr->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (SIGB * SIGB));
+                opt.addEdge(pr);
             }
             for (int k = first; k <= i; ++k)
             {
@@ -254,9 +274,11 @@ int main(int argc, char **argv)
                     opt.addEdge(e);
                 }
                 {
-                    auto *e = new EdgePedLogRange<g2o::VertexSE3Expmap>();
+                    auto *e = new EdgePedLogRange<g2o::VertexSE3Expmap>(vb != nullptr);
                     e->setVertex(0, s);
                     e->setVertex(1, poses[k - first]);
+                    if (vb)
+                        e->setVertex(2, vb);
                     e->setMeasurement(std::log(F) + std::log(CL) + std::log(H0) - std::log(W.kf[k].lpx));
                     e->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (logsigModel * logsigModel));
                     auto *rk = new g2o::RobustKernelHuber();
@@ -276,7 +298,7 @@ int main(int argc, char **argv)
             }
             // ---- floor contact
             std::vector<g2o::VertexSBAPointXYZ *> ptv(W.pts.size(), nullptr);
-            if (useA || useB)
+            if ((useA || useB) && feet)
             {
                 for (int k = firstFree; k <= i; ++k)
                 {
@@ -354,24 +376,29 @@ int main(int argc, char **argv)
             opt.optimize(10);
             for (int k = firstFree; k <= i; ++k)
                 est[k] = st[k - first]->estimate();
+            if (vb)
+                bPers = vb->estimate();
+            if (i == 29) bHat30.push_back(bPers - bTrue);
+            if (i == 99) bHat100.push_back(bPers - bTrue);
             for (size_t j = 0; j < ptv.size(); ++j)
                 if (ptv[j])
                     ptEst[j] = ptv[j]->estimate();
         }
-        for (int i = 10; i < n; ++i) // skip the first states (no history)
+        bErr.push_back(bPers - bTrue);
+        for (int i = std::min(10, n - 1); i < n; ++i) // skip the first states (no history)
         {
             errAll.push_back((est[i].head<3>() - W.kf[i].p).norm());
             const Eigen::Vector3d Xc = W.kf[i].Rcw * est[i].head<3>() + W.kf[i].tcw, Xt = W.kf[i].Rcw * W.kf[i].p + W.kf[i].tcw;
             rangeSigned.push_back((Xc.norm() - Xt.norm()) / Xt.norm() * 100.0);
+            rangeAbsM.push_back(std::abs(Xc.norm() - Xt.norm()));
+            rangeAbsPct.push_back(std::abs(Xc.norm() - Xt.norm()) / Xt.norm() * 100.0);
         }
     }
-    std::sort(errAll.begin(), errAll.end());
-    double ss = 0, ms = 0;
-    for (double e : errAll) ss += e * e;
-    for (double e : rangeSigned) ms += e;
-    std::vector<double> rs = rangeSigned;
-    std::sort(rs.begin(), rs.end());
-    std::printf("%s\tH=%.2f\tseeds=%d\tn=%zu\tmedian_err=%.4f\trms_err=%.4f\tp90_err=%.4f\tmean_signed_range_err_pct=%.3f\tmedian_signed_range_err_pct=%.3f\tfloor_edges=%ld/%ld\n", mode.c_str(), Htrue, nseeds,
-                errAll.size(), errAll[errAll.size() / 2], std::sqrt(ss / errAll.size()), errAll[static_cast<size_t>(0.9 * errAll.size())], ms / rangeSigned.size(), rs[rs.size() / 2], nEdges, nOpp);
+    auto med = [](std::vector<double> v) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
+    auto medabs = [&](std::vector<double> v) { for (double &x : v) x = std::abs(x); return med(v); };
+    std::printf("%s%s\tfeet=%d\tb_true=%+.3f\tNKF=%d\tseeds=%d\tn=%zu\tmedian_abs_range_err_m=%.4f\tmedian_abs_range_err_pct=%.3f\tmedian_signed_range_err_pct=%.3f\t"
+                "median_abs_bhat_err=%.4f\tmedian_bhat_err=%+.4f\tmedian_abs_bhat_err_at30=%.4f\tat100=%.4f\tmedian_abs_bhat=%.4f\tfloor_edges=%ld/%ld\n",
+                mode.c_str(), useBias ? "+b" : "", feet ? 1 : 0, bTrue, NKF, nseeds, rangeAbsM.size(), med(rangeAbsM), med(rangeAbsPct), med(rangeSigned),
+                medabs(bErr), med(bErr), medabs(bHat30), medabs(bHat100), useBias ? medabs([&] { std::vector<double> v; for (double e : bErr) v.push_back(e + bTrue); return v; }()) : 0.0, nEdges, nOpp);
     return 0;
 }

@@ -107,6 +107,30 @@ namespace ORB_SLAM3
             Eigen::Vector3d v() const { return _estimate.tail<3>(); }
         };
 
+        // Per-track log-scale bias b_j (P9-C3b): one scalar per track, persistent between BA calls like the stature of P9-C2 5b/5c was. Additive update.
+        class VertexPedBias : public g2o::BaseVertex<1, double>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            VertexPedBias() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            void setToOriginImpl() override { _estimate = 0.0; }
+            void oplusImpl(const double *u) override { _estimate += u[0]; }
+        };
+
+        // N(0, sigma_b^2) prior on b: e = b (information 1 / sigma_b^2 set by the caller).
+        class EdgePedBiasPrior : public g2o::BaseUnaryEdge<1, double, VertexPedBias>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedBiasPrior() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            void computeError() override { this->_error(0) = static_cast<const VertexPedBias *>(this->_vertices[0])->estimate() - _measurement; }
+            void linearizeOplus() override { this->_jacobianOplusXi(0, 0) = 1.0; }
+        };
+
         inline Eigen::Vector3d PosOf(const VertexPedState *v) { return v->p(); }
         inline Eigen::Vector3d PosOf(const g2o::VertexSBAPointXYZ *v) { return v->estimate(); }
 
@@ -158,17 +182,18 @@ namespace ORB_SLAM3
             double fx, fy, cx, cy;
         };
 
-        // ---------------------------------------------------------------- nose->heel log-range
-        // Vertices: (0) VertexPedState, (1) camera pose.
-        //   e = log|Xc| - (log f + log(cL) + log H0 - log l_px)      (P7-A A3: range along the ray from the nose->heel length with the fixed stature
-        //   H0 = 1.70 m, the convention under which cL = L_skel / 1.70 was defined; P1-B_report.md:96-100)
-        // _measurement = log f + log cL + log H0 - log l_px.
+        // ---------------------------------------------------------------- nose->heel log-depth (P9-C3b erratum: depth z, not ray length)
+        // Vertices: (0) VertexPedState, (1) camera pose [, (2) VertexPedBias, Variants A / B only].
+        //   e = log z_c - (log f + log cL + log H0 [+ b] - log l_px),   z_c = (Rcw p + tcw)_z   the optical-axis depth of the root
+        // The apparent length of a vertical body extent L at depth z is l_px = f L / z -- NOT f L / |Xc| (P9-C3 check 0a: r/z = 1.06 median, 1.22 at p90; with the ray
+        // length the per-track scale spread is 8.9 % and depends on the image column, with z it is 4.2 % and does not). cL is the z-model value (constants_z.json).
+        // _measurement = log f + log cL + log H0 - log l_px.   With the bias vertex b (log-scale offset of the track, b = log(H_track / H0)) the model is z_c = e^b f cL H0 / l_px.
         template <class PoseV>
         class EdgePedLogRange : public g2o::BaseMultiEdge<1, double>
         {
         public:
             EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-            EdgePedLogRange() { this->resize(2); }
+            explicit EdgePedLogRange(bool withBias = false) : biased(withBias) { this->resize(withBias ? 3 : 2); }
             Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
             bool read(std::istream &) override { return false; }
             bool write(std::ostream &) const override { return false; }
@@ -184,23 +209,33 @@ namespace ORB_SLAM3
                     *Rcw_out = Rcw;
                 return Rcw * S->p() + tcw;
             }
+            double Bias() const;
 
             void computeError() override
             {
-                this->_error(0) = std::log(Xc().norm()) - _measurement;
+                this->_error(0) = std::log(Xc()(2)) - (_measurement + Bias());
             }
 
             void linearizeOplus() override
             {
                 Eigen::Matrix3d Rcw;
                 const Eigen::Vector3d X = Xc(&Rcw);
-                const double n2 = X.squaredNorm();
-                const Eigen::Matrix<double, 1, 3> dlog = X.transpose() / n2; // d log|Xc| / d Xc
+                Eigen::Matrix<double, 1, 3> dlog; // d log z / d Xc
+                dlog << 0.0, 0.0, 1.0 / X(2);
                 this->_jacobianOplus[0].setZero();
                 this->_jacobianOplus[0].template leftCols<3>() = dlog * Rcw;
                 this->_jacobianOplus[1] = dlog * PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), X);
+                if (biased)
+                    this->_jacobianOplus[2](0, 0) = -1.0;
             }
+            bool biased;
         };
+
+        template <class PoseV>
+        double EdgePedLogRange<PoseV>::Bias() const
+        {
+            return biased ? static_cast<const VertexPedBias *>(this->_vertices[2])->estimate() : 0.0;
+        }
 
         // ---------------------------------------------------------------- white-noise-acceleration prior between two states of one track
         // e = [p_j - p_i - v_i dt ; v_j - v_i];  Q = q kron([[dt^3/3, dt^2/2],[dt^2/2, dt]], I3)  (P7-A addendum_A8.md:5-6, without the

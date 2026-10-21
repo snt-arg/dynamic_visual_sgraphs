@@ -69,6 +69,10 @@ namespace ORB_SLAM3
             p.floorSigmaRadialM = Req(fs, "Pedestrians.FloorSigmaRadialM");
             p.floorSigmaTangentialM = Req(fs, "Pedestrians.FloorSigmaTangentialM");
             p.floorRegionRadiusM = Req(fs, "Pedestrians.FloorRegionRadiusM");
+            p.biasSigma = Req(fs, "Pedestrians.BiasSigma");
+            p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
+            if (p.biasMinContacts < 0)
+                throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
             p.floorContactOffsetM = Req(fs, "Pedestrians.FloorContactOffsetM", true);
             p.floorLowModeFraction = Req(fs, "Pedestrians.FloorLowModeFraction");
             p.floorMinPoints = static_cast<int>(Req(fs, "Pedestrians.FloorMinPoints"));
@@ -85,13 +89,13 @@ namespace ORB_SLAM3
                 if (!(p.floorNeighbourRadiusM > 0 && p.floorBandM > 0))
                     throw std::runtime_error("[Pedestrians] joint floor contact: FloorNeighbourRadiusM and FloorBandM must be > 0");
             }
-            for (double v : {p.floorSigmaRadialM, p.floorSigmaTangentialM, p.floorRegionRadiusM, p.floorBinM, p.floorPlausM, p.floorLowModeFraction})
+            for (double v : {p.floorSigmaRadialM, p.floorSigmaTangentialM, p.floorRegionRadiusM, p.floorBinM, p.floorPlausM, p.floorLowModeFraction, p.biasSigma})
                 if (!(v > 0))
                     throw std::runtime_error("[Pedestrians] every floor-contact sigma / radius / bin must be > 0");
             if (p.floorMinPoints < 1)
                 throw std::runtime_error("[Pedestrians] Pedestrians.FloorMinPoints must be >= 1");
             std::cout << "[Pedestrians] floor contact " << fm << ": sigma radial " << p.floorSigmaRadialM << " m, tangential " << p.floorSigmaTangentialM
-                      << " m, keypoint offset " << p.floorContactOffsetM << " m, region " << p.floorRegionRadiusM << " m, low-mode fraction " << p.floorLowModeFraction << ", min points " << p.floorMinPoints << ", bin " << p.floorBinM << " m, below camera "
+                      << " m, bias sigma " << p.biasSigma << " (min contacts " << p.biasMinContacts << "), keypoint offset " << p.floorContactOffsetM << " m, region " << p.floorRegionRadiusM << " m, low-mode fraction " << p.floorLowModeFraction << ", min points " << p.floorMinPoints << ", bin " << p.floorBinM << " m, below camera "
                       << p.floorBelowCameraM << " m, plausibility +-" << p.floorPlausM << " m";
             if (p.floorMode == FloorMode::Joint)
                 std::cout << ", k " << p.floorNeighbours << ", neighbour radius " << p.floorNeighbourRadiusM << " m, band " << p.floorBandM << " m";

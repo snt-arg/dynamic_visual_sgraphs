@@ -109,6 +109,16 @@ static bool TryBinary(g2o::OptimizableGraph::Edge *e, int vi, Eigen::MatrixXd &o
 }
 
 template <class E>
+static bool TryUnary(g2o::OptimizableGraph::Edge *e, int, Eigen::MatrixXd &out)
+{
+    auto *b = dynamic_cast<E *>(e);
+    if (!b)
+        return false;
+    out = Eigen::MatrixXd(b->jacobianOplusXi());
+    return true;
+}
+
+template <class E>
 static bool TryMulti(g2o::OptimizableGraph::Edge *e, int vi, Eigen::MatrixXd &out)
 {
     auto *b = dynamic_cast<E *>(e);
@@ -132,7 +142,7 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, VertexPedState, VertexPose>>(e, vi, J) ||
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, SE3>>(e, vi, J) ||
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, VertexPose>>(e, vi, J) || TryBinary<EdgePedWna>(e, vi, J) ||
-        TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
+        TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryUnary<EdgePedBiasPrior>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
         TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
@@ -191,6 +201,32 @@ static void JacobianTests(const char *tag)
         e.setVertex(1, pose);
         e.setMeasurement(std::log(415.7) + std::log(0.91) + std::log(1.70) - std::log(150.0));
         CheckEdge(&e, std::string("nose-heel log range [") + tag + "]");
+    }
+    {
+        // erratum (P9-C3b): the error is log of the optical-axis depth, not of the ray length
+        EdgePedLogRange<PoseV> e;
+        e.setVertex(0, &state);
+        e.setVertex(1, pose);
+        e.setMeasurement(0.3);
+        e.computeError();
+        const Eigen::Vector3d Xc3 = R * Xw + t;
+        CHECK(std::abs(e.error()(0) - (std::log(Xc3(2)) - 0.3)) < 1e-12, std::string("log range [") + tag + "]: error = log z_c - measurement (depth, not ray length)");
+        CHECK(std::abs(std::log(Xc3(2)) - std::log(Xc3.norm())) > 1e-3, std::string("log range [") + tag + "]: the test geometry distinguishes z from the ray length");
+        // with the per-track bias vertex
+        ped::VertexPedBias bias;
+        bias.setEstimate(0.04);
+        EdgePedLogRange<PoseV> eb(true);
+        eb.setVertex(0, &state);
+        eb.setVertex(1, pose);
+        eb.setVertex(2, &bias);
+        eb.setMeasurement(0.3);
+        eb.computeError();
+        CHECK(std::abs(eb.error()(0) - (std::log(Xc3(2)) - (0.3 + 0.04))) < 1e-12, std::string("log range with bias [") + tag + "]: error = log z_c - (meas + b)");
+        CheckEdge(&eb, std::string("nose-heel log depth with bias [") + tag + "]");
+        EdgePedBiasPrior pr;
+        pr.setVertex(0, &bias);
+        pr.setMeasurement(0.0);
+        CheckEdge(&pr, std::string("bias prior [") + tag + "]");
     }
     // vertex ownership: the stack objects above are not owned by a graph
     delete pose;
@@ -352,7 +388,7 @@ static void FloorIoTests()
         "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
         "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
         "Pedestrians.GateK: 0.0\nPedestrians.Dir: /x\n";
-    const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\n"
+    const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\nPedestrians.BiasSigma: 0.042\nPedestrians.BiasMinContacts: 0\n"
                            "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
     auto cfg = [&](const std::string &extra) {
         cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);

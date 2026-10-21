@@ -29,6 +29,7 @@
 #include "Semantic/Floor.h"
 #include "Semantic/Marker.h"
 
+#include <map>
 #include <set>
 #include <mutex>
 #include <cstdint>
@@ -158,6 +159,9 @@ namespace ORB_SLAM3
 
         // [P9-C] the reset used on loop correction / merge / scale-rotation of the map
         void ResetPedestrians(); // locks mMutexMap
+        // [P9-C3b] persistent per-track log-scale bias b_j (Pedestrians.FloorContact != none); cleared with the person states
+        bool GetPedBias(int trackId, double &b);
+        void SetPedBias(int trackId, double b);
 
         void clear();
 
@@ -200,6 +204,8 @@ namespace ORB_SLAM3
         KeyFrame *mpFirstRegionKF;
         std::mutex mMutexMapUpdate;
         void ResetPedestriansLocked(); // caller holds mMutexMap
+        std::mutex mMutexPedMap;
+        std::map<int, double> mPedBias;
         vector<KeyFrame *> mvpKeyFrameOrigins;
         vector<unsigned long int> mvBackupKeyFrameOriginsId;
 

@@ -25,7 +25,7 @@ namespace ORB_SLAM3
         std::map<std::pair<unsigned long, int>, LogRec> gLog; // ordered: deterministic dump
         struct FloorRec
         {
-            double stamp, zp, zRegional, s;
+            double stamp, zp, zRegional, s, b;
             Eigen::Vector3d G, p;
             int nPts;
         };
@@ -156,6 +156,31 @@ namespace ORB_SLAM3
 
                 const double Hcur = P.statureFixedM; // fixed stature (P9-C2 5d): not a state
 
+                // P9-C3b: per-track log-scale bias b_j (Variants A / B only; "none" keeps b = 0 and the 2-vertex range edge)
+                ped::VertexPedBias *vbias = nullptr;
+                if (floorOn)
+                {
+                    const int contacts = static_cast<int>(std::count_if(E.begin(), E.end(), [](const Entry &en) { return en.obs->hasFoot && !en.fixed; }));
+                    if (contacts >= P.biasMinContacts)
+                    {
+                        double b0 = 0.0;
+                        if (pMap)
+                            pMap->GetPedBias(track, b0);
+                        vbias = new ped::VertexPedBias();
+                        vbias->setId(nextId++);
+                        vbias->setEstimate(b0);
+                        vbias->setFixed(false);
+                        opt.addVertex(vbias);
+                        auto *pr = new ped::EdgePedBiasPrior();
+                        pr->setVertex(0, vbias);
+                        pr->setMeasurement(0.0);
+                        pr->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.biasSigma * P.biasSigma));
+                        opt.addEdge(pr);
+                        Tag(G, PedGraph::BIAS, pr);
+                        G.biases.push_back({track, vbias});
+                    }
+                }
+
                 // 2. state vertices (existing estimate, else initialised from the keyframe's pose, the root pixel and the range)
                 for (Entry &e : E)
                 {
@@ -164,10 +189,10 @@ namespace ORB_SLAM3
                     if (!e.kf->GetPedState(track, s))
                     {
                         const Eigen::Vector3d b((e.obs->rootU - c.cx) / c.fx, (e.obs->rootV - c.cy) / c.fy, 1.0);
-                        // depth along the optical axis: range r = f cL H / l_px along the unit ray, z = r / |b~|;
+                        // optical-axis depth z = f cL H / l_px (P9-C3b erratum: the length is inversely proportional to z, not to the ray length);
                         // without a skeleton length the mask height gives an initial depth only (the estimate is refined by the BA)
-                        const double z = e.rangeOk ? (c.fx * P.skelOverStature * Hcur / e.obs->lpx) / b.norm()
-                                                   : (c.fx * P.maskHeightM / std::max(e.obs->maskH, 1.0)) / b.norm();
+                        const double z = e.rangeOk ? (c.fx * P.skelOverStature * Hcur / e.obs->lpx)
+                                                   : (c.fx * P.maskHeightM / std::max(e.obs->maskH, 1.0));
                         const Sophus::SE3f Twc = e.kf->GetPoseInverse();
                         s.p = (Twc.rotationMatrix() * (z * b).cast<float>() + Twc.translation()).cast<double>();
                         s.v.setZero();
@@ -214,9 +239,11 @@ namespace ORB_SLAM3
                     }
                     if (metric && e.rangeOk)
                     {
-                        auto *edge = new ped::EdgePedLogRange<PoseV>();
+                        auto *edge = new ped::EdgePedLogRange<PoseV>(vbias != nullptr);
                         edge->setVertex(0, e.v);
                         edge->setVertex(1, vpose);
+                        if (vbias)
+                            edge->setVertex(2, vbias);
                         edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx));
                         edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.logDepthSigma * P.logDepthSigma));
                         auto *rk = new g2o::RobustKernelHuber();
@@ -491,10 +518,10 @@ namespace ORB_SLAM3
         };
         std::vector<CallRec> gCalls;
         long gCreatedT[PedGraph::NTYPES] = {0}, gActiveT[PedGraph::NTYPES] = {0};
-        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor"};
+        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor", "bias"};
         // inside the robust-kernel threshold: the Huber deltas of PedestrianBA.cc (chi2 95 %: 5.991 for 2 dof, 3.841 for 1 dof);
         // the WNA prior (6 dof, no kernel) uses its own 95 % chi2 (12.592)
-        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991};
+        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991, 3.841};
     } // namespace
 
     void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
@@ -564,20 +591,22 @@ namespace ORB_SLAM3
     {
         std::ofstream f(path);
         f << "# skipped (no regional z_f, no neighbours, grazing ray): " << gFloorSkipped[1] << " " << gFloorSkipped[2] << " " << gFloorSkipped[3] << "\n";
-        f << "# kf_id stamp track zp z_regional Gx Gy Gz px py pz s nPts (map frame; G = foot-ray / plane intersection, p = optimised root, s = ray depth)\n";
+        f << "# kf_id stamp track zp z_regional Gx Gy Gz px py pz s nPts b (map frame; b = the track's log-scale bias at the write; G = foot-ray / plane intersection, p = optimised root, s = ray depth)\n";
         char buf[512];
         std::lock_guard<std::mutex> lk(gLogMutex);
         for (const auto &kv : gFloorLog)
         {
             const FloorRec &r = kv.second;
-            std::snprintf(buf, sizeof(buf), "%lu %.9f %d %a %a %a %a %a %a %a %a %a %d\n", kv.first.first, r.stamp, kv.first.second, r.zp, r.zRegional, r.G(0), r.G(1),
-                          r.G(2), r.p(0), r.p(1), r.p(2), r.s, r.nPts);
+            std::snprintf(buf, sizeof(buf), "%lu %.9f %d %a %a %a %a %a %a %a %a %a %d %a\n", kv.first.first, r.stamp, kv.first.second, r.zp, r.zRegional, r.G(0), r.G(1),
+                          r.G(2), r.p(0), r.p(1), r.p(2), r.s, r.nPts, r.b);
             f << buf;
         }
     }
 
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
     {
+        for (const auto &bh : g.biases)
+            pMap->SetPedBias(bh.track, bh.v->estimate());
         for (const auto &h : g.floors)
         {
             FloorRec r;
@@ -595,6 +624,10 @@ namespace ORB_SLAM3
                 fill(static_cast<ped::EdgePedFloorContact<g2o::VertexSE3Expmap> *>(h.e));
             r.stamp = h.kf->mTimeStamp;
             r.zRegional = h.zRegional;
+            r.b = 0.0;
+            for (const auto &bh : g.biases)
+                if (bh.track == h.track)
+                    r.b = bh.v->estimate();
             std::lock_guard<std::mutex> lk(gLogMutex);
             gFloorLog[{h.kf->mnId, h.track}] = r;
         }

@@ -32,7 +32,7 @@ namespace ORB_SLAM3
             bool fixed;
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
-        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, NTYPES };
+        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, NTYPES };
         struct FloorHandle // one floor-contact edge (P9-C3): written back with the state it belongs to
         {
             int track;
@@ -42,6 +42,12 @@ namespace ORB_SLAM3
             double zRegional;                                          // the regional z_f at build time (Variant A: the plane height; B: selection reference)
         };
         std::vector<FloorHandle> floors;
+        struct BiasHandle
+        {
+            int track;
+            ped::VertexPedBias *v;
+        };
+        std::vector<BiasHandle> biases; // P9-C3b: one per track with a bias vertex (written back to Map::SetPedBias)
         int nFloor = 0, nFloorNoObs = 0, nFloorNoZf = 0, nFloorNoNeighbours = 0, nFloorGrazing = 0;
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
         std::vector<g2o::OptimizableGraph::Edge *> byType[NTYPES];

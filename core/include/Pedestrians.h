@@ -85,6 +85,10 @@ namespace ORB_SLAM3
         double floorNeighbourRadiusM = 0; // Variant B: horizontal search radius around the ray/z_f intersection
         double floorBandM = 0;          // Variant B: neighbours must lie within +- this of the regional z_f (selection only; z_f is not a constraint in B)
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
+        // P9-C3b per-track log-scale bias b_j (read only when FloorContact != none): prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with
+        // at least that many foot observations on free states in the BA window (otherwise b = 0 for that call); 0: always.
+        double biasSigma = 0;
+        int biasMinContacts = 0;
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 

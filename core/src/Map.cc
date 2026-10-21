@@ -833,8 +833,28 @@ namespace ORB_SLAM3
 
 namespace ORB_SLAM3
 {
+    bool Map::GetPedBias(int trackId, double &b)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        auto it = mPedBias.find(trackId);
+        if (it == mPedBias.end())
+            return false;
+        b = it->second;
+        return true;
+    }
+
+    void Map::SetPedBias(int trackId, double b)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        mPedBias[trackId] = b;
+    }
+
     void Map::ResetPedestriansLocked()
     {
+        {
+            unique_lock<mutex> lock(mMutexPedMap);
+            mPedBias.clear();
+        }
         for (KeyFrame *pKF : mspKeyFrames)
             pKF->ClearPedStates();
     }
