@@ -24,6 +24,9 @@ namespace ORB_SLAM3
         double rootU = 0, rootV = 0; // mask root (cu, vb - 0.55 h) [px]
         double lpx = 0;             // |nose - mean(heels)| in the image [px] (P1-B l_px); <= 0 -> no range measurement
         double maskH = 0;           // mask pixel height [px]; only used to initialise a state's depth when lpx <= 0
+        // P9-C3: lowest foot keypoint (heel or toe, RTMW, score >= 0.3) of this person in this image [px]; `F` row of the per-frame file
+        bool hasFoot = false;
+        double footU = 0, footV = 0, footScore = 0;
     };
 
     // Stance claim of one track at one image, delivered LATE: the P4-S1 agree+timing claim at image t is final only 6 images later
@@ -68,6 +71,20 @@ namespace ORB_SLAM3
         // range-consistency gate (P9-C2 5b.2): the nose->heel range and the mask-height range are independent cues; an observation whose log
         // difference d = log r_lpx - log r_mask is further than gateK * gateSigma from gateCenter loses its range factor (root reprojection stays).
         double maskHeightM = 0, gateCenter = 0, gateSigma = 0, gateK = 0; // gateK <= 0: gate off
+        // P9-C3 floor contact (Pedestrians.FloorContact: none | regional | joint). All keys below are read only when the mode is not `none`.
+        enum class FloorMode { None, Regional, Joint };
+        FloorMode floorMode = FloorMode::None;
+        double floorSigmaRadialM = 0, floorSigmaTangentialM = 0; // metric residual (G - root)_xy along / across the horizontal viewing direction (c3_check0c calibration)
+        double floorRegionRadiusM = 0;  // Variant A: radius R of the region whose static map points give z_f
+        double floorContactOffsetM = 0; // delta: height of the lowest foot keypoint above the floor (calibrated, c3_check0c); added to the floor plane height
+        double floorLowModeFraction = 0;  // Variant A estimator: 1 = highest histogram mode; < 1 = lowest local maximum with at least this fraction of the highest count
+        int floorMinPoints = 0;         // Variant A: fewer map points below the camera in the region -> no z_f, no factor
+        double floorBinM = 0;           // Variant A: height-histogram bin
+        double floorBelowCameraM = 0;   // Variant A: only points lower than the camera by at least this margin
+        int floorNeighbours = 0;        // Variant B: k static points that define the local plane
+        double floorNeighbourRadiusM = 0; // Variant B: horizontal search radius around the ray/z_f intersection
+        double floorBandM = 0;          // Variant B: neighbours must lie within +- this of the regional z_f (selection only; z_f is not a constraint in B)
+        double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 

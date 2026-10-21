@@ -52,6 +52,51 @@ namespace ORB_SLAM3
         p.gateCenter = Req(fs, "Pedestrians.GateCenter", true);
         p.gateSigma = Req(fs, "Pedestrians.GateSigma");
         p.gateK = Req(fs, "Pedestrians.GateK", true);
+        const cv::FileNode fc = fs["Pedestrians.FloorContact"];
+        if (fc.empty())
+            throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.FloorContact (none | regional | joint) is missing from the settings file");
+        const std::string fm = static_cast<std::string>(fc);
+        if (fm == "none")
+            p.floorMode = FloorMode::None;
+        else if (fm == "regional")
+            p.floorMode = FloorMode::Regional;
+        else if (fm == "joint")
+            p.floorMode = FloorMode::Joint;
+        else
+            throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional or joint, got " + fm);
+        if (p.floorMode != FloorMode::None)
+        {
+            p.floorSigmaRadialM = Req(fs, "Pedestrians.FloorSigmaRadialM");
+            p.floorSigmaTangentialM = Req(fs, "Pedestrians.FloorSigmaTangentialM");
+            p.floorRegionRadiusM = Req(fs, "Pedestrians.FloorRegionRadiusM");
+            p.floorContactOffsetM = Req(fs, "Pedestrians.FloorContactOffsetM", true);
+            p.floorLowModeFraction = Req(fs, "Pedestrians.FloorLowModeFraction");
+            p.floorMinPoints = static_cast<int>(Req(fs, "Pedestrians.FloorMinPoints"));
+            p.floorBinM = Req(fs, "Pedestrians.FloorBinM");
+            p.floorBelowCameraM = Req(fs, "Pedestrians.FloorBelowCameraM", true);
+            p.floorPlausM = Req(fs, "Pedestrians.FloorPlausM");
+            if (p.floorMode == FloorMode::Joint)
+            {
+                p.floorNeighbours = static_cast<int>(Req(fs, "Pedestrians.FloorNeighbours"));
+                p.floorNeighbourRadiusM = Req(fs, "Pedestrians.FloorNeighbourRadiusM");
+                p.floorBandM = Req(fs, "Pedestrians.FloorBandM");
+                if (p.floorNeighbours < 3)
+                    throw std::runtime_error("[Pedestrians] Pedestrians.FloorNeighbours must be >= 3");
+                if (!(p.floorNeighbourRadiusM > 0 && p.floorBandM > 0))
+                    throw std::runtime_error("[Pedestrians] joint floor contact: FloorNeighbourRadiusM and FloorBandM must be > 0");
+            }
+            for (double v : {p.floorSigmaRadialM, p.floorSigmaTangentialM, p.floorRegionRadiusM, p.floorBinM, p.floorPlausM, p.floorLowModeFraction})
+                if (!(v > 0))
+                    throw std::runtime_error("[Pedestrians] every floor-contact sigma / radius / bin must be > 0");
+            if (p.floorMinPoints < 1)
+                throw std::runtime_error("[Pedestrians] Pedestrians.FloorMinPoints must be >= 1");
+            std::cout << "[Pedestrians] floor contact " << fm << ": sigma radial " << p.floorSigmaRadialM << " m, tangential " << p.floorSigmaTangentialM
+                      << " m, keypoint offset " << p.floorContactOffsetM << " m, region " << p.floorRegionRadiusM << " m, low-mode fraction " << p.floorLowModeFraction << ", min points " << p.floorMinPoints << ", bin " << p.floorBinM << " m, below camera "
+                      << p.floorBelowCameraM << " m, plausibility +-" << p.floorPlausM << " m";
+            if (p.floorMode == FloorMode::Joint)
+                std::cout << ", k " << p.floorNeighbours << ", neighbour radius " << p.floorNeighbourRadiusM << " m, band " << p.floorBandM << " m";
+            std::cout << std::endl;
+        }
         const cv::FileNode d = fs["Pedestrians.Dir"];
         if (d.empty())
             throw std::runtime_error("[Pedestrians] Pedestrians.Enabled is set but Pedestrians.Dir is missing from the settings file");
@@ -122,6 +167,27 @@ namespace ORB_SLAM3
                     pf->lateClaims.push_back(lc);
                 }
                 pf->lateClaims.back().claims.push_back(c);
+            }
+            else if (tag == "F")
+            {
+                // F track u v score: lowest foot keypoint of the person of the P row with that track id (P9-C3)
+                int tid;
+                double fu, fv, fs;
+                ss >> tid >> fu >> fv >> fs;
+                if (ss.fail())
+                    throw std::runtime_error("[Pedestrians] malformed line in " + path + ": " + line);
+                PedObs *target = nullptr;
+                for (PedObs &o : pf->obs)
+                    if (o.trackId == tid)
+                        target = &o;
+                if (!target)
+                    throw std::runtime_error("[Pedestrians] F row without a P row of the same track in " + path + ": " + line);
+                if (target->hasFoot)
+                    throw std::runtime_error("[Pedestrians] two F rows for one track in " + path + ": " + line);
+                target->hasFoot = true;
+                target->footU = fu;
+                target->footV = fv;
+                target->footScore = fs;
             }
             else
                 throw std::runtime_error("[Pedestrians] unknown row tag in " + path + ": " + line);

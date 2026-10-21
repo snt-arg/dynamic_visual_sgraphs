@@ -2534,7 +2534,7 @@ namespace ORB_SLAM3
                 pedKFs.push_back({k, k->mnId == pMap->GetInitKFid()});
             for (KeyFrame *k : lFixedCameras)
                 pedKFs.push_back({k, true});
-            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/false, /*inertialPoses=*/false);
+            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/false, /*inertialPoses=*/false, /*mpVertexBase=*/0);
         }
 
         optimizer.initializeOptimization();
@@ -4331,7 +4331,7 @@ namespace ORB_SLAM3
                 pedKFs.push_back({k, false});
             for (KeyFrame *k : lFixedKeyFrames)
                 pedKFs.push_back({k, true});
-            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/true, /*inertialPoses=*/true);
+            pedGraph = PedestrianBA::Add(optimizer, pedKFs, pMap, /*metric=*/true, /*inertialPoses=*/true, /*mpVertexBase=*/iniMPid + 1);
         }
 
         optimizer.initializeOptimization();

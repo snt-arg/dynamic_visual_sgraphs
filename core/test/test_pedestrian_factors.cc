@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <cstdlib>
 #include <Eigen/Dense>
 #include <opencv2/core/core.hpp>
 
@@ -132,7 +133,7 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, SE3>>(e, vi, J) ||
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, VertexPose>>(e, vi, J) || TryBinary<EdgePedWna>(e, vi, J) ||
         TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
-        TryMulti<EdgePedTie2>(e, vi, J))
+        TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
@@ -195,8 +196,194 @@ static void JacobianTests(const char *tag)
     delete pose;
 }
 
+
+// ---- P9-C3 floor contact ------------------------------------------------------------------------------------------
+// camera ~1.5 m above the floor z = zf, looking forward-down; foot ray through (u, v); the person's root above the ground point.
+template <class PoseV>
+static void FloorTests(const char *tag)
+{
+    const double fx = 415.7, cx = 360.0, cy = 240.0, zf = 0.2;
+    // world: z up. Camera at (0.3, -0.2, 1.7), optical axis forward (+x world) pitched 12 deg down, y_cam down.
+    const Eigen::Matrix3d Rwc0 = (Eigen::Matrix3d() << 0, 0, 1, -1, 0, 0, 0, -1, 0).finished(); // cam x = -world y, cam y = -world z, cam z = world x
+    const Eigen::Matrix3d Rwc = Eigen::AngleAxisd(0.21, Eigen::Vector3d::UnitY()).toRotationMatrix() * Rwc0; // rotation about world +y by +0.21: the forward axis (+x) tilts down
+    const Eigen::Vector3d C(0.3, -0.2, 1.7);
+    const Eigen::Matrix3d Rcw = Rwc.transpose();
+    const Eigen::Vector3d tcw = -Rcw * C;
+    PoseV *pose = MakePose<PoseV>(Rcw, tcw);
+    const double u = 372.0, v = 330.0;
+    VertexPedState state;
+    Vec6 x;
+    x << 3.1, -0.15, 1.15, 0.2, 0.1, 0.0;
+    state.setEstimate(x);
+
+    // A: fixed plane
+    EdgePedFloorContact<PoseV> A(fx, fx, cx, cy, u, v, 0, zf, 0.036, /*poseGradient=*/true);
+    A.setVertex(0, &state);
+    A.setVertex(1, pose);
+    A.setMeasurement(Eigen::Vector2d(u, v));
+    {
+        const auto g = A.Geometry();
+        CHECK(std::abs(g.G(2) - (zf + 0.036)) < 1e-10, std::string("floor contact A [") + tag + "]: ground point on the plane z = zf + delta");
+        // the ground point projects back to the foot pixel
+        const Eigen::Vector3d Xc = Rcw * g.G + tcw;
+        CHECK(std::abs(fx * Xc(0) / Xc(2) + cx - u) < 1e-8 && std::abs(fx * Xc(1) / Xc(2) + cy - v) < 1e-8,
+              std::string("floor contact A [") + tag + "]: ground point lies on the foot ray");
+        CHECK(g.s > 0 && g.den < 0, std::string("floor contact A [") + tag + "]: ray points down, depth positive");
+        A.computeError();
+        CHECK(std::abs(A.error()(0) - (g.G(0) - 3.1)) < 1e-12 && std::abs(A.error()(1) - (g.G(1) + 0.15)) < 1e-12,
+              std::string("floor contact A [") + tag + "]: residual = (G - p)_xy");
+    }
+    CheckEdge(&A, std::string("floor contact A (pose gradient) [") + tag + "]");
+    {
+        // "pedestrian only": the pose block is exactly zero, the state block is unchanged
+        EdgePedFloorContact<PoseV> Ap(fx, fx, cx, cy, u, v, 0, zf, 0.036, /*poseGradient=*/false);
+        Ap.setVertex(0, &state);
+        Ap.setVertex(1, pose);
+        const Eigen::MatrixXd J1 = Analytic(&Ap, 1), J0 = Analytic(&Ap, 0), J0a = Analytic(&A, 0);
+        CHECK(J1.cwiseAbs().maxCoeff() == 0.0, std::string("floor contact A pedestrian-only [") + tag + "]: pose Jacobian block is exactly zero");
+        CHECK((J0 - J0a).cwiseAbs().maxCoeff() == 0.0, std::string("floor contact A pedestrian-only [") + tag + "]: state block unchanged");
+        CHECK(NumJac(&Ap, 1).cwiseAbs().maxCoeff() > 1e-3, std::string("floor contact A pedestrian-only [") + tag + "]: the residual does depend on the pose (stop-gradient is deliberate)");
+    }
+    // B: k = 4 live points; plane height = mean z
+    std::vector<g2o::VertexSBAPointXYZ *> pts;
+    const double dz[4] = {0.03, -0.02, 0.05, -0.01};
+    for (int i = 0; i < 4; ++i)
+    {
+        auto *pv = new g2o::VertexSBAPointXYZ();
+        pv->setEstimate(Eigen::Vector3d(2.5 + 0.3 * i, -0.4 + 0.2 * i, zf + dz[i]));
+        pts.push_back(pv);
+    }
+    EdgePedFloorContact<PoseV> B(fx, fx, cx, cy, u, v, 4, 99.0, 0.036, /*poseGradient=*/true);
+    B.setVertex(0, &state);
+    B.setVertex(1, pose);
+    for (int i = 0; i < 4; ++i)
+        B.setVertex(2 + i, pts[i]);
+    B.setMeasurement(Eigen::Vector2d(u, v));
+    CHECK(std::abs(B.PlaneHeight() - (zf + (0.03 - 0.02 + 0.05 - 0.01) / 4 + 0.036)) < 1e-12, std::string("floor contact B [") + tag + "]: plane height = mean z of the k points + delta");
+    CheckEdge(&B, std::string("floor contact B [") + tag + "]");
+    // B reduces to A when the camera and the static points are fixed and every neighbour lies on the floor plane
+    for (int i = 0; i < 4; ++i)
+        pts[i]->setEstimate(Eigen::Vector3d(2.5 + 0.3 * i, -0.4 + 0.2 * i, zf));
+    A.computeError();
+    B.computeError();
+    CHECK((A.error() - B.error()).cwiseAbs().maxCoeff() < 1e-12, std::string("floor contact B == A [") + tag + "]: same residual when all neighbours are on the plane");
+    CHECK((Analytic(&A, 0) - Analytic(&B, 0)).cwiseAbs().maxCoeff() < 1e-12 && (Analytic(&A, 1) - Analytic(&B, 1)).cwiseAbs().maxCoeff() < 1e-12,
+          std::string("floor contact B == A [") + tag + "]: same state and pose Jacobians (camera/points fixed = the extra blocks are not used)");
+    // lifting the neighbours by dz moves the ground point away from the camera by dz/tan(depression) in the viewing direction (sign check of dG/dzp)
+    for (int i = 0; i < 4; ++i)
+        pts[i]->setEstimate(Eigen::Vector3d(2.5 + 0.3 * i, -0.4 + 0.2 * i, zf + 0.1));
+    {
+        const auto gB = B.Geometry(), gA = A.Geometry();
+        const Eigen::Vector3d dh = (gB.G - gA.G).template head<2>().homogeneous();
+        CHECK(gB.G(2) > gA.G(2) + 0.09 && (gB.G.template head<2>() - C.head<2>()).norm() < (gA.G.template head<2>() - C.head<2>()).norm(),
+              std::string("floor contact B [") + tag + "]: a higher plane puts the ground point higher and nearer to the camera");
+        (void)dh;
+    }
+    for (auto *pv : pts)
+        delete pv;
+    delete pose;
+}
+
+static void RegionalFloorTests()
+{
+    std::mt19937 g(11);
+    std::normal_distribution<double> n01(0.0, 1.0);
+    std::uniform_real_distribution<double> uni(-3.0, 3.0);
+    std::vector<Eigen::Vector3d> pts;
+    for (int i = 0; i < 600; ++i) pts.emplace_back(uni(g), uni(g), 0.12 + 0.015 * n01(g));       // floor
+    for (int i = 0; i < 150; ++i) pts.emplace_back(uni(g) * 0.3, uni(g) * 0.3, 0.75 + 0.01 * n01(g)); // table top
+    for (int i = 0; i < 200; ++i) pts.emplace_back(uni(g), 3.0, 0.2 + 1.8 * std::abs(uni(g)) / 3.0);   // wall
+    for (int i = 0; i < 300; ++i) pts.emplace_back(uni(g), uni(g), 2.4 + 0.02 * n01(g));          // ceiling (above the camera: excluded)
+    const auto f = PedestrianBA::RegionalFloor(pts, Eigen::Vector2d(0, 0), 1.6, 2.0, 0.05, 0.3, 30, 0.25);
+    CHECK(f.ok && std::abs(f.zf - 0.12) < 0.03, "regional floor: the floor mode (not table, wall or ceiling) is found");
+    const auto f2 = PedestrianBA::RegionalFloor(pts, Eigen::Vector2d(0, 0), 1.6, 0.01, 0.05, 0.3, 30, 0.25);
+    CHECK(!f2.ok, "regional floor: too few points in the region -> not ok");
+    const auto f3 = PedestrianBA::RegionalFloor(pts, Eigen::Vector2d(0, 0), 0.05, 2.0, 0.05, 0.3, 30, 0.25);
+    CHECK(!f3.ok, "regional floor: camera below every point -> not ok");
+    const auto f4 = PedestrianBA::RegionalFloor(pts, Eigen::Vector2d(0, 0), 1.6, 2.0, 0.05, 0.3, 30, 0.25);
+    CHECK(f4.zf == f.zf && f4.nMode == f.nMode, "regional floor: deterministic");
+    {   // a scene where the table top has more points than the floor: the highest mode is the table, the lowest significant mode is the floor
+        std::vector<Eigen::Vector3d> q2;
+        for (int i = 0; i < 150; ++i) q2.emplace_back(uni(g) * 0.5, uni(g) * 0.5, 0.75 + 0.01 * n01(g));
+        for (int i = 0; i < 90; ++i) q2.emplace_back(uni(g), uni(g), 0.05 + 0.01 * n01(g));
+        const auto hi = PedestrianBA::RegionalFloor(q2, Eigen::Vector2d(0, 0), 1.6, 3.0, 0.05, 0.3, 30, 1.0);
+        const auto lo = PedestrianBA::RegionalFloor(q2, Eigen::Vector2d(0, 0), 1.6, 3.0, 0.05, 0.3, 30, 0.25);
+        CHECK(hi.ok && std::abs(hi.zf - 0.75) < 0.03, "regional floor: q = 1 takes the highest mode (the table)");
+        CHECK(lo.ok && std::abs(lo.zf - 0.05) < 0.03, "regional floor: q = 0.25 takes the lowest significant mode (the floor)");
+    }
+    auto shuffled = pts;
+    std::shuffle(shuffled.begin(), shuffled.end(), g);
+    const auto f5 = PedestrianBA::RegionalFloor(shuffled, Eigen::Vector2d(0, 0), 1.6, 2.0, 0.05, 0.3, 30, 0.25);
+    CHECK(f5.zf == f.zf, "regional floor: independent of the point order");
+}
+
+static void FloorIoTests()
+{
+    // reader: F rows
+    char dirt[] = "/tmp/p9c3_reader_XXXXXX";
+    char *dir = mkdtemp(dirt);
+    CHECK(dir != nullptr, "temporary directory");
+    PedestrianParams::Get() = PedestrianParams();
+    PedestrianParams::Get().enabled = true;
+    const std::string d(dir);
+    auto write = [&](const std::string &name, const std::string &body) {
+        std::FILE *f = std::fopen((d + "/" + name).c_str(), "w");
+        std::fputs(body.c_str(), f);
+        std::fclose(f);
+    };
+    write("0000000000001000000.ped.txt", "# stamp 1.0 image 0\nP 3 100.0 200.0 50.0 120.0\nP 7 300.0 210.0 0.0 90.0\nF 7 301.5 400.25 0.8\n");
+    PedestrianFrameReader rd(d);
+    const auto fr = rd.Read(1.0);
+    CHECK(fr->obs.size() == 2 && !fr->obs[0].hasFoot && fr->obs[1].hasFoot && fr->obs[1].footU == 301.5 && fr->obs[1].footV == 400.25 && fr->obs[1].footScore == 0.8,
+          "reader: an F row attaches the lowest-foot pixel to the P row of the same track");
+    write("0000000000002000000.ped.txt", "P 3 100.0 200.0 50.0 120.0\nF 9 301.5 400.25 0.8\n");
+    bool threw = false;
+    try { rd.Read(2.0); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "reader: an F row without a P row of the same track throws");
+    write("0000000000003000000.ped.txt", "P 3 100.0 200.0 50.0 120.0\nF 3 1 2 0.8\nF 3 1 2 0.8\n");
+    threw = false;
+    try { rd.Read(3.0); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "reader: two F rows for one track throw");
+    PedestrianParams::Get() = PedestrianParams();
+    // settings
+    const std::string base =
+        "%YAML:1.0\n---\nPedestrians.Enabled: 1\nPedestrians.RootPxSigma: 1.5\nPedestrians.LogDepthSigma: 0.031\nPedestrians.SkeletonOverStature: 0.9027\n"
+        "Pedestrians.StatureFixedM: 1.7\nPedestrians.Qv: 0.1386\nPedestrians.FootprintPxSigma: 2.0\nPedestrians.T1Sigma: 0.02\nPedestrians.T2Sigma: 0.1\n"
+        "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
+        "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
+        "Pedestrians.GateK: 0.0\nPedestrians.Dir: /x\n";
+    const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\n"
+                           "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
+    auto cfg = [&](const std::string &extra) {
+        cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);
+        return PedestrianParams::Configure(fs);
+    };
+    threw = false;
+    try { cfg(""); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "settings: Pedestrians.FloorContact is required when the flag is on (no default)");
+    CHECK(cfg("Pedestrians.FloorContact: none\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "settings: FloorContact none reads no floor key");
+    threw = false;
+    try { cfg("Pedestrians.FloorContact: regional\n"); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "settings: FloorContact regional with missing sigma keys throws");
+    CHECK(cfg("Pedestrians.FloorContact: regional\n" + fl) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Regional, "settings: regional");
+    threw = false;
+    try { cfg("Pedestrians.FloorContact: joint\n" + fl); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "settings: joint without FloorNeighbours / radius / band throws");
+    CHECK(cfg("Pedestrians.FloorContact: joint\n" + fl + "Pedestrians.FloorNeighbours: 5\nPedestrians.FloorNeighbourRadiusM: 1.0\nPedestrians.FloorBandM: 0.15\n") &&
+              PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Joint && PedestrianParams::Get().floorNeighbours == 5,
+          "settings: joint");
+    threw = false;
+    try { cfg("Pedestrians.FloorContact: bogus\n"); } catch (const std::runtime_error &) { threw = true; }
+    CHECK(threw, "settings: an unknown FloorContact value throws");
+    PedestrianParams::Get() = PedestrianParams();
+}
+
 int main()
 {
+    FloorTests<g2o::VertexSE3Expmap>("SE3");
+    FloorTests<VertexPose>("VertexPose");
+    RegionalFloorTests();
+    FloorIoTests();
     // ------------------------------------------------------------------------------------------------ 1. Jacobians
     JacobianTests<g2o::VertexSE3Expmap>("SE3");
     JacobianTests<VertexPose>("VertexPose");
@@ -368,7 +555,7 @@ int main()
         PedestrianParams::Get() = PedestrianParams(); // Enabled = false
         g2o::SparseOptimizer opt;
         bool threw = false;
-        try { PedestrianBA::Add(opt, {}, nullptr, true, true); } catch (const std::runtime_error &) { threw = true; }
+        try { PedestrianBA::Add(opt, {}, nullptr, true, true, 0); } catch (const std::runtime_error &) { threw = true; }
         CHECK(threw, "flag off: PedestrianBA::Add refuses to run");
         threw = false;
         try { PedestrianFrameReader r("/nonexistent"); } catch (const std::runtime_error &) { threw = true; }

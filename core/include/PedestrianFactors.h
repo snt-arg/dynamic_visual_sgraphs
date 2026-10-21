@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <istream>
+#include <stdexcept>
 #include <ostream>
 
 #include <Eigen/Dense>
@@ -311,6 +312,115 @@ namespace ORB_SLAM3
                 }
             }
             double cLeg, H0;
+        };
+
+        // ---------------------------------------------------------------- floor contact (P9-C3)
+        // Lowest foot keypoint (heel or toe) of a person = a ray b = ((u-cx)/fx, (v-cy)/fy, 1) in the camera frame. A walking person always has a foot on
+        // the floor, so the ray meets the gravity-aligned floor plane z = zp (world frame, z up) at a point G that is stature-independent:
+        //   n = Rcw e_z (world up in camera coordinates), den = n.b (< 0 for a downward ray), s = (zp + n.tcw)/den, Xc_G = s b, G = Rcw^T (Xc_G - tcw)
+        // The edge penalises the horizontal offset between G and the root state:  e = (G - p)_xy  (metres, 2-D). This is the contact-vertex formulation
+        // (pixel reprojection of a contact point + contact point on the plane + horizontal tie to the root) with the contact vertex eliminated: the
+        // pixel and plane constraints are exact, and every noise (keypoint pixel, swing, heel/toe offset) sits in one metric residual that the
+        // tuning data calibrate directly (c3_check0c.py).
+        //   zp = (floor height) + delta, the floor height being: k == 0 (Variant A, regional) a constant z_f estimated from the static map points at build time and held fixed;
+        //       k >= 1 (Variant B, joint) the mean height of k static map points that are live vertices of the same BA (the gravity-aligned plane through
+        //       them, least-squares height); the points and the camera pose move.
+        // Vertices: (0) VertexPedState, (1) camera pose, (2..k+1) g2o::VertexSBAPointXYZ.  `poseGradient` = false (Variant A, "pedestrian only"): the
+        // residual follows the current camera pose but the pose Jacobian block is zero, so the factor cannot move the camera.
+        // Jacobian derivation (both pose types): with M = dXc/d(pose update) of a fixed world point (PoseTraits::dXc),
+        //   dG/dxi = Rcw^T ( b n^T M / den - M ),   dG/dzp = Rcw^T b / den.
+        template <class PoseV>
+        class EdgePedFloorContact : public g2o::BaseMultiEdge<2, Eigen::Vector2d>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            // k = 0: fixed plane height zf. k >= 1: the plane height is the mean z of the k point vertices (set via setVertex(2 + i, ...)).
+            EdgePedFloorContact(double fx, double fy, double cx, double cy, double u, double v, int k, double zf, double deltaM, bool poseGradient)
+                : b((u - cx) / fx, (v - cy) / fy, 1.0), nPts(k), zFixed(zf), delta(deltaM), grad(poseGradient)
+            {
+                this->resize(2 + k);
+                this->_measurement << u, v;
+            }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+
+            // Height of the plane the ray is intersected with: the floor (z_f, or the mean of the k points) plus `delta`, the calibrated height of the
+            // lowest foot keypoint above the sole (heel / toe keypoint offset + swing; median of c3_check0c e_v on the tuning sequences).
+            double PlaneHeight() const
+            {
+                return FloorHeight() + delta;
+            }
+            double FloorHeight() const
+            {
+                if (nPts == 0)
+                    return zFixed;
+                double z = 0;
+                for (int i = 0; i < nPts; ++i)
+                    z += static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[2 + i])->estimate()(2);
+                return z / nPts;
+            }
+
+            // Ground point, the ray parameter s (depth along the unit-z camera ray), and den; throws on a ray parallel to the floor.
+            struct Geo
+            {
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw, n, XcG, G;
+                double s, den, zp;
+            };
+            Geo Geometry() const
+            {
+                Geo g;
+                const PoseV *C = static_cast<const PoseV *>(this->_vertices[1]);
+                PoseTraits<PoseV>::Get(C, g.Rcw, g.tcw);
+                g.n = g.Rcw.col(2);
+                g.den = g.n.dot(b);
+                if (std::abs(g.den) < 1e-9)
+                    throw std::runtime_error("[Pedestrians] floor contact: the foot ray is parallel to the floor plane");
+                g.zp = PlaneHeight();
+                g.s = (g.zp + g.n.dot(g.tcw)) / g.den;
+                g.XcG = g.s * b;
+                g.G = g.Rcw.transpose() * (g.XcG - g.tcw);
+                return g;
+            }
+
+            void computeError() override
+            {
+                const Geo g = Geometry();
+                const Eigen::Vector3d p = static_cast<const VertexPedState *>(this->_vertices[0])->p();
+                this->_error = (g.G - p).template head<2>();
+            }
+
+            void linearizeOplus() override
+            {
+                const Geo g = Geometry();
+                this->_jacobianOplus[0].setZero();
+                this->_jacobianOplus[0](0, 0) = -1.0;
+                this->_jacobianOplus[0](1, 1) = -1.0;
+                if (grad)
+                {
+                    const Eigen::Matrix<double, 3, 6> M = PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), g.XcG);
+                    const Eigen::Matrix<double, 3, 6> dG = g.Rcw.transpose() * (b * (g.n.transpose() * M) / g.den - M);
+                    this->_jacobianOplus[1] = dG.topRows<2>();
+                }
+                else
+                    this->_jacobianOplus[1].setZero();
+                if (nPts > 0)
+                {
+                    const Eigen::Vector3d dGdz = g.Rcw.transpose() * b / g.den;
+                    for (int i = 0; i < nPts; ++i)
+                    {
+                        this->_jacobianOplus[2 + i].setZero();
+                        this->_jacobianOplus[2 + i](0, 2) = dGdz(0) / nPts;
+                        this->_jacobianOplus[2 + i](1, 2) = dGdz(1) / nPts;
+                    }
+                }
+            }
+
+            Eigen::Vector3d b;
+            int nPts;
+            double zFixed, delta;
+            bool grad;
         };
 
     } // namespace ped
