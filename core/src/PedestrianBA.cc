@@ -9,6 +9,10 @@
 #include <mutex>
 #include <stdexcept>
 #include <type_traits>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
 
@@ -39,6 +43,44 @@ namespace ORB_SLAM3
         };
         std::map<std::pair<unsigned long, int>, GateRow> gGateLog; // P9-C4: the first (and only) decision per (keyframe, track)
         long gGateNoPred = 0;
+
+        // P9-C4 (determinism diagnosis; OFF unless the environment variable P9C_DET_LOG names a file): one line per BA call with FNV-1a hashes of the inputs the
+        // call consumed (the perception rows of the keyframes, the keyframe poses, the person vertices and edges it created) and, after the solve, of the written-back states.
+        // P9C_DET_LOG_DETAIL=1 additionally writes every vertex and edge.
+        struct DetLog
+        {
+            std::FILE *f = nullptr;
+            bool detail = false;
+            long n = 0;
+            DetLog()
+            {
+                const char *p = std::getenv("P9C_DET_LOG");
+                if (p && *p)
+                    f = std::fopen(p, "w");
+                const char *d = std::getenv("P9C_DET_LOG_DETAIL");
+                detail = d && *d == '1';
+            }
+        };
+        DetLog &DL()
+        {
+            static DetLog d;
+            return d;
+        }
+        struct Fnv
+        {
+            std::uint64_t h = 1469598103934665603ULL;
+            void bytes(const void *p, std::size_t n)
+            {
+                const unsigned char *c = static_cast<const unsigned char *>(p);
+                for (std::size_t i = 0; i < n; ++i)
+                {
+                    h ^= c[i];
+                    h *= 1099511628211ULL;
+                }
+            }
+            template <class T> void val(const T &v) { bytes(&v, sizeof(T)); }
+        };
+        long gDetCall = 0;
         std::mutex gLogMutex;
 
         // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1994-1995 thHuber1D / thHuberMono).
@@ -505,6 +547,52 @@ namespace ORB_SLAM3
                     }
                 }
             }
+            if (DL().f)
+            {
+                Fnv hObs, hPose, hV, hE;
+                for (const PedGraphKF &g : kfs)
+                {
+                    hObs.val(g.kf->mnId);
+                    hObs.val(g.fixed);
+                    hPose.val(g.kf->mnId);
+                    const Sophus::SE3f Tcw = g.kf->GetPose();
+                    hPose.bytes(Tcw.matrix().data(), 16 * sizeof(float));
+                    if (g.kf->mpPedFrame)
+                        for (const PedObs &o : g.kf->mpPedFrame->obs)
+                        {
+                            hObs.val(o.trackId); hObs.val(o.rootU); hObs.val(o.rootV); hObs.val(o.lpx); hObs.val(o.maskH);
+                            hObs.val(o.hasFoot); hObs.val(o.footU); hObs.val(o.footV); hObs.val(o.footScore);
+                        }
+                }
+                for (const auto &st : G.states)
+                {
+                    hV.val(st.v->id()); hV.val(st.fixed); hV.val(st.track);
+                    const ped::Vec6 x = st.v->estimate();
+                    hV.bytes(x.data(), 6 * sizeof(double));
+                    if (DL().detail)
+                        std::fprintf(DL().f, "V %d kf=%lu tr=%d fixed=%d %a %a %a %a %a %a\n", st.v->id(), st.kf->mnId, st.track, st.fixed ? 1 : 0, x(0), x(1), x(2), x(3), x(4), x(5));
+                }
+                for (int ty = 0; ty < PedGraph::NTYPES; ++ty)
+                    for (g2o::OptimizableGraph::Edge *e : G.byType[ty])
+                    {
+                        hE.val(ty);
+                        for (auto *hv : e->vertices())
+                            hE.val(hv ? hv->id() : -1);
+                        const int dim = e->dimension();
+                        hE.bytes(e->informationData(), static_cast<std::size_t>(dim) * dim * sizeof(double));
+                        if (DL().detail)
+                        {
+                            std::fprintf(DL().f, "E t=%d v=", ty);
+                            for (auto *hv : e->vertices())
+                                std::fprintf(DL().f, "%d,", hv ? hv->id() : -1);
+                            std::fprintf(DL().f, " info0=%a\n", e->informationData()[0]);
+                        }
+                    }
+                std::fprintf(DL().f, "BA %ld metric=%d nKF=%zu obs=%016llx pose=%016llx vtx=%016llx edges=%016llx nV=%zu nE=%zu\n", gDetCall++, metric ? 1 : 0, kfs.size(),
+                             static_cast<unsigned long long>(hObs.h), static_cast<unsigned long long>(hPose.h), static_cast<unsigned long long>(hV.h),
+                             static_cast<unsigned long long>(hE.h), G.states.size(), G.edges.size());
+                std::fflush(DL().f);
+            }
             gVertices += static_cast<long>(G.states.size()) + G.nFootVertices;
             gEdges += static_cast<long>(G.edges.size());
             return G;
@@ -727,6 +815,18 @@ namespace ORB_SLAM3
             r.twc << Twc.translation().cast<double>(), q.x(), q.y(), q.z(), q.w();
             std::lock_guard<std::mutex> lk(gLogMutex);
             gLog[{s.kf->mnId, s.track}] = r;
+        }
+        if (DL().f)
+        {
+            Fnv h;
+            for (const auto &s : g.states)
+            {
+                const ped::Vec6 x = s.v->estimate();
+                h.val(s.v->id());
+                h.bytes(x.data(), 6 * sizeof(double));
+            }
+            std::fprintf(DL().f, "WB %ld post=%016llx nStates=%zu\n", gDetCall - 1, static_cast<unsigned long long>(h.h), g.states.size());
+            std::fflush(DL().f);
         }
     }
 } // namespace ORB_SLAM3
