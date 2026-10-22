@@ -172,7 +172,7 @@ static Scen MakeScen(const std::string &n)
         s.level = {0, 0, 2, 2};
         s.bTrue = {-0.05, 0.05, 0.05, -0.05};
         s.trueLevels = {0.0, -2.8};
-        s.texturedLower = false;
+        s.texturedLower = true;   // patch C does not make S6 textureless (only S3's lower level is, task step 4)
         s.pitch = 14.0;
     }
     return s;
@@ -283,6 +283,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     else if (S.name == "S6")
     {
         addFloor(0.0, 2.5, 9.0, 3000);                              // upper level textured
+        addFloor(-2.8, 13.5, 17.0, 3000);                           // lower level textured
         // stairs treads and the lower floor are textureless / not floor points of a level: treads carry points at the tread heights (distractors for the RANSAC)
         for (int s = 0; s < 16; ++s)
             for (int j = 0; j < 20; ++j)
