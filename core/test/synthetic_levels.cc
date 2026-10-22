@@ -634,6 +634,8 @@ int main(int argc, char **argv)
             double dn = 1e9;
             for (double zt : W.levelsTrue)
                 dn = std::min(dn, std::abs(L.z - zt));
+            if (std::getenv("DEBUG_LEVELS"))
+                std::printf("LEVEL seed=%d z=%+.4f nearest_true_err=%+.4f n=%d\n", seed, L.z, L.z - W.levelsTrue[std::abs(L.z - W.levelsTrue[0]) < std::abs(L.z - W.levelsTrue.back()) ? 0 : W.levelsTrue.size() - 1], L.nContacts);
             if (L.nContacts >= 20)
             {
                 ++nLevelsTotal;
