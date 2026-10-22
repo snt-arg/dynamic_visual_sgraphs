@@ -14,6 +14,7 @@
 #include <map>
 #include <set>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace ORB_SLAM3
@@ -33,6 +34,29 @@ namespace ORB_SLAM3
             int ransacIters;                           // RansacIterations(0.99, 0.5)
         };
 
+        // The design constants of task_C5.md / patch_stairs_ransac.md; only the three calibrated values are inputs.
+        inline LevelParams DesignLevelParams(double sigmaA, double sigmaPt, double sMax)
+        {
+            LevelParams P;
+            P.sigmaA = sigmaA;
+            P.sigmaPt = sigmaPt;
+            P.sMax = sMax;
+            P.assocK = 3;
+            P.createK = 2;
+            P.mergeK = 2;
+            P.createMinContacts = 10;
+            P.createMinTracks = 2;
+            P.transWindowS = 1.5;
+            P.transMinTravelM = 0.5;
+            P.transMinContacts = 4;
+            P.ransacThrK = 2;
+            P.ransacRadiusM = 1.0;
+            P.ransacMinInliers = 5;
+            P.ransacMaxOffsetK = 3;
+            P.ransacIters = 7; // ceil(ln(0.01) / ln(0.5)), asserted against RansacIterations(0.99, 0.5) in the unit test
+            return P;
+        }
+
         // Number of iterations for success probability `conf` at inlier ratio `w` with a model of `m` samples: ln(1 - conf) / ln(1 - w^m).
         // The model is a 1-D height, m = 1: conf 0.99, w 0.5 -> 6.64 -> 7.
         inline int RansacIterations(double conf, double w, int m = 1)
@@ -43,6 +67,7 @@ namespace ORB_SLAM3
         struct Contact
         {
             int track;
+            unsigned long kf = 0; // keyframe id: (kf, track) identifies a contact across overlapping BA windows
             double t;           // seconds
             double x, y;        // person footprint, world (horizontal)
             double h;           // implied floor height h_c
@@ -145,9 +170,13 @@ namespace ORB_SLAM3
                 for (Contact &c : cs)
                 {
                     c.level = Associate(c);
+                    const bool fresh = seen.insert({c.kf, c.track}).second; // a contact is counted / pooled once, however many BA windows contain it
                     if (c.level >= 0)
-                        ++Find(c.level).nContacts;
-                    else if (!c.transitional)
+                    {
+                        if (fresh)
+                            ++Find(c.level).nContacts;
+                    }
+                    else if (!c.transitional && fresh)
                         pool.push_back(c);
                 }
                 int created = 0;
@@ -234,6 +263,7 @@ namespace ORB_SLAM3
             {
                 levels.clear();
                 pool.clear();
+                seen.clear();
             }
             size_t PoolSize() const { return pool.size(); }
 
@@ -246,6 +276,7 @@ namespace ORB_SLAM3
                 throw std::runtime_error("[Levels] unknown level id");
             }
             LevelParams P;
+            std::set<std::pair<unsigned long, int>> seen;
             std::vector<Level> levels;
             std::vector<Contact> pool;
             int nextId;

@@ -28,7 +28,7 @@ static std::vector<Contact> Walk(int track, int n, double v, double h0, double s
     for (int i = 0; i < n; ++i)
     {
         Contact c;
-        c.track = track; c.t = t0 + i / 6.0; c.x = v * c.t; c.y = 0.1 * track;
+        c.track = track; c.kf = static_cast<unsigned long>(i); c.t = t0 + i / 6.0; c.x = v * c.t; c.y = 0.1 * track;
         c.h = h0 + slope * (v * (c.t - t0)) + (g && noise > 0 ? N(*g) : 0.0);
         cs.push_back(c);
     }
@@ -39,7 +39,7 @@ int main()
 {
     const LevelParams P = TP();
     std::mt19937 g(5);
-    CHECK(RansacIterations(0.99, 0.5) == 7, "RANSAC iterations for 99% at 50% inliers, 1-D model = 7");
+    CHECK(RansacIterations(0.99, 0.5) == 7 && DesignLevelParams(1,1,1).ransacIters == 7, "RANSAC iterations for 99% at 50% inliers, 1-D model = 7");
 
     // ---- transitional
     { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "flat walk (noise 1.5 cm) is not flagged"); }
@@ -59,6 +59,11 @@ int main()
     { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01); for (auto &x : a) x.transitional = true; for (auto &x : b) x.transitional = true;
       S.Update(a); S.Update(b); CHECK(S.Levels().empty() && S.PoolSize() == 0, "transitional contacts never enter the pool nor create a level"); }
     { LevelSet S(P); std::vector<Contact> none; S.Update(none); CHECK(S.Levels().empty(), "a furniture cluster (points only, no contacts) never becomes a level: the level set has no point input"); }
+
+    { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01); S.Update(a); S.Update(b);
+      const int n1 = S.Levels()[0].nContacts; auto a2 = a, b2 = b; S.Update(a2); S.Update(b2);
+      CHECK(S.Levels().size() == 1 && S.Levels()[0].nContacts == n1, "overlapping BA windows: the same (keyframe, track) contacts are not counted twice");
+      auto lone = Walk(7, 12, 1.0, 1.5, 0, 0, &g, 0.01); S.Update(lone); auto lone2 = lone; S.Update(lone2); CHECK(S.PoolSize() == 12, "overlapping windows: the same contacts are not pooled twice"); }
 
     // ---- RANSAC
     {
