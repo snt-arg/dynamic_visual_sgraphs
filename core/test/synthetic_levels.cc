@@ -662,6 +662,9 @@ int main(int argc, char **argv)
                 {
                     // posterior sigma of the levels at the true state (Huber off); the level error is taken from the solved estimate
                     std::map<int, std::pair<double, int>> errN;   // id -> (error, contacts)
+                    std::vector<std::pair<VertexPedState *, Vec6>> savedSt;
+                    std::vector<std::pair<VertexPedBias *, double>> savedB;
+                    std::vector<std::pair<VertexFloorLevel *, double>> savedL;
                     for (const auto &kv : lv)
                     {
                         double zt = 0, best = 1e9;
@@ -671,16 +674,18 @@ int main(int argc, char **argv)
                         for (const auto &L : LS.Levels())
                             if (L.id == kv.first) nc = L.nContacts;
                         errN[kv.first] = {kv.second->estimate() - zt, nc};
+                        savedL.push_back({kv.second, kv.second->estimate()});
                         kv.second->setEstimate(zt);
                     }
                     for (int w = 0; w < NTRK; ++w)
                     {
-                        if (vb[w]) vb[w]->setEstimate(W.bTrue[w]);
+                        if (vb[w]) { savedB.push_back({vb[w], vb[w]->estimate()}); vb[w]->setEstimate(W.bTrue[w]); }
                         for (int k = first; k <= i; ++k)
                             if (st[w][k])
                             {
                                 Vec6 x;
                                 x << W.obs[w][k].p, W.obs[w][k].vel;
+                                savedSt.push_back({st[w][k], st[w][k]->estimate()});
                                 st[w][k]->setEstimate(x);
                             }
                     }
@@ -690,6 +695,9 @@ int main(int argc, char **argv)
                     const std::map<int, double> sg = PosteriorSigmas(opt, ids);
                     for (const auto &kv : sg)
                         std::printf("LVSIG seed=%d id=%d err=%+.5f sigma_post=%.5f n=%d\n", seed, vid[kv.first], errN[vid[kv.first]].first, kv.second, errN[vid[kv.first]].second);
+                    for (auto &x : savedSt) x.first->setEstimate(x.second);   // the posterior is evaluated at the truth; the solved estimates are restored for the metrics
+                    for (auto &x : savedB) x.first->setEstimate(x.second);
+                    for (auto &x : savedL) x.first->setEstimate(x.second);
                 }
             }
             else
