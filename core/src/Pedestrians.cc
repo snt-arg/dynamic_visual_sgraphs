@@ -118,7 +118,11 @@ namespace ORB_SLAM3
         }
         else
             throw std::runtime_error("[Pedestrians] Pedestrians.MotionPrior must be isotropic or anisotropic, got " + mps);
-        p.innovGate = static_cast<int>(Req(fs, "Pedestrians.InnovGate", true)) != 0;
+        const int gateMode = static_cast<int>(Req(fs, "Pedestrians.InnovGate", true));
+        if (gateMode < 0 || gateMode > 2)
+            throw std::runtime_error("[Pedestrians] Pedestrians.InnovGate must be 0 (off), 1 (on) or 2 (shadow: log only)");
+        p.innovGate = gateMode != 0;
+        p.innovShadow = gateMode == 2;
         if (p.innovGate)
         {
             p.innovChi2Dof2 = Req(fs, "Pedestrians.InnovChi2Dof2");
@@ -129,6 +133,13 @@ namespace ORB_SLAM3
             p.innovP0PosZ = Req(fs, "Pedestrians.InnovP0PosZ");
             p.innovP0VelXY = Req(fs, "Pedestrians.InnovP0VelXY");
             p.innovP0VelZ = Req(fs, "Pedestrians.InnovP0VelZ");
+            p.innovScale[0] = Req(fs, "Pedestrians.InnovScaleK3");
+            p.innovScale[1] = Req(fs, "Pedestrians.InnovScaleK4");
+            p.innovScale[2] = Req(fs, "Pedestrians.InnovScaleK5");
+            p.innovScale[3] = Req(fs, "Pedestrians.InnovScaleK6");
+            for (double sc : p.innovScale)
+                if (!(sc > 0))
+                    throw std::runtime_error("[Pedestrians] innovation gate: every InnovScaleK* must be > 0");
             for (double v : {p.innovChi2Dof2, p.innovChi2Dof3, p.innovP0PosXY, p.innovP0PosZ, p.innovP0VelXY, p.innovP0VelZ})
                 if (!(v > 0))
                     throw std::runtime_error("[Pedestrians] innovation gate: every threshold / P0 standard deviation must be > 0");
@@ -138,9 +149,9 @@ namespace ORB_SLAM3
         std::cout << "[Pedestrians] motion prior " << mps;
         if (p.motionPrior == MotionPrior::Anisotropic)
             std::cout << " (q_h " << p.qvH << ", q_z " << p.qvZ << ")";
-        std::cout << ", innovation gate " << (p.innovGate ? "ON" : "off");
+        std::cout << ", innovation gate " << (p.innovShadow ? "SHADOW (log only)" : (p.innovGate ? "ON" : "off"));
         if (p.innovGate)
-            std::cout << " (chi2 " << p.innovChi2Dof2 << " / " << p.innovChi2Dof3 << ", free " << p.innovFreeKeyframes << ", reinit after " << p.innovReinitRejections << ", P0 pos " << p.innovP0PosXY << "/" << p.innovP0PosZ << " m, vel " << p.innovP0VelXY << "/" << p.innovP0VelZ << " m/s)";
+            std::cout << " (chi2 " << p.innovChi2Dof2 << " / " << p.innovChi2Dof3 << ", free " << p.innovFreeKeyframes << ", reinit after " << p.innovReinitRejections << ", scale " << p.innovScale[0] << "/" << p.innovScale[1] << "/" << p.innovScale[2] << "/" << p.innovScale[3] << ", P0 pos " << p.innovP0PosXY << "/" << p.innovP0PosZ << " m, vel " << p.innovP0VelXY << "/" << p.innovP0VelZ << " m/s)";
         std::cout << std::endl;
         const cv::FileNode d = fs["Pedestrians.Dir"];
         if (d.empty())

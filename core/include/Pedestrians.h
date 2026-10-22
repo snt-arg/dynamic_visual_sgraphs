@@ -96,6 +96,8 @@ namespace ORB_SLAM3
         double qvH = 0, qvZ = 0;     // read only when anisotropic
         // P9-C4 prediction-based innovation gate (Pedestrians.InnovGate: 0 | 1; metric maps only). All keys below are read only when the gate is on.
         bool innovGate = false;
+        bool innovShadow = false;                      // Pedestrians.InnovGate: 2 = log-only: tests are computed and logged at decision time, every measurement is accepted
+        double innovScale[4] = {1, 1, 1, 1};           // P9-C4 II: covariance scale s_k by chain age k of the tested measurement (k = 3, 4, 5, >= 6): reject iff d^2 > s_k chi2(0.99, dof)
         double innovChi2Dof2 = 0, innovChi2Dof3 = 0;   // rejection thresholds chi2(0.99, 2) and chi2(0.99, 3)
         int innovFreeKeyframes = 0;                    // the first this-many accepted measurements of a track are not gated
         int innovReinitRejections = 0;                 // this many consecutive rejections re-initialise the track

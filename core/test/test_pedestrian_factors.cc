@@ -467,7 +467,8 @@ static void C4Tests()
             "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
             "Pedestrians.GateK: 0.0\nPedestrians.FloorContact: none\nPedestrians.Dir: /x\n";
         const std::string gate = "Pedestrians.InnovGate: 1\nPedestrians.InnovChi2Dof2: 9.21034\nPedestrians.InnovChi2Dof3: 11.34487\nPedestrians.InnovFreeKeyframes: 2\n"
-                                 "Pedestrians.InnovReinitRejections: 3\nPedestrians.InnovP0PosXY: 0.2\nPedestrians.InnovP0PosZ: 0.06\nPedestrians.InnovP0VelXY: 0.19\nPedestrians.InnovP0VelZ: 0.08\n";
+                                 "Pedestrians.InnovReinitRejections: 3\nPedestrians.InnovP0PosXY: 0.2\nPedestrians.InnovP0PosZ: 0.06\nPedestrians.InnovP0VelXY: 0.19\nPedestrians.InnovP0VelZ: 0.08\n"
+                                 "Pedestrians.InnovScaleK3: 0.5\nPedestrians.InnovScaleK4: 0.8\nPedestrians.InnovScaleK5: 1.5\nPedestrians.InnovScaleK6: 2.0\n";
         auto cfg = [&](const std::string &extra) {
             cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);
             return PedestrianParams::Configure(fs);
@@ -485,7 +486,17 @@ static void C4Tests()
               "C4 settings: anisotropic");
         CHECK(throws("Pedestrians.MotionPrior: bogus\nPedestrians.InnovGate: 0\n"), "C4 settings: unknown MotionPrior throws");
         CHECK(throws("Pedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 1\n"), "C4 settings: gate on without its keys throws");
-        CHECK(cfg("Pedestrians.MotionPrior: isotropic\n" + gate) && PedestrianParams::Get().innovGate && PedestrianParams::Get().innovReinitRejections == 3, "C4 settings: gate on");
+        CHECK(cfg("Pedestrians.MotionPrior: isotropic\n" + gate) && PedestrianParams::Get().innovGate && !PedestrianParams::Get().innovShadow && PedestrianParams::Get().innovReinitRejections == 3 &&
+                  PedestrianParams::Get().innovScale[0] == 0.5 && PedestrianParams::Get().innovScale[3] == 2.0,
+              "C4 settings: gate on, with the s_k scales");
+        {
+            std::string shadow = gate;
+            shadow.replace(shadow.find("Pedestrians.InnovGate: 1"), 24, "Pedestrians.InnovGate: 2");
+            CHECK(cfg("Pedestrians.MotionPrior: isotropic\n" + shadow) && PedestrianParams::Get().innovGate && PedestrianParams::Get().innovShadow, "C4 settings: InnovGate 2 = shadow (log only)");
+            std::string noscale = gate.substr(0, gate.find("Pedestrians.InnovScaleK3"));
+            CHECK(throws("Pedestrians.MotionPrior: isotropic\n" + noscale), "C4 settings: gate on without InnovScaleK* throws");
+            CHECK(throws("Pedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 3\n"), "C4 settings: InnovGate 3 throws");
+        }
         PedestrianParams::Get() = PedestrianParams();
     }
     // 3. innovation gate: analytic cases of the production test (PedestrianGate.h)
@@ -534,6 +545,13 @@ static void C4Tests()
         const double s_cross = std::sqrt(P.innovChi2Dof3 / d2) * du;
         CHECK(!InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 0.999 * s_cross, v0, true, lz0).reject && InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0).reject,
               "gate: rejection flips at d^2 = chi2(0.99, 3)");
+        // s_k scales the covariance: the same offset is rejected at scale 1 and kept at a scale that moves the threshold above its d^2
+        {
+            const double dd = InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0).d2;
+            CHECK(InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0, 1.0).reject && !InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0, 1.01 * dd / P.innovChi2Dof3).reject &&
+                      InnovationTest(P, p, v, dt, Rcw, tcw, fx, fy, cx, cy, u0 + 1.001 * s_cross, v0, true, lz0, 0.5).reject,
+                  "gate: the scale s_k moves the rejection threshold (d^2 itself is unscaled)");
+        }
         // anisotropic Q is the active prior: a vertical offset is judged with q_z, not q_h
         PedestrianParams Pa = P;
         Pa.motionPrior = PedestrianParams::MotionPrior::Anisotropic;

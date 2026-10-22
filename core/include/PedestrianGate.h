@@ -6,7 +6,8 @@
 //               tuning data), Q(dt) = diag(q) kron [[dt^3/3, dt^2/2],[dt^2/2, dt]] of the ACTIVE motion prior (isotropic q_v, or (q_h, q_h, q_z))
 //   innovation  y = z - h(p^), h = (u, v[, log z]) of the keyframe camera, covariance S = J Sigma_pp J^T + R, R = diag(rootPxSigma^2, rootPxSigma^2,
 //               logDepthSigma^2) (the frozen measurement noise); the log-depth row only when the observation carries a range measurement
-//   test        reject if y^T S^-1 y > chi2(0.99, dof) (dof 3 with the range row, 2 without)
+//   test        reject if y^T S^-1 y > s_k chi2(0.99, dof) (dof 3 with the range row, 2 without); s_k = Pedestrians.InnovScaleK3/4/5/6 by chain age k of the tested
+//               measurement (P9-C4 II, calibrated on real tuning data); InnovGate: 2 = shadow: the test is computed and logged, everything is accepted
 //   chain       the first `innovFreeKeyframes` accepted measurements of a chain are not gated; `innovReinitRejections` consecutive rejections
 //               re-initialise the track (the measurement that completes the run starts a new chain)
 #ifndef PEDESTRIAN_GATE_H
@@ -39,7 +40,8 @@ namespace ORB_SLAM3
         // p, v: world-frame state of the predecessor; dt: time to the new keyframe; Rcw, tcw: pose of the new keyframe; (u, v): measured root pixel;
         // hasRange: the observation carries a range measurement, logZ = log(f cL H / l_px)
         inline GateTest InnovationTest(const PedestrianParams &P, const Eigen::Vector3d &p, const Eigen::Vector3d &v, double dt, const Eigen::Matrix3d &Rcw,
-                                       const Eigen::Vector3d &tcw, double fx, double fy, double cx, double cy, double u, double vpx, bool hasRange, double logZ)
+                                       const Eigen::Vector3d &tcw, double fx, double fy, double cx, double cy, double u, double vpx, bool hasRange, double logZ,
+                                       double scale = 1.0)
         {
             GateTest g;
             const Eigen::Vector3d ph = p + v * dt;
@@ -79,7 +81,7 @@ namespace ORB_SLAM3
             g.ok = true;
             g.dof = m;
             g.d2 = ym.dot(Sm.ldlt().solve(ym));
-            g.reject = g.d2 > (hasRange ? P.innovChi2Dof3 : P.innovChi2Dof2);
+            g.reject = g.d2 > scale * (hasRange ? P.innovChi2Dof3 : P.innovChi2Dof2); // scale = s_k: covariance scaled by s_k <=> threshold scaled by s_k
             return g;
         }
 

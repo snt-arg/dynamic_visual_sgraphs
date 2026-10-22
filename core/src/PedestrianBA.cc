@@ -220,12 +220,34 @@ namespace ORB_SLAM3
                                 {
                                     const Cam c = CameraOf(e.kf);
                                     const Sophus::SE3f Tcw = e.kf->GetPose();
+                                    const int kAge = ch.idx + 1; // chain age of this measurement (the first gated one is 3 with 2 free keyframes)
+                                    const double sk = P.innovScale[std::min(std::max(kAge, 3), 6) - 3];
                                     t = ped::InnovationTest(P, ps.p, ps.v, dt, Tcw.rotationMatrix().cast<double>(), Tcw.translation().cast<double>(), c.fx, c.fy, c.cx, c.cy,
                                                             e.obs->rootU, e.obs->rootV, e.rangeOk,
-                                                            std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx));
+                                                            std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx), sk);
                                 }
                             }
-                            rec = ped::GateStep(P, ch, havePred, t, dt, lastAcc ? lastAcc->mTimeStamp : 0.0);
+                            if (P.innovShadow)
+                            {
+                                // log-only (InnovGate: 2): the test is computed at decision time against the predecessor's current written-back state and logged
+                                // (d2, dof, dt; `tested` = the measurement would have been gated: chain age >= free + 1), every measurement is accepted
+                                rec = PedGateRec();
+                                rec.dt = dt;
+                                rec.predStamp = lastAcc ? lastAcc->mTimeStamp : 0.0;
+                                rec.status = PedGateRec::ACCEPTED;
+                                if (havePred && t.ok)
+                                {
+                                    rec.dof = t.dof;
+                                    rec.d2 = t.d2;
+                                    rec.tested = ch.idx >= P.innovFreeKeyframes;
+                                }
+                                ++ch.idx;
+                                ch.consecRej = 0;
+                                rec.chainIdx = ch.idx;
+                                rec.consecRej = 0;
+                            }
+                            else
+                                rec = ped::GateStep(P, ch, havePred, t, dt, lastAcc ? lastAcc->mTimeStamp : 0.0);
                             e.kf->SetPedGate(track, rec);
                             std::lock_guard<std::mutex> lk(gLogMutex);
                             gGateLog[{e.kf->mnId, track}] = {e.kf->mTimeStamp, rec};

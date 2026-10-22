@@ -9,7 +9,9 @@
 //   clean     known negative: rejection share <= 2 %, 0 re-initialisations
 //   idswitch  known positive: at keyframe K0 the track's measurements come from a second walker 3 m (horizontal) from the first; re-initialised within 4 keyframes (K0..K0+3)
 //   outliers  5 % of the measurements from keyframe index 2 on (past the free keyframes) have l_px scaled so that the range is off by +-30 %; share of them rejected
-// usage: synthetic_gate SCENARIO PRIOR(iso|aniso) NSEEDS [dt=0.2 nkf=60 logsigData=0.031 p0scale=1]
+// P9-C4 II: the gate carries the covariance scales s_k (k = 3, 4, 5, >=6; argument "s3,s4,s5,s6", default 1,1,1,1) and the data can carry the real-data log-range noise:
+//   logsigData = within-track sigma of an AR(1) (correlation time tauC seconds, phi = exp(-dt/tauC)), plus a per-track constant bias ~ N(0, biasSigma^2) (the graph has no bias state in "none").
+// usage: synthetic_gate SCENARIO PRIOR(iso|aniso) NSEEDS [dt=0.2 nkf=60 logsigData=0.031 p0scale=1 scales=1,1,1,1 tauC=0 biasSigma=0]
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -108,6 +110,10 @@ int main(int argc, char **argv)
     const int NKF = argc > 5 ? std::atoi(argv[5]) : 60;
     const double logsigData = argc > 6 ? std::atof(argv[6]) : 0.031;
     const double p0s = argc > 7 ? std::atof(argv[7]) : 1.0;
+    double sc[4] = {1, 1, 1, 1};
+    if (argc > 8)
+        std::sscanf(argv[8], "%lf,%lf,%lf,%lf", &sc[0], &sc[1], &sc[2], &sc[3]);
+    const double tauC = argc > 9 ? std::atof(argv[9]) : 0.0, biasSigma = argc > 10 ? std::atof(argv[10]) : 0.0;
     PedestrianParams P;
     P.rootPxSigma = PXSIG;
     P.logDepthSigma = 0.031;
@@ -126,6 +132,8 @@ int main(int argc, char **argv)
     P.innovP0PosZ = 0.0586 * p0s;
     P.innovP0VelXY = 0.1851 * p0s;
     P.innovP0VelZ = 0.0752 * p0s;
+    for (int q = 0; q < 4; ++q)
+        P.innovScale[q] = sc[q];
     const int K0 = 30;
     long gated = 0, rejected = 0, reinits = 0, seedsWithReinit = 0, nInj = 0, nInjRej = 0, nInjGateable = 0, nInjGateableRej = 0, seedsOk = 0, seedsReinitIn4 = 0;
     std::vector<int> reinitDelay;
@@ -149,6 +157,9 @@ int main(int argc, char **argv)
                 // the second walker is the track from K0 on: its start is 3 m (horizontal) from the first walker's position at K0
             }
             ok = true;
+            double ar = logsigData * N(rng); // stationary start
+            const double phi = tauC > 0 ? std::exp(-dt / tauC) : 0.0;
+            const double bTrack = biasSigma * N(rng);
             for (int k = 0; k < NKF && ok; ++k)
             {
                 const double th = 0.35 * std::sin(2 * M_PI * k * dt / 20.0), dist = 7.0;
@@ -166,7 +177,8 @@ int main(int argc, char **argv)
                 const Eigen::Vector3d Xc = m.Rcw * X + m.tcw;
                 m.u = F * Xc(0) / Xc(2) + CXP + PXSIG * N(rng);
                 m.v = F * Xc(1) / Xc(2) + CYP + PXSIG * N(rng);
-                m.lpx = F * CL * Ht / Xc(2) * std::exp(logsigData * N(rng));
+                ar = phi * ar + std::sqrt(1 - phi * phi) * logsigData * N(rng); // phi = 0: white noise of sigma logsigData
+                m.lpx = F * CL * Ht / Xc(2) * std::exp(ar + bTrack);
                 if (scen == "outliers" && k >= P.innovFreeKeyframes && Uni(rng) < 0.05)
                 {
                     m.lpx /= (Uni(rng) < 0.5 ? 1.3 : 0.7); // range x1.3 or x0.7
@@ -195,7 +207,7 @@ int main(int argc, char **argv)
             GateTest t;
             bool havePred = lastAcc >= 0 && has[lastAcc];
             if (havePred)
-                t = InnovationTest(P, est[lastAcc].head<3>(), est[lastAcc].tail<3>(), (i - lastAcc) * dt, m.Rcw, m.tcw, F, F, CXP, CYP, m.u, m.v, true, logz);
+                t = InnovationTest(P, est[lastAcc].head<3>(), est[lastAcc].tail<3>(), (i - lastAcc) * dt, m.Rcw, m.tcw, F, F, CXP, CYP, m.u, m.v, true, logz, P.innovScale[std::min(std::max(ch.idx + 1, 3), 6) - 3]);
             const PedGateRec r = GateStep(P, ch, havePred, t, (i - lastAcc) * dt, 0);
             if (r.tested)
             {
@@ -321,7 +333,7 @@ int main(int argc, char **argv)
         }
         (void)seedsOk;
     }
-    std::printf("scenario %s prior %s seeds %d dt %.2f nkf %d logsigData %.3f p0scale %.2f\n", scen.c_str(), prior.c_str(), nseeds, dt, NKF, logsigData, p0s);
+    std::printf("scenario %s prior %s seeds %d dt %.2f nkf %d logsigData %.4f p0scale %.2f scales %.4g,%.4g,%.4g,%.4g tauC %.2f biasSigma %.4f\n", scen.c_str(), prior.c_str(), nseeds, dt, NKF, logsigData, p0s, sc[0], sc[1], sc[2], sc[3], tauC, biasSigma);
     if (scen == "clean")
     {
         const double share = gated ? static_cast<double>(rejected) / gated : 0.0;
