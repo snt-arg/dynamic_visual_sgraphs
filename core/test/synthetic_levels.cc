@@ -602,7 +602,7 @@ int main(int argc, char **argv)
             for (int k = std::min(10, n - 1); k < n; ++k)
             {
                 const Obs &o = W.obs[w][k];
-                if (!o.vis || !has[w][k])
+                if (!o.vis || !has[w][k] || o.stairContact)   // S6 criterion 8: the range error is judged on level-ground samples (stairs give no floor factor)
                     continue;
                 const Eigen::Vector3d Xc = W.kf[k].Rcw * est[w][k].head<3>() + W.kf[k].tcw, Xt = W.kf[k].Rcw * o.p + W.kf[k].tcw;
                 // S6 / S3 / S4 criteria 1-3 are judged on contacts on level ground; the range error is judged for all samples of the track in the scenarios other than S6
