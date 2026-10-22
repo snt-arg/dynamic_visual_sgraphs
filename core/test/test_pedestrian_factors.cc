@@ -695,6 +695,26 @@ static void FloorPxSettingsTests()
     CHECK(cfg("Pedestrians.FloorContact: joint_px\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::JointPx && PedestrianParams::Get().floorNeighbours == 5, "C3c settings: joint_px");
     CHECK(cfg("Pedestrians.FloorContact: shadow\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Shadow, "C3c settings: shadow");
     CHECK(cfg("Pedestrians.FloorContact: none\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "C3c settings: none reads no floor key");
+    // P9-C5 levels: every calibrated key is required, no defaults
+    const std::string lv = "Pedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n"
+                           "Pedestrians.LevelSigmaA: 0.05\nPedestrians.LevelSigmaPt: 0.03\nPedestrians.LevelSMax: 0.2\n";
+    CHECK(cfg("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\n" + lv) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Levels &&
+              !PedestrianParams::Get().platformHeight && PedestrianParams::Get().levelSigmaA == 0.05 && PedestrianParams::Get().levelSMax == 0.2,
+          "C5 settings: levels, platform off");
+    CHECK(cfg("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: on\nPedestrians.PlatformHeightM: 1.4895\nPedestrians.PlatformSigmaM: 0.036\n" + lv) &&
+              PedestrianParams::Get().platformHeight && PedestrianParams::Get().platformHeightM == 1.4895 && PedestrianParams::Get().platformSigmaM == 0.036,
+          "C5 settings: levels, platform on reads h_cam and sigma_h");
+    CHECK(cfg("Pedestrians.FloorContact: levels_shadow\nPedestrians.PlatformHeight: off\n" + lv) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::LevelsShadow, "C5 settings: levels_shadow");
+    CHECK(throws("Pedestrians.FloorContact: levels\n" + lv), "C5 settings: levels without PlatformHeight throws");
+    CHECK(throws("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: on\n" + lv), "C5 settings: PlatformHeight on without h_cam / sigma_h throws");
+    CHECK(throws("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: maybe\n" + lv), "C5 settings: an unknown PlatformHeight value throws");
+    for (const char *key : {"LevelSigmaA", "LevelSigmaPt", "LevelSMax"})
+    {
+        std::string cut = lv;
+        const size_t a = cut.find(std::string("Pedestrians.") + key + ":");
+        cut.erase(a, cut.find('\n', a) - a + 1);
+        CHECK(throws("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\n" + cut), std::string("C5 settings: levels without ") + key + " throws (calibrated, no default)");
+    }
     PedestrianParams::Get() = PedestrianParams();
 }
 
