@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <set>
 #include <random>
 #include <sstream>
 #include <vector>
@@ -84,6 +85,8 @@ struct Obs
     bool hasFoot = false;
     bool stairContact = false;
     double floorTrue = 0;
+    Eigen::Vector3d vel = Eigen::Vector3d::Zero();   // true root velocity (posterior sigma of the levels is evaluated at the true state)
+    bool informative = false;                        // c5_gate_revision.md: foot-ray depression >= 5 deg below the horizon, from the true geometry
 };
 
 struct World
@@ -93,7 +96,7 @@ struct World
     std::vector<double> bTrue;
     std::vector<int> levelOf;           // S3/S4/S6: nominal level of the track (0 upper, 1 lower)
     std::vector<Eigen::Vector3d> pts;   // map points
-    std::vector<double> levelsTrue;
+    std::vector<double> levelsTrue, stepSurfaces;
 };
 
 static bool Project(const KF &k, const Eigen::Vector3d &Xw, Eigen::Vector2d &px, double &depth)
@@ -127,6 +130,7 @@ struct Scen
     double pitch = 12.0;
     double lowerZ = -0.8;                  // S3: second level; S4: 1.5 (the upper); S6: -2.8
     std::vector<double> trueLevels;
+    std::vector<double> stepSurfaces;       // S6: tread heights (not wrong levels in the revised criterion S2)
 };
 
 static Scen MakeScen(const std::string &n)
@@ -172,6 +176,8 @@ static Scen MakeScen(const std::string &n)
         s.level = {0, 0, 2, 2};
         s.bTrue = {-0.05, 0.05, 0.05, -0.05};
         s.trueLevels = {0.0, -2.8};
+        for (int k = 1; k <= 16; ++k)
+            s.stepSurfaces.push_back(-0.175 * k);
         s.texturedLower = true;   // patch C does not make S6 textureless (only S3's lower level is, task step 4)
         s.pitch = 14.0;
     }
@@ -187,6 +193,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     W.bTrue = S.bTrue;
     W.levelOf = S.level;
     W.levelsTrue = S.trueLevels;
+    W.stepSurfaces = S.stepSurfaces;
     const Eigen::Matrix3d Rcw0 = CamRot(S.pitch);
     // walkers
     struct Wk { Eigen::Vector2d p, v; double hL = 0, hR = 0, phase; double stairPhase; };
@@ -231,6 +238,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             o.stairContact = S.terrain.OnStairs(a.p(0));
             const double H = H0 * std::exp(S.bTrue[w]);
             o.p = Eigen::Vector3d(a.p(0), a.p(1), fl + 0.55 * H);
+            o.vel = Eigen::Vector3d(a.v(0), a.v(1), 0.0);
             Eigen::Vector2d px;
             double z;
             if (!Project(kf, o.p, px, z))
@@ -256,6 +264,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             o.hasFoot = vL && vR && !S.noFeet;
             if (o.hasFoot)
             {
+                o.informative = std::atan2(kf.cam(2) - (fl + DELTA_V), std::hypot(a.p(0) - kf.cam(0), a.p(1) - kf.cam(1))) >= 5.0 * M_PI / 180.0;
                 const Eigen::Vector2d mid = 0.5 * (pL + pR);
                 o.mu = mid(0) + CPX_U * N(rng);
                 o.mv = mid(1) + CPX_V * N(rng);
@@ -297,6 +306,70 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     return true;
 }
 
+// ---- posterior sigma of the 1-D level variables from the information matrix of the final window (Huber off, evaluated at the true state): H = sum J' Omega J with numeric
+// Jacobians of every edge (independent of the analytic ones), dense; sigma_l = sqrt([H^-1]_ll) (pseudo-inverse).
+static Eigen::MatrixXd NumJacE(g2o::OptimizableGraph::Edge *e, int vi, double h = 1e-6)
+{
+    auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(e->vertex(vi));
+    const int d = v->dimension(), m = e->dimension();
+    Eigen::MatrixXd J(m, d);
+    for (int k = 0; k < d; ++k)
+    {
+        Eigen::VectorXd delta = Eigen::VectorXd::Zero(d);
+        delta(k) = h;
+        v->push(); v->oplus(delta.data()); e->computeError();
+        Eigen::VectorXd ep = Eigen::Map<const Eigen::VectorXd>(e->errorData(), m);
+        v->pop();
+        delta(k) = -h;
+        v->push(); v->oplus(delta.data()); e->computeError();
+        Eigen::VectorXd em = Eigen::Map<const Eigen::VectorXd>(e->errorData(), m);
+        v->pop();
+        J.col(k) = (ep - em) / (2 * h);
+    }
+    e->computeError();
+    return J;
+}
+
+static std::map<int, double> PosteriorSigmas(g2o::SparseOptimizer &opt, const std::vector<int> &ids)
+{
+    std::map<int, int> off;
+    int dim = 0;
+    for (const auto &kv : opt.vertices())
+    {
+        auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(kv.second);
+        if (v->fixed())
+            continue;
+        off[kv.first] = dim;
+        dim += v->dimension();
+    }
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(dim, dim);
+    for (g2o::HyperGraph::Edge *eb : opt.edges())
+    {
+        auto *e = static_cast<g2o::OptimizableGraph::Edge *>(eb);
+        const int m = e->dimension(), nv = static_cast<int>(e->vertices().size());
+        Eigen::Map<const Eigen::MatrixXd> info(e->informationData(), m, m);
+        std::vector<Eigen::MatrixXd> J(nv);
+        std::vector<int> o(nv, -1);
+        for (int a = 0; a < nv; ++a)
+        {
+            auto *v = static_cast<g2o::OptimizableGraph::Vertex *>(e->vertex(a));
+            if (v->fixed())
+                continue;
+            o[a] = off[v->id()];
+            J[a] = NumJacE(e, a);
+        }
+        for (int a = 0; a < nv; ++a)
+            for (int b = 0; b < nv; ++b)
+                if (o[a] >= 0 && o[b] >= 0)
+                    H.block(o[a], o[b], J[a].cols(), J[b].cols()) += J[a].transpose() * info * J[b];
+    }
+    const Eigen::MatrixXd Hinv = H.completeOrthogonalDecomposition().pseudoInverse();
+    std::map<int, double> out;
+    for (int id : ids)
+        out[id] = std::sqrt(std::max(0.0, Hinv(off[id], off[id])));
+    return out;
+}
+
 struct TrackStat
 {
     std::vector<double> errPct;     // signed (range - truth) / truth, per keyframe i >= 10
@@ -325,6 +398,8 @@ int main(int argc, char **argv)
 
     std::vector<double> trackMedSigned, trackMedAbs, trackMedAbsPm5, trackMedAbsPm5Upper;
     long nStairC = 0, nStairFlag = 0, nLevelC = 0, nLevelFlag = 0;
+    int seedsWrongLevel = 0;
+    long nLevelNearEdge = 0, nLevelNearEdgeFlag = 0;
     int seedsLevelAtStep = 0, seedsFurnitureLevel = 0, seedsAnyLevelAt = 0, nLevelsNoContactsCheck = 0;
     std::vector<double> levelErr;       // |z - nearest true| of every final level with >= 20 contacts
     long nLevelsTotal = 0, nLevelsBad = 0, nSeedsWithLevels = 0;
@@ -583,6 +658,39 @@ int main(int argc, char **argv)
                 opt.optimize(10);
                 for (const auto &kv : lv)
                     LS.SetHeight(kv.first, kv.second->estimate());
+                if (i == n - 1 && perTrack)
+                {
+                    // posterior sigma of the levels at the true state (Huber off); the level error is taken from the solved estimate
+                    std::map<int, std::pair<double, int>> errN;   // id -> (error, contacts)
+                    for (const auto &kv : lv)
+                    {
+                        double zt = 0, best = 1e9;
+                        for (double t : W.levelsTrue)
+                            if (std::abs(kv.second->estimate() - t) < best) { best = std::abs(kv.second->estimate() - t); zt = t; }
+                        int nc = 0;
+                        for (const auto &L : LS.Levels())
+                            if (L.id == kv.first) nc = L.nContacts;
+                        errN[kv.first] = {kv.second->estimate() - zt, nc};
+                        kv.second->setEstimate(zt);
+                    }
+                    for (int w = 0; w < NTRK; ++w)
+                    {
+                        if (vb[w]) vb[w]->setEstimate(W.bTrue[w]);
+                        for (int k = first; k <= i; ++k)
+                            if (st[w][k])
+                            {
+                                Vec6 x;
+                                x << W.obs[w][k].p, W.obs[w][k].vel;
+                                st[w][k]->setEstimate(x);
+                            }
+                    }
+                    std::vector<int> ids;
+                    std::map<int, int> vid;
+                    for (const auto &kv : lv) { ids.push_back(kv.second->id()); vid[kv.second->id()] = kv.first; }
+                    const std::map<int, double> sg = PosteriorSigmas(opt, ids);
+                    for (const auto &kv : sg)
+                        std::printf("LVSIG seed=%d id=%d err=%+.5f sigma_post=%.5f n=%d\n", seed, vid[kv.first], errN[vid[kv.first]].first, kv.second, errN[vid[kv.first]].second);
+                }
             }
             else
             {
@@ -629,10 +737,15 @@ int main(int argc, char **argv)
             }
             bHatAbs.push_back(std::abs(bPers[w]));
             if (perTrack)
-                std::printf("TRACK seed=%d w=%d b_true=%+.2f b_hat=%+.4f med_signed_pct=%+.3f med_abs_pct=%.3f\n", seed, w, W.bTrue[w], bPers[w], ms, ma);
+            {
+                int nf = 0, ni = 0;
+                for (int k = 0; k < n; ++k)
+                    if (W.obs[w][k].vis && W.obs[w][k].hasFoot) { ++nf; ni += W.obs[w][k].informative ? 1 : 0; }
+                std::printf("TRACK seed=%d w=%d b_true=%+.2f b_hat=%+.4f med_signed_pct=%+.3f med_abs_pct=%.3f n_foot=%d inf_frac=%.4f\n", seed, w, W.bTrue[w], bPers[w], ms, ma, nf, nf ? double(ni) / nf : 0.0);
+            }
         }
         // levels at the end
-        bool furnLevel = false, stepLevel = false;
+        bool furnLevel = false, stepLevel = false, wrongLevel = false;
         for (const auto &L : LS.Levels())
         {
             double dn = 1e9;
@@ -651,7 +764,13 @@ int main(int argc, char **argv)
                 furnLevel = true;
             if (dn > 0.10)
                 stepLevel = true;
+            double dw = dn;
+            for (double zs : W.stepSurfaces)
+                dw = std::min(dw, std::abs(L.z - zs));
+            if (dw > 0.10)
+                wrongLevel = true;
         }
+        seedsWrongLevel += wrongLevel;
         if (!LS.Levels().empty())
             ++nSeedsWithLevels;
         seedsFurnitureLevel += furnLevel;
@@ -666,6 +785,17 @@ int main(int argc, char **argv)
             (stair ? nStairC : nLevelC) += 1;
             if (kv.second)
                 (stair ? nStairFlag : nLevelFlag) += 1;
+            if (!stair)
+            {
+                bool nearEdge = false;   // within one transitional window (1.5 s) of a sample of this walker on the stairs
+                for (int j = 0; j < n && !nearEdge; ++j)
+                    nearEdge = W.obs[w][j].stairContact && std::abs(W.kf[j].t - W.kf[k].t) <= LP.transWindowS;
+                if (nearEdge)
+                {
+                    ++nLevelNearEdge;
+                    nLevelNearEdgeFlag += kv.second ? 1 : 0;
+                }
+            }
         }
     }
     auto med = [](std::vector<double> v) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
@@ -673,8 +803,8 @@ int main(int argc, char **argv)
     std::sort(levelErr.begin(), levelErr.end());
     std::printf("scen=%s cand=%s NKF=%d seeds=%d tracks=%zu spread_sd_pct=%.4f median_abs_pct_all=%.4f median_abs_pct_pm5=%.4f median_abs_pct_pm5_upper=%.4f median_signed_pct=%.4f "
                 "levels_ge20=%ld levels_bad_5cm=%ld max_level_err_m=%.4f seeds_with_levels=%ld seeds_furniture_level=%d seeds_level_off_truth_10cm=%d "
-                "stair_contacts=%ld stair_flagged=%ld level_contacts=%ld level_flagged=%ld median_abs_bhat=%.4f seeds_levels_when_nofeet=%d\n",
+                "stair_contacts=%ld stair_flagged=%ld level_contacts=%ld level_flagged=%ld median_abs_bhat=%.4f seeds_levels_when_nofeet=%d seeds_wrong_level=%d level_near_edge=%ld level_near_edge_flagged=%ld\n",
                 scen.c_str(), cand.c_str(), NKF, nseeds, trackMedSigned.size(), sd(trackMedSigned), med(trackMedAbs), med(trackMedAbsPm5), med(trackMedAbsPm5Upper), med(trackMedSigned), nLevelsTotal,
-                nLevelsBad, levelErr.empty() ? 0.0 : levelErr.back(), nSeedsWithLevels, seedsFurnitureLevel, seedsLevelAtStep, nStairC, nStairFlag, nLevelC, nLevelFlag, med(bHatAbs), nLevelsNoContactsCheck);
+                nLevelsBad, levelErr.empty() ? 0.0 : levelErr.back(), nSeedsWithLevels, seedsFurnitureLevel, seedsLevelAtStep, nStairC, nStairFlag, nLevelC, nLevelFlag, med(bHatAbs), nLevelsNoContactsCheck, seedsWrongLevel, nLevelNearEdge, nLevelNearEdgeFlag);
     return 0;
 }
