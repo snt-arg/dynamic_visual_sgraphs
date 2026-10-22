@@ -705,6 +705,11 @@ static void FloorPxSettingsTests()
               PedestrianParams::Get().platformHeight && PedestrianParams::Get().platformHeightM == 1.4895 && PedestrianParams::Get().platformSigmaM == 0.036,
           "C5 settings: levels, platform on reads h_cam and sigma_h");
     CHECK(cfg("Pedestrians.FloorContact: levels_shadow\nPedestrians.PlatformHeight: off\n" + lv) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::LevelsShadow, "C5 settings: levels_shadow");
+    CHECK(cfg("Pedestrians.FloorContact: levels_platform\nPedestrians.PlatformHeightM: 1.4895\nPedestrians.PlatformSigmaM: 0.036\n" + lv) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Levels &&
+              PedestrianParams::Get().platformHeight && PedestrianParams::Get().platformHeightM == 1.4895,
+          "C5 settings: levels_platform = levels with the platform prior on");
+    CHECK(throws("Pedestrians.FloorContact: levels_platform\n" + lv), "C5 settings: levels_platform without PlatformHeightM / PlatformSigmaM throws");
+    CHECK(throws("Pedestrians.FloorContact: levels_platform\nPedestrians.PlatformHeight: on\nPedestrians.PlatformHeightM: 1.4895\nPedestrians.PlatformSigmaM: 0.036\n" + lv), "C5 settings: levels_platform with a PlatformHeight key throws");
     CHECK(throws("Pedestrians.FloorContact: levels\n" + lv), "C5 settings: levels without PlatformHeight throws");
     CHECK(throws("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: on\n" + lv), "C5 settings: PlatformHeight on without h_cam / sigma_h throws");
     CHECK(throws("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: maybe\n" + lv), "C5 settings: an unknown PlatformHeight value throws");

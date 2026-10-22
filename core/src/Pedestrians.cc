@@ -72,8 +72,10 @@ namespace ORB_SLAM3
             p.floorMode = FloorMode::Levels;
         else if (fm == "levels_shadow")
             p.floorMode = FloorMode::LevelsShadow;
+        else if (fm == "levels_platform")
+            p.floorMode = FloorMode::Levels; // = levels + the platform-height prior F3 (Pedestrians.PlatformHeightM / PlatformSigmaM required; no PlatformHeight key)
         else
-            throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional, joint, shadow, regional_px, joint_px, levels or levels_shadow, got " + fm);
+            throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional, joint, shadow, regional_px, joint_px, levels, levels_platform or levels_shadow, got " + fm);
         if (p.floorMode == FloorMode::Levels || p.floorMode == FloorMode::LevelsShadow)
         {
             p.floorMidDeltaM = Req(fs, "Pedestrians.FloorMidDeltaM");
@@ -90,9 +92,12 @@ namespace ORB_SLAM3
             if (p.biasMinContacts < 0)
                 throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
             const cv::FileNode ph = fs["Pedestrians.PlatformHeight"];
-            if (ph.empty())
+            const bool aliasPlatform = fm == "levels_platform";
+            if (aliasPlatform && !ph.empty())
+                throw std::runtime_error("[Pedestrians] FloorContact levels_platform already means the platform prior is on: remove Pedestrians.PlatformHeight");
+            if (!aliasPlatform && ph.empty())
                 throw std::runtime_error("[Pedestrians] FloorContact levels needs Pedestrians.PlatformHeight (off | on)");
-            const std::string phs = static_cast<std::string>(ph);
+            const std::string phs = aliasPlatform ? "on" : static_cast<std::string>(ph);
             if (phs == "on")
             {
                 p.platformHeight = true;

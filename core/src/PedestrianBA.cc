@@ -56,6 +56,7 @@ namespace ORB_SLAM3
             int nContacts = 0, nPointsMax = 0, merges = 0;
         };
         std::map<std::pair<unsigned long, int>, LevelStat> gLevelStat; // (map id, level id)
+        std::map<std::tuple<unsigned long, unsigned long, int>, double> gBiasRow; // P9-C5: (map id, kf id, track) -> the track's log-scale bias b at the last write
         struct PtRow // P9-C5 (levels_shadow only): a static map point within the RANSAC radius of a non-transitional contact, its latest position and nearest contact
         {
             double x, y, z, d;
@@ -1178,6 +1179,7 @@ namespace ORB_SLAM3
         f << "# P9-C5 contacts. map_id kf_id stamp track hc level_id level_z transitional n_levels\n";
         f << "# L map_id level_id z n_contacts n_f2_points_max n_merges_map\n";
         f << "# P map_id point_id x y z dist_to_nearest_contact kf_of_that_contact track_of_that_contact (levels_shadow only)\n";
+        f << "# B map_id kf_id track b  (the track's log-scale bias at the last write of that state; levels / levels_platform)\n";
         char buf[384];
         std::lock_guard<std::mutex> lk(gLogMutex);
         for (const auto &kv : gLevelLog)
@@ -1190,6 +1192,11 @@ namespace ORB_SLAM3
         for (const auto &kv : gPtLog)
         {
             std::snprintf(buf, sizeof(buf), "P %lu %lu %a %a %a %a %lu %d\n", kv.first.first, kv.first.second, kv.second.x, kv.second.y, kv.second.z, kv.second.d, kv.second.kf, kv.second.track);
+            f << buf;
+        }
+        for (const auto &kv : gBiasRow)
+        {
+            std::snprintf(buf, sizeof(buf), "B %lu %lu %d %a\n", std::get<0>(kv.first), std::get<1>(kv.first), std::get<2>(kv.first), kv.second);
             f << buf;
         }
         for (const auto &kv : gLevelStat)
@@ -1218,7 +1225,15 @@ namespace ORB_SLAM3
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
     {
         for (const auto &bh : g.biases)
+        {
             pMap->SetPedBias(bh.track, bh.v->estimate());
+            for (const auto &s : g.states)
+                if (s.track == bh.track && !s.fixed)
+                {
+                    std::lock_guard<std::mutex> lk(gLogMutex);
+                    gBiasRow[{pMap->GetId(), s.kf->mnId, s.track}] = bh.v->estimate();
+                }
+        }
         if (!g.levels.empty())
         {
             std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
