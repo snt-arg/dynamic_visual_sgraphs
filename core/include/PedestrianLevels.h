@@ -26,6 +26,8 @@ namespace ORB_SLAM3
             double sigmaA, sigmaPt, sMax;              // calibrated
             double assocK, createK, mergeK;            // 3, 2, 2 (multiples of sigmaA)
             int createMinContacts, createMinTracks;    // 10, 2
+            double createMinExtentM;                   // 1.0: founding contacts must span >= this horizontally (c5_gate_revision.md, design change 2)
+            double edgeGuardS;                         // 1.5 (= transWindowS): a contact this close in time to a transitional contact of its track never enters the pool (design change 1)
             double transWindowS, transMinTravelM;      // 1.5, 0.5
             int transMinContacts;                      // 4
             double ransacThrK, ransacRadiusM;          // 2 (x sigmaPt), 1.0
@@ -46,6 +48,8 @@ namespace ORB_SLAM3
             P.mergeK = 2;
             P.createMinContacts = 10;
             P.createMinTracks = 2;
+            P.createMinExtentM = 1.0;
+            P.edgeGuardS = 1.5;
             P.transWindowS = 1.5;
             P.transMinTravelM = 0.5;
             P.transMinContacts = 4;
@@ -167,6 +171,29 @@ namespace ORB_SLAM3
             // Contacts are assigned `level` in place. Returns the number of levels created.
             int Update(std::vector<Contact> &cs)
             {
+                // edge guard (c5_gate_revision.md, design change 1): times of the transitional contacts of each track in this window
+                std::map<int, std::vector<double>> transT;
+                for (const Contact &c : cs)
+                    if (c.transitional)
+                        transT[c.track].push_back(c.t);
+                auto guarded = [&](const Contact &c) {
+                    auto it = transT.find(c.track);
+                    if (it == transT.end())
+                        return false;
+                    for (double t : it->second)
+                        if (std::abs(t - c.t) <= P.edgeGuardS)
+                            return true;
+                    return false;
+                };
+                // flags are retrospective (a window is complete only when its last contact arrives): a pooled contact that the current window now places within one
+                // guard time of a transitional contact of its track leaves the pool
+                {
+                    std::vector<Contact> keep;
+                    for (const Contact &c : pool)
+                        if (!guarded(c))
+                            keep.push_back(c);
+                    pool.swap(keep);
+                }
                 for (Contact &c : cs)
                 {
                     c.level = Associate(c);
@@ -176,7 +203,7 @@ namespace ORB_SLAM3
                         if (fresh)
                             ++Find(c.level).nContacts;
                     }
-                    else if (!c.transitional && fresh)
+                    else if (!c.transitional && fresh && !guarded(c))
                         pool.push_back(c);
                 }
                 int created = 0;
@@ -189,8 +216,9 @@ namespace ORB_SLAM3
                 return created;
             }
 
-            // Pool-based creation: the densest +-createK sigmaA cluster of pooled h; created when it has >= createMinContacts contacts from
-            // >= createMinTracks tracks. Initial z is the median; the pooled contacts of the cluster are consumed.
+            // Pool-based creation: candidate clusters = the +-createK sigmaA neighbourhoods of the pooled heights, tried in order of decreasing size (ties: lower height).
+            // A cluster creates a level when it has >= createMinContacts contacts from >= createMinTracks tracks AND the contacts span >= createMinExtentM horizontally
+            // (largest pairwise distance; a stair tread is 0.28 m deep, c5_gate_revision.md design change 2). Initial z is the median; the cluster's contacts are consumed.
             bool CreateFromPool()
             {
                 if (static_cast<int>(pool.size()) < P.createMinContacts)
@@ -200,41 +228,55 @@ namespace ORB_SLAM3
                     hs.push_back(c.h);
                 std::sort(hs.begin(), hs.end());
                 const double w = P.createK * P.sigmaA;
-                int bestI = -1, bestN = 0;
-                for (int i = 0; i < static_cast<int>(hs.size()); ++i)
+                std::vector<std::pair<int, double>> cand; // (-count, centre)
+                for (size_t i = 0; i < hs.size(); ++i)
                 {
+                    if (i > 0 && hs[i] == hs[i - 1])
+                        continue;
                     int n = 0;
                     for (double h : hs)
                         n += std::abs(h - hs[i]) <= w ? 1 : 0;
-                    if (n > bestN)
-                    {
-                        bestN = n;
-                        bestI = i;
-                    }
+                    cand.push_back({-n, hs[i]});
                 }
-                std::vector<double> in;
-                std::set<int> tracks;
-                for (const Contact &c : pool)
-                    if (std::abs(c.h - hs[bestI]) <= w)
-                    {
-                        in.push_back(c.h);
-                        tracks.insert(c.track);
-                    }
-                if (static_cast<int>(in.size()) < P.createMinContacts || static_cast<int>(tracks.size()) < P.createMinTracks)
-                    return false;
-                std::sort(in.begin(), in.end());
-                const double med = in.size() % 2 ? in[in.size() / 2] : 0.5 * (in[in.size() / 2 - 1] + in[in.size() / 2]);
-                Level L;
-                L.id = nextId++;
-                L.z = med;
-                L.nContacts = static_cast<int>(in.size());
-                levels.push_back(L);
-                std::vector<Contact> rest;
-                for (const Contact &c : pool)
-                    if (std::abs(c.h - med) > w)
-                        rest.push_back(c);
-                pool.swap(rest);
-                return true;
+                std::sort(cand.begin(), cand.end());
+                for (const auto &cd : cand)
+                {
+                    if (-cd.first < P.createMinContacts)
+                        break; // sorted: no later candidate is larger
+                    std::vector<const Contact *> in;
+                    std::set<int> tracks;
+                    for (const Contact &c : pool)
+                        if (std::abs(c.h - cd.second) <= w)
+                        {
+                            in.push_back(&c);
+                            tracks.insert(c.track);
+                        }
+                    if (static_cast<int>(tracks.size()) < P.createMinTracks)
+                        continue;
+                    double ext = 0;
+                    for (size_t a = 0; a < in.size() && ext < P.createMinExtentM; ++a)
+                        for (size_t b = a + 1; b < in.size(); ++b)
+                            ext = std::max(ext, std::hypot(in[a]->x - in[b]->x, in[a]->y - in[b]->y));
+                    if (ext < P.createMinExtentM)
+                        continue;
+                    std::vector<double> hh;
+                    for (const Contact *c : in)
+                        hh.push_back(c->h);
+                    std::sort(hh.begin(), hh.end());
+                    const double med = hh.size() % 2 ? hh[hh.size() / 2] : 0.5 * (hh[hh.size() / 2 - 1] + hh[hh.size() / 2]);
+                    Level L;
+                    L.id = nextId++;
+                    L.z = med;
+                    L.nContacts = static_cast<int>(hh.size());
+                    levels.push_back(L);
+                    std::vector<Contact> rest;
+                    for (const Contact &c : pool)
+                        if (std::abs(c.h - med) > w)
+                            rest.push_back(c);
+                    pool.swap(rest);
+                    return true;
+                }
+                return false;
             }
 
             // Merge pairs closer than mergeK sigmaA by the contact-count weighted mean; the lower id survives.

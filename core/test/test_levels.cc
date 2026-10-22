@@ -13,7 +13,7 @@ static LevelParams TP()
     LevelParams P;
     P.sigmaA = 0.05; P.sigmaPt = 0.03; P.sMax = 0.2;
     P.assocK = 3; P.createK = 2; P.mergeK = 2;
-    P.createMinContacts = 10; P.createMinTracks = 2;
+    P.createMinContacts = 10; P.createMinTracks = 2; P.createMinExtentM = 1.0; P.edgeGuardS = 1.5;
     P.transWindowS = 1.5; P.transMinTravelM = 0.5; P.transMinContacts = 4;
     P.ransacThrK = 2; P.ransacRadiusM = 1.0; P.ransacMinInliers = 5; P.ransacMaxOffsetK = 3;
     P.ransacIters = RansacIterations(0.99, 0.5);
@@ -64,6 +64,23 @@ int main()
       const int n1 = S.Levels()[0].nContacts; auto a2 = a, b2 = b; S.Update(a2); S.Update(b2);
       CHECK(S.Levels().size() == 1 && S.Levels()[0].nContacts == n1, "overlapping BA windows: the same (keyframe, track) contacts are not counted twice");
       auto lone = Walk(7, 12, 1.0, 1.5, 0, 0, &g, 0.01); S.Update(lone); auto lone2 = lone; S.Update(lone2); CHECK(S.PoolSize() == 12, "overlapping windows: the same contacts are not pooled twice"); }
+
+    // ---- c5_gate_revision.md: creation guard
+    { LevelSet S(P); std::vector<Contact> cs; std::uniform_real_distribution<double> U(0, 0.28);
+      for (int tr = 1; tr <= 2; ++tr) for (int i = 0; i < 12; ++i) { Contact c; c.track = tr; c.kf = i; c.t = i / 6.0; c.x = 9.0 + U(g); c.y = 0.1 * tr; c.h = -0.175 + 0.01 * (i % 3 - 1); cs.push_back(c); }
+      S.Update(cs); CHECK(S.Levels().empty() && S.PoolSize() == 24, "a stair-tread cluster (24 contacts of 2 tracks, 0.28 m deep) never creates a level and stays pooled"); }
+    { LevelSet S(P); auto a = Walk(1, 12, 0.3, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 0.3, 0.0, 0, 0, &g, 0.01); S.Update(a); S.Update(b);
+      CHECK(S.Levels().empty(), "12+12 contacts spanning 0.6 m (< 1.0 m) create no level"); auto c = Walk(1, 12, 1.0, 0.0, 0, 20, &g, 0.01); for (auto &x : c) x.kf += 100; S.Update(c);
+      CHECK(S.Levels().size() == 1, "once the pooled contacts of the cluster span >= 1.0 m an ordinary level is created"); }
+    { LevelSet S(P); std::vector<Contact> cs; auto w1 = Walk(1, 6, 1.0, 0.0, 0, 0, &g, 0.005); cs = w1;       // t 0 .. 0.83 s, flat
+      for (int i = 0; i < 6; ++i) { Contact c; c.track = 1; c.kf = 50 + i; c.t = 3.0 + i / 6.0; c.x = 4 + i * 0.2; c.y = 0; c.h = -0.2 * i; c.transitional = true; cs.push_back(c); }   // flagged at t 3 .. 3.83
+      Contact near; near.track = 1; near.kf = 70; near.t = 4.8; near.x = 5.5; near.y = 0; near.h = -1.0; cs.push_back(near);                             // 0.97 s after the last flagged contact -> guarded
+      Contact far; far.track = 1; far.kf = 71; far.t = 6.0; far.x = 6.5; far.y = 0; far.h = -1.0; cs.push_back(far);                                     // 2.17 s after -> pooled
+      S.Update(cs); CHECK(S.PoolSize() == 6 + 1, "edge guard: a contact within 1.5 s of a flagged contact of its track is not pooled (6 flat + 1 far pooled, the near one not)"); }
+    for (double tf : {1.2, 1.8})
+    { LevelSet S(P); auto a = Walk(1, 4, 1.0, 0.0, 0, 0, &g, 0.005); S.Update(a); CHECK(S.PoolSize() == 4, "edge guard setup: 4 contacts pooled (t = 0, 1/6, 1/3, 1/2 s)"); std::vector<Contact> cs = a; Contact f; f.track = 1; f.kf = 90; f.t = tf; f.x = 2; f.y = 0; f.h = -0.5; f.transitional = true; cs.push_back(f);
+      S.Update(cs); const size_t expect = tf == 1.2 ? 0 : 2;   // 1.2 s: all four within 1.5 s; 1.8 s: only t = 1/3 and 1/2 s (1.47, 1.30 s)
+      CHECK(S.PoolSize() == expect, std::string("edge guard is retrospective: flag at t = ") + std::to_string(tf) + " s leaves " + std::to_string(expect) + " pooled contacts (got " + std::to_string(S.PoolSize()) + ")"); }
 
     // ---- RANSAC
     {
