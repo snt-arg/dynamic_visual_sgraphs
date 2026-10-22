@@ -536,6 +536,127 @@ namespace ORB_SLAM3
             bool grad;
         };
 
+
+        // ---------------------------------------------------------------- P9-C5 floor levels as landmark states
+        // A level is a horizontal plane z = z_l in the gravity-aligned frame of one map (the S-Graphs floor layer). Additive update.
+        class VertexFloorLevel : public g2o::BaseVertex<1, double>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            VertexFloorLevel() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            void setToOriginImpl() override { _estimate = 0.0; }
+            void oplusImpl(const double *u) override { _estimate += u[0]; }
+        };
+
+        // F1: contact factor. Vertices: (0) VertexPedState, (1) camera pose, (2) VertexFloorLevel.
+        //   F = (p_x, p_y, z_l + delta_v),  e = (u, v)_contact - pi(Rcw F + tcw)   (sign convention of EdgePedReproj / EdgePedFloorPx)
+        // Jacobians: dF/dp_xy = I, dF/dz_l = e_z, so  de/dp_xy = -dpi Rcw[:, 0:2],  de/dz_l = -dpi Rcw[:, 2],  de/dxi = -dpi M(Xc) (PoseTraits::dXc).
+        template <class PoseV>
+        class EdgePedLevelPx : public g2o::BaseMultiEdge<2, Eigen::Vector2d>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedLevelPx(double fx_, double fy_, double cx_, double cy_, double u, double v, double deltaM)
+                : fx(fx_), fy(fy_), cx(cx_), cy(cy_), delta(deltaM)
+            {
+                this->resize(3);
+                this->_measurement << u, v;
+            }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+
+            Eigen::Vector3d Xc(Eigen::Matrix3d *Rcw_out = nullptr) const
+            {
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw;
+                PoseTraits<PoseV>::Get(static_cast<const PoseV *>(this->_vertices[1]), Rcw, tcw);
+                if (Rcw_out)
+                    *Rcw_out = Rcw;
+                const Eigen::Vector3d p = static_cast<const VertexPedState *>(this->_vertices[0])->p();
+                const double zl = static_cast<const VertexFloorLevel *>(this->_vertices[2])->estimate();
+                return Rcw * Eigen::Vector3d(p(0), p(1), zl + delta) + tcw;
+            }
+            void computeError() override
+            {
+                const Eigen::Vector3d X = Xc();
+                const double z = X(2) > 1e-6 ? X(2) : 1e-6;
+                this->_error << this->_measurement(0) - (fx * X(0) / z + cx), this->_measurement(1) - (fy * X(1) / z + cy);
+            }
+            void linearizeOplus() override
+            {
+                Eigen::Matrix3d Rcw;
+                const Eigen::Vector3d X = Xc(&Rcw);
+                const double z = X(2) > 1e-6 ? X(2) : 1e-6;
+                Eigen::Matrix<double, 2, 3> dpi;
+                dpi << fx / z, 0.0, -fx * X(0) / (z * z), 0.0, fy / z, -fy * X(1) / (z * z);
+                this->_jacobianOplus[0].setZero();
+                this->_jacobianOplus[0].template leftCols<2>() = -dpi * Rcw.template leftCols<2>();
+                this->_jacobianOplus[1] = -dpi * PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), X);
+                this->_jacobianOplus[2] = -dpi * Rcw.col(2);
+            }
+            double fx, fy, cx, cy, delta;
+        };
+
+        // F2: static map point on a level. Vertices: (0) g2o::VertexSBAPointXYZ (live or fixed), (1) VertexFloorLevel.  e = z_point - z_l.
+        class EdgePedPointOnLevel : public g2o::BaseBinaryEdge<1, double, g2o::VertexSBAPointXYZ, VertexFloorLevel>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedPointOnLevel() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            void computeError() override
+            {
+                this->_error(0) = static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[0])->estimate()(2) -
+                                  static_cast<const VertexFloorLevel *>(this->_vertices[1])->estimate();
+            }
+            void linearizeOplus() override
+            {
+                this->_jacobianOplusXi.setZero();
+                this->_jacobianOplusXi(0, 2) = 1.0;
+                this->_jacobianOplusXj(0, 0) = -1.0;
+            }
+        };
+
+        // F3: platform-height prior. Vertices: (0) camera pose, (1) VertexFloorLevel of the level under the camera.  e = z_cam - z_l - h_cam, z_cam the
+        // camera-centre height C_z, C = -Rcw^T tcw. A fixed world point at C has Xc = 0, and dXc = -Rcw dC for any pose update (the rotation terms
+        // multiply Xc = 0), so dC/dxi = -Rcw^T M(0), M = PoseTraits::dXc(., 0); the Jacobian row is the third row of that.
+        template <class PoseV>
+        class EdgePedPlatformHeight : public g2o::BaseBinaryEdge<1, double, PoseV, VertexFloorLevel>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedPlatformHeight() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            // _measurement = h_cam
+            static double CamZ(const PoseV *v)
+            {
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw;
+                PoseTraits<PoseV>::Get(v, Rcw, tcw);
+                return (-Rcw.transpose() * tcw)(2);
+            }
+            void computeError() override
+            {
+                this->_error(0) = CamZ(static_cast<const PoseV *>(this->_vertices[0])) -
+                                  static_cast<const VertexFloorLevel *>(this->_vertices[1])->estimate() - this->_measurement;
+            }
+            void linearizeOplus() override
+            {
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw;
+                const PoseV *C = static_cast<const PoseV *>(this->_vertices[0]);
+                PoseTraits<PoseV>::Get(C, Rcw, tcw);
+                const Eigen::Matrix<double, 3, 6> M0 = PoseTraits<PoseV>::dXc(C, Eigen::Vector3d::Zero());
+                this->_jacobianOplusXi = (-Rcw.transpose() * M0).row(2);
+                this->_jacobianOplusXj(0, 0) = -1.0;
+            }
+        };
+
     } // namespace ped
 } // namespace ORB_SLAM3
 

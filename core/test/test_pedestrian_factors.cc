@@ -146,7 +146,9 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, VertexPose>>(e, vi, J) || TryBinary<EdgePedWna>(e, vi, J) ||
         TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryUnary<EdgePedBiasPrior>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
         TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J) ||
-        TryMulti<EdgePedFloorPx<SE3>>(e, vi, J) || TryMulti<EdgePedFloorPx<VertexPose>>(e, vi, J))
+        TryMulti<EdgePedFloorPx<SE3>>(e, vi, J) || TryMulti<EdgePedFloorPx<VertexPose>>(e, vi, J) ||
+        TryMulti<EdgePedLevelPx<SE3>>(e, vi, J) || TryMulti<EdgePedLevelPx<VertexPose>>(e, vi, J) ||
+        TryBinary<EdgePedPointOnLevel>(e, vi, J) || TryBinary<EdgePedPlatformHeight<SE3>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
@@ -696,8 +698,64 @@ static void FloorPxSettingsTests()
     PedestrianParams::Get() = PedestrianParams();
 }
 
+// ---- P9-C5: floor-level factors F1 (contact), F2 (point on level), F3 (platform height) -------------------------------
+template <class PoseV>
+static void LevelTests(const char *tag)
+{
+    const double fx = 415.7, fy = 413.2, cx = 360.0, cy = 240.0, zl = 0.2, delta = 0.053;
+    const Eigen::Matrix3d Rwc0 = (Eigen::Matrix3d() << 0, 0, 1, -1, 0, 0, 0, -1, 0).finished();
+    const Eigen::Matrix3d Rwc = Eigen::AngleAxisd(0.21, Eigen::Vector3d::UnitY()).toRotationMatrix() * Rwc0;
+    const Eigen::Vector3d C(0.3, -0.2, 1.7);
+    const Eigen::Matrix3d Rcw = Rwc.transpose();
+    PoseV *pose = MakePose<PoseV>(Rcw, -Rcw * C);
+    VertexPedState state;
+    Vec6 x;
+    x << 3.1, -0.15, 1.15, 0.2, 0.1, 0.0;
+    state.setEstimate(x);
+    VertexFloorLevel lvl;
+    lvl.setEstimate(zl);
+
+    // F1: the residual vanishes when the pixel is the projection of (p_x, p_y, z_l + delta); Jacobians agree with central differences
+    const Eigen::Vector3d X = Rcw * Eigen::Vector3d(3.1, -0.15, zl + delta) + (-Rcw * C);
+    const double u = fx * X(0) / X(2) + cx, v = fy * X(1) / X(2) + cy;
+    EdgePedLevelPx<PoseV> f1(fx, fy, cx, cy, u + 4.0, v - 3.0, delta);
+    f1.setVertex(0, &state);
+    f1.setVertex(1, pose);
+    f1.setVertex(2, &lvl);
+    f1.computeError();
+    CHECK(std::abs(f1.error()(0) - 4.0) < 1e-9 && std::abs(f1.error()(1) + 3.0) < 1e-9, std::string("F1 level contact [") + tag + "]: e = contact pixel - pi(F), F = (p_x, p_y, z_l + delta_v)");
+    CheckEdge(&f1, std::string("F1 level contact [") + tag + "]");
+    CHECK(f1.Jac(2).cwiseAbs().maxCoeff() > 0.1, std::string("F1 level contact [") + tag + "]: the level block is non-trivial");
+    lvl.setEstimate(zl + 0.3);
+    CheckEdge(&f1, std::string("F1 level contact, other level [") + tag + "]");
+
+    // F2: e = z_point - z_l
+    g2o::VertexSBAPointXYZ pt;
+    pt.setEstimate(Eigen::Vector3d(1.0, 2.0, 0.27));
+    lvl.setEstimate(zl);
+    EdgePedPointOnLevel f2;
+    f2.setVertex(0, &pt);
+    f2.setVertex(1, &lvl);
+    f2.setMeasurement(0.0);
+    f2.computeError();
+    CHECK(std::abs(f2.error()(0) - 0.07) < 1e-12, std::string("F2 point on level [") + tag + "]: e = z_point - z_l");
+    CheckEdge(&f2, std::string("F2 point on level [") + tag + "]");
+
+    // F3: e = C_z - z_l - h_cam
+    EdgePedPlatformHeight<PoseV> f3;
+    f3.setVertex(0, pose);
+    f3.setVertex(1, &lvl);
+    f3.setMeasurement(1.4895);
+    f3.computeError();
+    CHECK(std::abs(f3.error()(0) - (1.7 - zl - 1.4895)) < 1e-12, std::string("F3 platform height [") + tag + "]: e = C_z - z_l - h_cam");
+    CheckEdge(&f3, std::string("F3 platform height [") + tag + "]");
+    delete pose;
+}
+
 int main()
 {
+    LevelTests<g2o::VertexSE3Expmap>("SE3");
+    LevelTests<VertexPose>("VertexPose");
     FloorPxTests<g2o::VertexSE3Expmap>("SE3");
     FloorPxTests<VertexPose>("VertexPose");
     FloorPxGateTests();
