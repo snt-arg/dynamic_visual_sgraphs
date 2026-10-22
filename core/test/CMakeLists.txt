@@ -47,3 +47,11 @@ target_link_libraries(synthetic_gate ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${
   ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
 set_target_properties(synthetic_gate PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
+
+add_executable(synthetic_floor_px synthetic_floor_px.cc)
+target_include_directories(synthetic_floor_px PRIVATE ${ORB_SLAM3_DIR} ${ORB_SLAM3_DIR}/include ${ORB_SLAM3_DIR}/include/CameraModels
+  ${ORB_SLAM3_DIR}/Thirdparty/Sophus ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} ${Pangolin_INCLUDE_DIRS})
+target_link_libraries(synthetic_floor_px ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+  ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
+set_target_properties(synthetic_floor_px PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
