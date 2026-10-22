@@ -56,6 +56,13 @@ namespace ORB_SLAM3
             int nContacts = 0, nPointsMax = 0, merges = 0;
         };
         std::map<std::pair<unsigned long, int>, LevelStat> gLevelStat; // (map id, level id)
+        struct PtRow // P9-C5 (levels_shadow only): a static map point within the RANSAC radius of a non-transitional contact, its latest position and nearest contact
+        {
+            double x, y, z, d;
+            unsigned long kf;
+            int track;
+        };
+        std::map<std::pair<unsigned long, unsigned long>, PtRow> gPtLog; // (map id, map point id)
         long gFloorSkipped[4] = {0, 0, 0, 0}; // no foot observation (not counted), no regional z_f, no neighbours, grazing ray
         struct GateRow
         {
@@ -771,6 +778,32 @@ namespace ORB_SLAM3
                     std::lock_guard<std::mutex> lk(gLogMutex);
                     gLevelLog[{mapId, cs[i].kf, cs[i].track}] = lr;
                 }
+                if (levelsShadow)
+                {
+                    // calibration log of the points a level's RANSAC would see (sigma_pt, F2 coverage): points within ransacRadiusM of any non-transitional contact
+                    const double r2 = LP.ransacRadiusM * LP.ransacRadiusM;
+                    for (const StaticPt &sp : statics)
+                    {
+                        double bd = r2;
+                        long bi = -1;
+                        for (size_t i = 0; i < cs.size(); ++i)
+                        {
+                            if (cs[i].transitional)
+                                continue;
+                            const double d2 = (sp.x(0) - cs[i].x) * (sp.x(0) - cs[i].x) + (sp.x(1) - cs[i].y) * (sp.x(1) - cs[i].y);
+                            if (d2 <= bd)
+                            {
+                                bd = d2;
+                                bi = static_cast<long>(i);
+                            }
+                        }
+                        if (bi >= 0)
+                        {
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            gPtLog[{mapId, sp.id}] = {sp.x(0), sp.x(1), sp.x(2), std::sqrt(bd), cs[bi].kf, cs[bi].track};
+                        }
+                    }
+                }
                 if (!levelsShadow)
                 {
                     for (const auto &lc : lvContacts)
@@ -1144,6 +1177,7 @@ namespace ORB_SLAM3
         std::ofstream f(path);
         f << "# P9-C5 contacts. map_id kf_id stamp track hc level_id level_z transitional n_levels\n";
         f << "# L map_id level_id z n_contacts n_f2_points_max n_merges_map\n";
+        f << "# P map_id point_id x y z dist_to_nearest_contact kf_of_that_contact track_of_that_contact (levels_shadow only)\n";
         char buf[384];
         std::lock_guard<std::mutex> lk(gLogMutex);
         for (const auto &kv : gLevelLog)
@@ -1151,6 +1185,11 @@ namespace ORB_SLAM3
             const LevelRow &r = kv.second;
             std::snprintf(buf, sizeof(buf), "%lu %lu %.9f %d %a %d %a %d %d\n", std::get<0>(kv.first), std::get<1>(kv.first), r.stamp, std::get<2>(kv.first), r.hc, r.level, r.levelZ,
                           r.transitional, r.nLevels);
+            f << buf;
+        }
+        for (const auto &kv : gPtLog)
+        {
+            std::snprintf(buf, sizeof(buf), "P %lu %lu %a %a %a %a %lu %d\n", kv.first.first, kv.first.second, kv.second.x, kv.second.y, kv.second.z, kv.second.d, kv.second.kf, kv.second.track);
             f << buf;
         }
         for (const auto &kv : gLevelStat)
