@@ -19,6 +19,7 @@
 
 #include "PedestrianBA.h"
 #include "PedestrianFactors.h"
+#include "PedestrianFloorGate.h"
 #include "PedestrianGate.h"
 #include "Pedestrians.h"
 
@@ -144,7 +145,8 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, SE3>>(e, vi, J) ||
         TryBinary<g2o::BaseBinaryEdge<2, Eigen::Vector2d, Pt, VertexPose>>(e, vi, J) || TryBinary<EdgePedWna>(e, vi, J) ||
         TryMulti<EdgePedLogRange<SE3>>(e, vi, J) || TryMulti<EdgePedLogRange<VertexPose>>(e, vi, J) || TryUnary<EdgePedBiasPrior>(e, vi, J) || TryMulti<EdgePedTie1>(e, vi, J) ||
-        TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J))
+        TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J) ||
+        TryMulti<EdgePedFloorPx<SE3>>(e, vi, J) || TryMulti<EdgePedFloorPx<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
@@ -590,8 +592,116 @@ static void C4Tests()
     PedestrianParams::Get() = PedestrianParams();
 }
 
+// ---- P9-C3c: midpoint floor contact (image-space residual), gates, settings -------------------------------------------
+template <class PoseV>
+static void FloorPxTests(const char *tag)
+{
+    const double fx = 415.7, cx = 360.0, cy = 240.0, zf = 0.2, dv = 0.053;
+    const Eigen::Matrix3d Rwc0 = (Eigen::Matrix3d() << 0, 0, 1, -1, 0, 0, 0, -1, 0).finished();
+    const Eigen::Matrix3d Rwc = Eigen::AngleAxisd(0.21, Eigen::Vector3d::UnitY()).toRotationMatrix() * Rwc0;
+    const Eigen::Vector3d C(0.3, -0.2, 1.7);
+    const Eigen::Matrix3d Rcw = Rwc.transpose();
+    const Eigen::Vector3d tcw = -Rcw * C;
+    PoseV *pose = MakePose<PoseV>(Rcw, tcw);
+    const double u = 372.0, v = 330.0;
+    VertexPedState state;
+    Vec6 x;
+    x << 3.1, -0.15, 1.15, 0.2, 0.1, 0.0;
+    state.setEstimate(x);
+    EdgePedFloorPx<PoseV> A(fx, fx, cx, cy, u, v, 0, zf, dv, /*poseGradient=*/true);
+    A.setVertex(0, &state);
+    A.setVertex(1, pose);
+    A.computeError();
+    const Eigen::Vector3d Xc = Rcw * Eigen::Vector3d(3.1, -0.15, zf + dv) + tcw;
+    CHECK(std::abs(A.error()(0) - (u - (fx * Xc(0) / Xc(2) + cx))) < 1e-12 && std::abs(A.error()(1) - (v - (fx * Xc(1) / Xc(2) + cy))) < 1e-12,
+          std::string("floor px A' [") + tag + "]: residual = contact pixel - pi(R (p_x, p_y, z_f + delta_v) + t)");
+    CheckEdge(&A, std::string("floor px A' (pose gradient) [") + tag + "]");
+    CHECK(Analytic(&A, 0).col(2).cwiseAbs().maxCoeff() == 0.0 && Analytic(&A, 0).template rightCols<3>().cwiseAbs().maxCoeff() == 0.0, std::string("floor px [") + tag + "]: the root height and the velocity do not enter the factor");
+    EdgePedFloorPx<PoseV> Ap(fx, fx, cx, cy, u, v, 0, zf, dv, /*poseGradient=*/false);
+    Ap.setVertex(0, &state);
+    Ap.setVertex(1, pose);
+    CHECK(Analytic(&Ap, 1).cwiseAbs().maxCoeff() == 0.0 && (Analytic(&Ap, 0) - Analytic(&A, 0)).cwiseAbs().maxCoeff() == 0.0, std::string("floor px A' pedestrian-only [") + tag + "]: pose block exactly zero, state block unchanged");
+    CHECK(NumJac(&Ap, 1).cwiseAbs().maxCoeff() > 1e-3, std::string("floor px A' pedestrian-only [") + tag + "]: the residual does depend on the pose");
+    std::vector<g2o::VertexSBAPointXYZ *> pts;
+    const double dz[5] = {0.03, -0.02, 0.05, -0.01, 0.0};
+    for (int i = 0; i < 5; ++i)
+    {
+        auto *pv = new g2o::VertexSBAPointXYZ();
+        pv->setEstimate(Eigen::Vector3d(2.5 + 0.3 * i, -0.4 + 0.2 * i, zf + dz[i]));
+        pts.push_back(pv);
+    }
+    EdgePedFloorPx<PoseV> B(fx, fx, cx, cy, u, v, 5, 99.0, dv, /*poseGradient=*/true);
+    B.setVertex(0, &state);
+    B.setVertex(1, pose);
+    for (int i = 0; i < 5; ++i)
+        B.setVertex(2 + i, pts[i]);
+    CHECK(std::abs(B.FloorHeight() - (zf + 0.05 / 5)) < 1e-12, std::string("floor px B' [") + tag + "]: floor height = mean z of the k points");
+    CheckEdge(&B, std::string("floor px B' [") + tag + "]");
+    for (int i = 0; i < 5; ++i)
+        pts[i]->setEstimate(Eigen::Vector3d(2.5 + 0.3 * i, -0.4 + 0.2 * i, zf));
+    A.computeError();
+    B.computeError();
+    CHECK((A.error() - B.error()).cwiseAbs().maxCoeff() < 1e-12 && (Analytic(&A, 0) - Analytic(&B, 0)).cwiseAbs().maxCoeff() < 1e-12 && (Analytic(&A, 1) - Analytic(&B, 1)).cwiseAbs().maxCoeff() < 1e-12,
+          std::string("floor px B' == A' [") + tag + "]: same residual and state / pose Jacobians when every neighbour lies on the floor plane");
+    for (auto *pv : pts)
+        delete pv;
+    delete pose;
+}
+
+static void FloorPxGateTests()
+{
+    PedestrianParams P;
+    P.floorRaisedMaxM = 0.10;
+    P.floorMinElevDeg = 8.0;
+    P.floorNeighbours = 5;
+    P.floorPlaneSigmaMaxM = 0.02;
+    CHECK(ped::FloorStageA(P, 0.05, 0.0, 12.0) == 0, "floor px gates: a contact 5 cm above the global floor mode at 12 deg passes");
+    CHECK(ped::FloorStageA(P, 0.101, 0.0, 12.0) == 2 && ped::FloorStageA(P, 0.099, 0.0, 12.0) == 0, "floor px gates: raised-surface rejection flips at 0.10 m above the global lowest floor mode");
+    CHECK(ped::FloorStageA(P, 0.0, 0.0, 7.99) == 3 && ped::FloorStageA(P, 0.0, 0.0, 8.0) == 0, "floor px gates: the elevation gate flips at FloorMinElevDeg");
+    CHECK(ped::FloorStageA(P, 0.0, 0.0, -3.0) == 3, "floor px gates: a ray above the horizon is rejected");
+    CHECK(ped::FloorStageA(P, 0.5, 0.0, 2.0) == 2, "floor px gates: the raised-surface stage is decided first");
+    CHECK(ped::FloorStageB(P, 4, 0.001) == 4 && ped::FloorStageB(P, 5, 0.001) == 0, "floor px B' gates: at least 5 qualifying points");
+    CHECK(ped::FloorStageB(P, 20, 0.0199) == 0 && ped::FloorStageB(P, 20, 0.02) == 5, "floor px B' gates: plane scatter must be below 2 cm");
+}
+
+static void FloorPxSettingsTests()
+{
+    const std::string base =
+        "%YAML:1.0\n---\nPedestrians.Enabled: 1\nPedestrians.RootPxSigma: 1.5\nPedestrians.LogDepthSigma: 0.031\nPedestrians.SkeletonOverStature: 0.855387\n"
+        "Pedestrians.StatureFixedM: 1.7\nPedestrians.Qv: 0.1386\nPedestrians.FootprintPxSigma: 2.0\nPedestrians.T1Sigma: 0.02\nPedestrians.T2Sigma: 0.1\n"
+        "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
+        "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
+        "Pedestrians.GateK: 0.0\nPedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 0\nPedestrians.Dir: /x\n";
+    const std::string common = "Pedestrians.FloorRegionRadiusM: 6.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n"
+                               "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
+    const std::string px = "Pedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\nPedestrians.FloorZfBiasM: 0.02\nPedestrians.FloorRaisedMaxM: 0.10\n"
+                           "Pedestrians.FloorMinElevDeg: 8.0\nPedestrians.FloorPlaneSigmaMaxM: 0.02\n";
+    const std::string nb = "Pedestrians.FloorNeighbours: 5\nPedestrians.FloorNeighbourRadiusM: 1.0\nPedestrians.FloorBandM: 0.05\n";
+    auto cfg = [&](const std::string &extra) {
+        cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);
+        return PedestrianParams::Configure(fs);
+    };
+    auto throws = [&](const std::string &extra) {
+        try { cfg(extra); } catch (const std::runtime_error &) { return true; }
+        return false;
+    };
+    CHECK(cfg("Pedestrians.FloorContact: regional_px\n" + common + px) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::RegionalPx && PedestrianParams::Get().floorMidDeltaM == 0.053 &&
+              PedestrianParams::Get().floorZfBiasM == 0.02,
+          "C3c settings: regional_px reads the midpoint keys and no range-space key");
+    CHECK(throws("Pedestrians.FloorContact: regional_px\n" + common), "C3c settings: regional_px without the midpoint keys throws");
+    CHECK(throws("Pedestrians.FloorContact: joint_px\n" + common + px), "C3c settings: joint_px without FloorNeighbours / radius / band throws");
+    CHECK(cfg("Pedestrians.FloorContact: joint_px\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::JointPx && PedestrianParams::Get().floorNeighbours == 5, "C3c settings: joint_px");
+    CHECK(cfg("Pedestrians.FloorContact: shadow\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Shadow, "C3c settings: shadow");
+    CHECK(cfg("Pedestrians.FloorContact: none\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "C3c settings: none reads no floor key");
+    PedestrianParams::Get() = PedestrianParams();
+}
+
 int main()
 {
+    FloorPxTests<g2o::VertexSE3Expmap>("SE3");
+    FloorPxTests<VertexPose>("VertexPose");
+    FloorPxGateTests();
+    FloorPxSettingsTests();
     C4Tests();
     FloorTests<g2o::VertexSE3Expmap>("SE3");
     FloorTests<VertexPose>("VertexPose");

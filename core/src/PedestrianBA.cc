@@ -1,4 +1,5 @@
 #include "PedestrianBA.h"
+#include "PedestrianFloorGate.h"
 #include "PedestrianGate.h"
 
 #include <algorithm>
@@ -35,6 +36,12 @@ namespace ORB_SLAM3
             int nPts;
         };
         std::map<std::pair<unsigned long, int>, FloorRec> gFloorLog;
+        struct PxRec // P9-C3c: one midpoint contact seen by the geometry / gates
+        {
+            double stamp = 0, zfRaw = 0, zfGlob = 0, elev = 0, u = 0, v = 0, sigQual = 0, resU = 0, resV = 0;
+            int stage = 0, nRegion = 0, nQual = 0;
+        };
+        std::map<std::pair<unsigned long, int>, PxRec> gPxLog;
         long gFloorSkipped[4] = {0, 0, 0, 0}; // no foot observation (not counted), no regional z_f, no neighbours, grazing ray
         struct GateRow
         {
@@ -126,6 +133,9 @@ namespace ORB_SLAM3
             const PedestrianParams &P = PedestrianParams::Get();
             PedGraph G;
             const bool floorOn = metric && P.floorMode != PedestrianParams::FloorMode::None;
+            const bool pxMode = P.floorMode == PedestrianParams::FloorMode::Shadow || P.floorMode == PedestrianParams::FloorMode::RegionalPx || P.floorMode == PedestrianParams::FloorMode::JointPx;
+            const bool shadowMode = P.floorMode == PedestrianParams::FloorMode::Shadow;
+            const bool jointPx = P.floorMode == PedestrianParams::FloorMode::JointPx;
 
             // P9-C3: static map points of the map (non-bad, ordered by id -> deterministic); for Variant B also their BA vertices
             struct StaticPt
@@ -145,7 +155,7 @@ namespace ORB_SLAM3
                     if (!mp || mp->isBad())
                         continue;
                     g2o::VertexSBAPointXYZ *vv = nullptr;
-                    if (P.floorMode == PedestrianParams::FloorMode::Joint)
+                    if (P.floorMode == PedestrianParams::FloorMode::Joint || jointPx)
                         vv = dynamic_cast<g2o::VertexSBAPointXYZ *>(opt.vertex(static_cast<int>(mp->mnId + mpVertexBase)));
                     statics.push_back({mp->mnId, mp->GetWorldPos().cast<double>(), vv});
                 }
@@ -284,7 +294,7 @@ namespace ORB_SLAM3
 
                 // P9-C3b: per-track log-scale bias b_j (Variants A / B only; "none" keeps b = 0 and the 2-vertex range edge)
                 ped::VertexPedBias *vbias = nullptr;
-                if (floorOn)
+                if (floorOn && !shadowMode)
                 {
                     const int contacts = static_cast<int>(std::count_if(E.begin(), E.end(), [](const Entry &en) { return en.obs->hasFoot && !en.fixed; }));
                     if (contacts >= P.biasMinContacts)
@@ -379,7 +389,115 @@ namespace ORB_SLAM3
                         Tag(G, PedGraph::RANGE, edge);
                         ++G.nRange;
                     }
-                    if (floorOn && e.obs->hasFoot && !e.fixed)
+                    if (floorOn && pxMode && e.obs->hasFoot && !e.fixed)
+                    {
+                        // P9-C3c midpoint contact: regional z_f (bias-corrected), raised-surface rejection, elevation gate, B': local plane through the qualifying static points
+                        const Sophus::SE3f Twc = e.kf->GetPoseInverse();
+                        const Eigen::Vector3d cam = Twc.translation().cast<double>();
+                        const Eigen::Vector3d p0 = e.v->p();
+                        PxRec rec;
+                        rec.stamp = e.kf->mTimeStamp;
+                        rec.u = e.obs->footU;
+                        rec.v = e.obs->footV;
+                        std::vector<g2o::VertexSBAPointXYZ *> nb;
+                        double zfc = 0;
+                        const PedestrianBA::FloorEstimate fe =
+                            PedestrianBA::RegionalFloor(staticXyz, p0.template head<2>(), cam(2), P.floorRegionRadiusM, P.floorBinM, P.floorBelowCameraM, P.floorMinPoints, P.floorLowModeFraction);
+                        if (!fe.ok)
+                        {
+                            rec.stage = 1;
+                            ++G.nPxNoZf;
+                        }
+                        else
+                        {
+                            rec.zfRaw = fe.zf;
+                            rec.nRegion = fe.nRegion;
+                            const PedestrianBA::FloorEstimate gl =
+                                PedestrianBA::RegionalFloor(staticXyz, p0.template head<2>(), cam(2), 1e6, P.floorBinM, P.floorBelowCameraM, P.floorMinPoints, P.floorLowModeFraction);
+                            rec.zfGlob = gl.ok ? gl.zf : fe.zf;
+                            zfc = fe.zf - P.floorZfBiasM;
+                            const Eigen::Vector3d bray((e.obs->footU - c.cx) / c.fx, (e.obs->footV - c.cy) / c.fy, 1.0);
+                            const Eigen::Vector3d dw = (Twc.rotationMatrix() * bray.cast<float>()).cast<double>();
+                            rec.elev = std::asin(std::max(-1.0, std::min(1.0, -dw(2) / dw.norm()))) * 180.0 / M_PI;
+                            rec.stage = ped::FloorStageA(P, fe.zf, rec.zfGlob, rec.elev);
+                            G.nPxRaised += rec.stage == 2;
+                            G.nPxElev += rec.stage == 3;
+                            if (rec.stage == 0 && P.floorMode != PedestrianParams::FloorMode::RegionalPx)
+                            {
+                                // qualifying points: within the band of the corrected z_f and within the radius of the contact (horizontal distance to the root state)
+                                std::vector<std::pair<double, size_t>> cand;
+                                std::vector<double> zq;
+                                for (size_t q = 0; q < statics.size(); ++q)
+                                {
+                                    const StaticPt &sp = statics[q];
+                                    if (std::abs(sp.x(2) - zfc) > P.floorBandM)
+                                        continue;
+                                    const double d = (sp.x.template head<2>() - p0.template head<2>()).norm();
+                                    if (d > P.floorNeighbourRadiusM)
+                                        continue;
+                                    zq.push_back(sp.x(2));
+                                    if (sp.v && !sp.v->fixed())
+                                        cand.push_back({d, q});
+                                }
+                                rec.nQual = static_cast<int>(zq.size());
+                                if (rec.nQual > 0)
+                                {
+                                    double m = 0;
+                                    for (double z : zq)
+                                        m += z;
+                                    m /= zq.size();
+                                    double ss = 0;
+                                    for (double z : zq)
+                                        ss += (z - m) * (z - m);
+                                    rec.sigQual = std::sqrt(ss / zq.size());
+                                }
+                                rec.stage = ped::FloorStageB(P, rec.nQual, rec.sigQual);
+                                G.nPxNoNeighbours += rec.stage == 4;
+                                G.nPxPlane += rec.stage == 5;
+                                if (rec.stage == 0 && jointPx)
+                                {
+                                    std::sort(cand.begin(), cand.end(), [&](const std::pair<double, size_t> &a, const std::pair<double, size_t> &b) {
+                                        return a.first != b.first ? a.first < b.first : statics[a.second].id < statics[b.second].id;
+                                    });
+                                    if (static_cast<int>(cand.size()) < P.floorNeighbours)
+                                    {
+                                        rec.stage = 4;
+                                        ++G.nPxNoNeighbours;
+                                    }
+                                    else
+                                        for (int q = 0; q < P.floorNeighbours; ++q)
+                                            nb.push_back(statics[cand[q].second].v);
+                                }
+                            }
+                        }
+                        if (rec.stage == 0 && !shadowMode)
+                        {
+                            const int k = static_cast<int>(nb.size());
+                            auto *fl = new ped::EdgePedFloorPx<PoseV>(c.fx, c.fy, c.cx, c.cy, e.obs->footU, e.obs->footV, k, zfc, P.floorMidDeltaM, /*poseGradient=*/jointPx);
+                            fl->setVertex(0, e.v);
+                            fl->setVertex(1, vpose);
+                            for (int q = 0; q < k; ++q)
+                            {
+                                nb[q]->setMarginalized(false); // the plane height couples k landmarks: they cannot stay in the Schur landmark block
+                                fl->setVertex(2 + q, nb[q]);
+                            }
+                            fl->setMeasurement(Eigen::Vector2d(e.obs->footU, e.obs->footV));
+                            Eigen::Matrix2d I = Eigen::Matrix2d::Zero();
+                            I(0, 0) = 1.0 / (P.floorSigmaPxU * P.floorSigmaPxU);
+                            I(1, 1) = 1.0 / (P.floorSigmaPxV * P.floorSigmaPxV);
+                            fl->setInformation(I);
+                            auto *rk = new g2o::RobustKernelHuber();
+                            rk->setDelta(kHuber2D * P.huberScale);
+                            fl->setRobustKernel(rk);
+                            opt.addEdge(fl);
+                            Tag(G, PedGraph::FLOOR, fl);
+                            ++G.nFloor;
+                            G.pxFloors.push_back({e.kf->mnId, track, fl});
+                        }
+                        std::lock_guard<std::mutex> lk(gLogMutex);
+                        gPxLog[{e.kf->mnId, track}] = rec;
+                    }
+                    if (floorOn && !pxMode && e.obs->hasFoot && !e.fixed)
                     {
                         const Sophus::SE3f Twc = e.kf->GetPoseInverse();
                         const Eigen::Vector3d cam = Twc.translation().cast<double>();
@@ -786,6 +904,22 @@ namespace ORB_SLAM3
         }
     }
 
+    void PedestrianBA::DumpFloorPxLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "# P9-C3c midpoint contacts seen by the gates. stage 0 pass / 1 no regional z_f / 2 raised surface / 3 elevation / 4 too few qualifying points / 5 plane scatter\n";
+        f << "# kf_id stamp track stage zf_raw zf_glob elev_deg u v nRegion nQual sigQual res_u res_v\n";
+        char buf[384];
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        for (const auto &kv : gPxLog)
+        {
+            const PxRec &r = kv.second;
+            std::snprintf(buf, sizeof(buf), "%lu %.9f %d %d %a %a %a %a %a %d %d %a %a %a\n", kv.first.first, r.stamp, kv.first.second, r.stage, r.zfRaw, r.zfGlob, r.elev, r.u, r.v, r.nRegion, r.nQual,
+                          r.sigQual, r.resU, r.resV);
+            f << buf;
+        }
+    }
+
     void PedestrianBA::DumpFloorLog(const std::string &path)
     {
         std::ofstream f(path);
@@ -806,6 +940,14 @@ namespace ORB_SLAM3
     {
         for (const auto &bh : g.biases)
             pMap->SetPedBias(bh.track, bh.v->estimate());
+        for (const auto &h : g.pxFloors)
+        {
+            h.e->computeError(); // residual of the contact pixel at the solution
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            PxRec &r = gPxLog[{h.kf, h.track}];
+            r.resU = h.e->errorData()[0];
+            r.resV = h.e->errorData()[1];
+        }
         for (const auto &h : g.floors)
         {
             FloorRec r;

@@ -72,7 +72,9 @@ namespace ORB_SLAM3
         // difference d = log r_lpx - log r_mask is further than gateK * gateSigma from gateCenter loses its range factor (root reprojection stays).
         double maskHeightM = 0, gateCenter = 0, gateSigma = 0, gateK = 0; // gateK <= 0: gate off
         // P9-C3 floor contact (Pedestrians.FloorContact: none | regional | joint). All keys below are read only when the mode is not `none`.
-        enum class FloorMode { None, Regional, Joint };
+        // P9-C3c: `shadow` = the A'/B' geometry and gates are evaluated and logged (ped_floor_px.log), no vertex / edge is added (calibration of the gates);
+        // `regional_px` = A' + b, `joint_px` = B' + b: midpoint-of-feet contact, image-space residual pi(p_x, p_y, z_f + delta_v) - contact pixel.
+        enum class FloorMode { None, Regional, Joint, Shadow, RegionalPx, JointPx };
         FloorMode floorMode = FloorMode::None;
         double floorSigmaRadialM = 0, floorSigmaTangentialM = 0; // metric residual (G - root)_xy along / across the horizontal viewing direction (c3_check0c calibration)
         double floorRegionRadiusM = 0;  // Variant A: radius R of the region whose static map points give z_f
@@ -84,6 +86,13 @@ namespace ORB_SLAM3
         int floorNeighbours = 0;        // Variant B: k static points that define the local plane
         double floorNeighbourRadiusM = 0; // Variant B: horizontal search radius around the ray/z_f intersection
         double floorBandM = 0;          // Variant B: neighbours must lie within +- this of the regional z_f (selection only; z_f is not a constraint in B)
+        // P9-C3c (modes shadow / regional_px / joint_px)
+        double floorMidDeltaM = 0;       // delta_v: height of the midpoint contact above the floor [m] (0.053, Marco 21 Oct)
+        double floorSigmaPxU = 0, floorSigmaPxV = 0; // contact pixel noise [px] (horizontal 6.0, vertical 3.0; 5b rule)
+        double floorZfBiasM = 0;         // median error of the regional z_f against the GT floor, subtracted from z_f (calibrated on the C4 base runs)
+        double floorRaisedMaxM = 0;      // a contact whose regional z_f is more than this above the map's global lowest floor mode is dropped (raised surface)
+        double floorMinElevDeg = 0;      // a contact whose foot ray is less than this below the horizontal is dropped (calibrated)
+        double floorPlaneSigmaMaxM = 0;  // B': the qualifying static points must have a height scatter below this
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
         // P9-C3b per-track log-scale bias b_j (read only when FloorContact != none): prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with
         // at least that many foot observations on free states in the BA window (otherwise b = 0 for that call); 0: always.

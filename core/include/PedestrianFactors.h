@@ -463,6 +463,79 @@ namespace ORB_SLAM3
             bool grad;
         };
 
+
+        // ---------------------------------------------------------------- P9-C3c midpoint floor contact, image-space residual
+        // Vertices: (0) VertexPedState, (1) camera pose, (2 ..) k static-point vertices (B': the floor height is the mean z of the k points; k = 0 (A'): the fixed z_f).
+        //   F = (p_x, p_y, z_f + delta_v),   e = (u, v)_contact - pi(Rcw F + tcw)      (the same sign convention as EdgePedReproj)
+        // The contact pixel is the midpoint of the two feet's lowest keypoints; delta_v is the calibrated height of that point above the floor (0.053 m).
+        // Only p_x, p_y of the state enter: the root height is not constrained by this factor. poseGradient = false (A'): the pose block is exactly zero
+        // (the factor is pedestrian-only; the residual still follows the current pose).
+        template <class PoseV>
+        class EdgePedFloorPx : public g2o::BaseMultiEdge<2, Eigen::Vector2d>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedFloorPx(double fx_, double fy_, double cx_, double cy_, double u, double v, int k, double zf, double deltaM, bool poseGradient)
+                : fx(fx_), fy(fy_), cx(cx_), cy(cy_), nPts(k), zFixed(zf), delta(deltaM), grad(poseGradient)
+            {
+                this->resize(2 + k);
+                this->_measurement << u, v;
+            }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+
+            double FloorHeight() const
+            {
+                if (nPts == 0)
+                    return zFixed;
+                double z = 0;
+                for (int i = 0; i < nPts; ++i)
+                    z += static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[2 + i])->estimate()(2);
+                return z / nPts;
+            }
+            Eigen::Vector3d Xc(Eigen::Matrix3d *Rcw_out = nullptr) const
+            {
+                const PoseV *C = static_cast<const PoseV *>(this->_vertices[1]);
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw;
+                PoseTraits<PoseV>::Get(C, Rcw, tcw);
+                if (Rcw_out)
+                    *Rcw_out = Rcw;
+                const Eigen::Vector3d p = static_cast<const VertexPedState *>(this->_vertices[0])->p();
+                return Rcw * Eigen::Vector3d(p(0), p(1), FloorHeight() + delta) + tcw;
+            }
+            void computeError() override
+            {
+                const Eigen::Vector3d X = Xc();
+                const double z = X(2) > 1e-6 ? X(2) : 1e-6;
+                this->_error << this->_measurement(0) - (fx * X(0) / z + cx), this->_measurement(1) - (fy * X(1) / z + cy);
+            }
+            void linearizeOplus() override
+            {
+                Eigen::Matrix3d Rcw;
+                const Eigen::Vector3d X = Xc(&Rcw);
+                const double z = X(2) > 1e-6 ? X(2) : 1e-6;
+                Eigen::Matrix<double, 2, 3> dpi;
+                dpi << fx / z, 0.0, -fx * X(0) / (z * z), 0.0, fy / z, -fy * X(1) / (z * z);
+                this->_jacobianOplus[0].setZero();
+                this->_jacobianOplus[0].template leftCols<2>() = -dpi * Rcw.template leftCols<2>();
+                if (grad)
+                    this->_jacobianOplus[1] = -dpi * PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), X);
+                else
+                    this->_jacobianOplus[1].setZero();
+                for (int i = 0; i < nPts; ++i)
+                {
+                    this->_jacobianOplus[2 + i].setZero();
+                    this->_jacobianOplus[2 + i].col(2) = -dpi * Rcw.col(2) / nPts;
+                }
+            }
+            double fx, fy, cx, cy;
+            int nPts;
+            double zFixed, delta;
+            bool grad;
+        };
+
     } // namespace ped
 } // namespace ORB_SLAM3
 

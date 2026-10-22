@@ -42,6 +42,14 @@ namespace ORB_SLAM3
             double zRegional;                                          // the regional z_f at build time (Variant A: the plane height; B: selection reference)
         };
         std::vector<FloorHandle> floors;
+        struct PxHandle // one midpoint floor-contact edge (P9-C3c): the residual at the solution is written to the px log
+        {
+            unsigned long kf;
+            int track;
+            g2o::OptimizableGraph::Edge *e;
+        };
+        std::vector<PxHandle> pxFloors;
+        int nPxNoZf = 0, nPxRaised = 0, nPxElev = 0, nPxNoNeighbours = 0, nPxPlane = 0;
         struct BiasHandle
         {
             int track;
@@ -83,6 +91,13 @@ namespace ORB_SLAM3
         // Last written floor-contact record of every (keyframe, track): text, hexfloat. Columns: kf_id stamp track zp(plane height) z_regional Gx Gy Gz
         // px py pz s nPts  (G = foot-ray / plane intersection, p = optimised root, s = ray depth).
         static void DumpFloorLog(const std::string &path);
+
+        // P9-C3c: every midpoint contact the geometry and gates looked at (modes shadow / regional_px / joint_px), one row per (keyframe, track), text:
+        //   kf_id stamp track stage zf_raw zf_glob elev_deg u v nRegion nQual sigQual res_u res_v
+        // stage 0 = passed every gate (an edge exists unless the mode is `shadow`), 1 = no regional z_f, 2 = raised surface (zf_raw - zf_glob > FloorRaisedMaxM),
+        // 3 = foot ray less than FloorMinElevDeg below the horizontal, 4 = fewer than k qualifying static points, 5 = plane scatter >= FloorPlaneSigmaMaxM
+        // (stages 4, 5 only evaluated when the mode is joint_px or shadow); res_* = contact-pixel residual of the edge at the solution (0 if no edge).
+        static void DumpFloorPxLog(const std::string &path);
 
         // P9-C4: every innovation-gate decision (written only when Pedestrians.InnovGate: 1): kf_id stamp track status tested dof d2 dt pred_stamp chain_idx consec_rej.
         static void DumpGateLog(const std::string &path);
