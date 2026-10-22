@@ -45,6 +45,9 @@ static const double HCAM = 1.4895, HCAM_SCATTER = 0.036, DELTA_V = 0.053, CPX_U 
 static const double kHuber2D = std::sqrt(5.991), kHuber1D = std::sqrt(3.841);
 static const double DT = 0.1;
 static const int NTRK = 4;
+// keypoint height above the sole: stance 0.03, swing SWING_BASE + 0.05 |N|; the mean of the two feet = (0.03 + SWING_BASE + 0.05 * 0.7979) / 2 = delta_v = 0.053 (spec: the vertical
+// offset matches delta_v; the C3c harness comment said 0.053 but its 0.08 + 0.05|N| swing gives 0.075)
+static const double SWING_BASE = 2 * DELTA_V - 0.03 - 0.05 * 0.79788456;
 
 struct Terrain
 {
@@ -245,7 +248,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             a.hL = 0.6 * a.hL + 0.8 * 0.015 * N(rng);
             a.hR = 0.6 * a.hR + 0.8 * 0.015 * N(rng);
             const bool leftSwing = std::cos(a.phase) > 0;
-            const double zL = std::max(0.0, (leftSwing ? 0.08 + 0.05 * std::abs(N(rng)) : 0.03) + a.hL), zR = std::max(0.0, (leftSwing ? 0.03 : 0.08 + 0.05 * std::abs(N(rng))) + a.hR);
+            const double zL = std::max(0.0, (leftSwing ? SWING_BASE + 0.05 * std::abs(N(rng)) : 0.03) + a.hL), zR = std::max(0.0, (leftSwing ? 0.03 : SWING_BASE + 0.05 * std::abs(N(rng))) + a.hR);
             Eigen::Vector2d pL, pR;
             double dzL, dzR;
             const double flL = S.camClimb ? fl : S.terrain.Floor(fL(0)), flR = S.camClimb ? fl : S.terrain.Floor(fR(0));
