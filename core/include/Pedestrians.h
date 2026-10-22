@@ -74,7 +74,9 @@ namespace ORB_SLAM3
         // P9-C3 floor contact (Pedestrians.FloorContact: none | regional | joint). All keys below are read only when the mode is not `none`.
         // P9-C3c: `shadow` = the A'/B' geometry and gates are evaluated and logged (ped_floor_px.log), no vertex / edge is added (calibration of the gates);
         // `regional_px` = A' + b, `joint_px` = B' + b: midpoint-of-feet contact, image-space residual pi(p_x, p_y, z_f + delta_v) - contact pixel.
-        enum class FloorMode { None, Regional, Joint, Shadow, RegionalPx, JointPx };
+        // P9-C5: `levels` = floor levels as landmark states (F1 contact + F2 points on the level [+ F3 platform height]) with b; `levels_shadow` = the levels are estimated from the
+        // contacts of the current states and logged, no vertex / edge is added (level check, calibration).
+        enum class FloorMode { None, Regional, Joint, Shadow, RegionalPx, JointPx, Levels, LevelsShadow };
         FloorMode floorMode = FloorMode::None;
         double floorSigmaRadialM = 0, floorSigmaTangentialM = 0; // metric residual (G - root)_xy along / across the horizontal viewing direction (c3_check0c calibration)
         double floorRegionRadiusM = 0;  // Variant A: radius R of the region whose static map points give z_f
@@ -94,6 +96,10 @@ namespace ORB_SLAM3
         double floorMinElevDeg = 0;      // a contact whose foot ray is less than this below the horizontal is dropped (calibrated)
         double floorPlaneSigmaMaxM = 0;  // B': the qualifying static points must have a height scatter below this
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
+        // P9-C5 (read only when FloorContact is levels | levels_shadow; calibrated on tuning data, constants_c5.md; the design constants are in PedestrianLevels.h)
+        double levelSigmaA = 0, levelSigmaPt = 0, levelSMax = 0;
+        bool platformHeight = false;                   // Pedestrians.PlatformHeight: off | on (F3)
+        double platformHeightM = 0, platformSigmaM = 0; // h_cam, sigma_h (read only when on)
         // P9-C3b per-track log-scale bias b_j (read only when FloorContact != none): prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with
         // at least that many foot observations on free states in the BA window (otherwise b = 0 for that call); 0: always.
         double biasSigma = 0;

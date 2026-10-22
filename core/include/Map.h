@@ -24,6 +24,7 @@
 #define MAP_H
 
 #include "MapPoint.h"
+#include "PedestrianLevels.h"
 #include "KeyFrame.h"
 #include "Semantic/Room.h"
 #include "Semantic/Floor.h"
@@ -31,6 +32,7 @@
 
 #include <map>
 #include <set>
+#include <memory>
 #include <mutex>
 #include <cstdint>
 #include <unordered_map>
@@ -162,6 +164,10 @@ namespace ORB_SLAM3
         // [P9-C3b] persistent per-track log-scale bias b_j (Pedestrians.FloorContact != none); cleared with the person states
         bool GetPedBias(int trackId, double &b);
         void SetPedBias(int trackId, double b);
+        // [P9-C5] floor levels of this map (Pedestrians.FloorContact: levels | levels_shadow); persistent like map points, cleared with the person states.
+        // The caller locks PedLevelsMutex() for as long as it uses the returned set; created on first use with `p`.
+        std::mutex &PedLevelsMutex() { return mMutexPedLevels; }
+        ped::LevelSet &PedLevels(const ped::LevelParams &p);
 
         void clear();
 
@@ -206,6 +212,8 @@ namespace ORB_SLAM3
         void ResetPedestriansLocked(); // caller holds mMutexMap
         std::mutex mMutexPedMap;
         std::map<int, double> mPedBias;
+        std::mutex mMutexPedLevels;
+        std::unique_ptr<ped::LevelSet> mPedLevels;
         vector<KeyFrame *> mvpKeyFrameOrigins;
         vector<unsigned long int> mvBackupKeyFrameOriginsId;
 

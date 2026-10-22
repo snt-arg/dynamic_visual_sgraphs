@@ -68,9 +68,48 @@ namespace ORB_SLAM3
             p.floorMode = FloorMode::RegionalPx;
         else if (fm == "joint_px")
             p.floorMode = FloorMode::JointPx;
+        else if (fm == "levels")
+            p.floorMode = FloorMode::Levels;
+        else if (fm == "levels_shadow")
+            p.floorMode = FloorMode::LevelsShadow;
         else
-            throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional, joint, shadow, regional_px or joint_px, got " + fm);
-        if (p.floorMode != FloorMode::None)
+            throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional, joint, shadow, regional_px, joint_px, levels or levels_shadow, got " + fm);
+        if (p.floorMode == FloorMode::Levels || p.floorMode == FloorMode::LevelsShadow)
+        {
+            p.floorMidDeltaM = Req(fs, "Pedestrians.FloorMidDeltaM");
+            p.floorSigmaPxU = Req(fs, "Pedestrians.FloorSigmaPxU");
+            p.floorSigmaPxV = Req(fs, "Pedestrians.FloorSigmaPxV");
+            p.biasSigma = Req(fs, "Pedestrians.BiasSigma");
+            p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
+            p.levelSigmaA = Req(fs, "Pedestrians.LevelSigmaA");
+            p.levelSigmaPt = Req(fs, "Pedestrians.LevelSigmaPt");
+            p.levelSMax = Req(fs, "Pedestrians.LevelSMax");
+            for (double v : {p.floorMidDeltaM, p.floorSigmaPxU, p.floorSigmaPxV, p.biasSigma, p.levelSigmaA, p.levelSigmaPt, p.levelSMax})
+                if (!(v > 0))
+                    throw std::runtime_error("[Pedestrians] levels: FloorMidDeltaM, FloorSigmaPx*, BiasSigma, LevelSigmaA, LevelSigmaPt, LevelSMax must be > 0");
+            if (p.biasMinContacts < 0)
+                throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
+            const cv::FileNode ph = fs["Pedestrians.PlatformHeight"];
+            if (ph.empty())
+                throw std::runtime_error("[Pedestrians] FloorContact levels needs Pedestrians.PlatformHeight (off | on)");
+            const std::string phs = static_cast<std::string>(ph);
+            if (phs == "on")
+            {
+                p.platformHeight = true;
+                p.platformHeightM = Req(fs, "Pedestrians.PlatformHeightM");
+                p.platformSigmaM = Req(fs, "Pedestrians.PlatformSigmaM");
+                if (!(p.platformHeightM > 0 && p.platformSigmaM > 0))
+                    throw std::runtime_error("[Pedestrians] PlatformHeightM and PlatformSigmaM must be > 0");
+            }
+            else if (phs == "off")
+                p.platformHeight = false;
+            else
+                throw std::runtime_error("[Pedestrians] Pedestrians.PlatformHeight must be off or on, got " + phs);
+            std::cout << "[Pedestrians] floor contact " << fm << ": delta_v " << p.floorMidDeltaM << " m, sigma px " << p.floorSigmaPxU << "/" << p.floorSigmaPxV << ", bias sigma " << p.biasSigma
+                      << " (min contacts " << p.biasMinContacts << "), sigma_a " << p.levelSigmaA << " m, sigma_pt " << p.levelSigmaPt << " m, s_max " << p.levelSMax << ", platform height "
+                      << (p.platformHeight ? "on" : "off") << std::endl;
+        }
+        else if (p.floorMode != FloorMode::None)
         {
             const bool px = p.floorMode == FloorMode::Shadow || p.floorMode == FloorMode::RegionalPx || p.floorMode == FloorMode::JointPx;
             if (!px)

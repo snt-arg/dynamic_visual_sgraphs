@@ -849,11 +849,22 @@ namespace ORB_SLAM3
         mPedBias[trackId] = b;
     }
 
+    ped::LevelSet &Map::PedLevels(const ped::LevelParams &p)
+    {
+        if (!mPedLevels)
+            mPedLevels.reset(new ped::LevelSet(p));
+        return *mPedLevels;
+    }
+
     void Map::ResetPedestriansLocked()
     {
         {
             unique_lock<mutex> lock(mMutexPedMap);
             mPedBias.clear();
+        }
+        {
+            unique_lock<mutex> lock(mMutexPedLevels);
+            mPedLevels.reset(); // [P9-C5] levels are world-frame heights: map reset / merge / scaled rotation / loop correction invalidate them as they do the person states
         }
         for (KeyFrame *pKF : mspKeyFrames)
             pKF->ClearPedStates();

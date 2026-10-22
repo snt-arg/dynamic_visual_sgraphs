@@ -32,7 +32,7 @@ namespace ORB_SLAM3
             bool fixed;
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
-        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, NTYPES };
+        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, LVPT, PLAT, NTYPES }; // LVPT = F2 point on level, PLAT = F3 platform height (P9-C5)
         struct FloorHandle // one floor-contact edge (P9-C3): written back with the state it belongs to
         {
             int track;
@@ -55,6 +55,12 @@ namespace ORB_SLAM3
             int track;
             ped::VertexPedBias *v;
         };
+        struct LevelHandle // P9-C5: a level vertex of this call, written back to the map's LevelSet
+        {
+            int id;
+            ped::VertexFloorLevel *v;
+        };
+        std::vector<LevelHandle> levels;
         std::vector<BiasHandle> biases; // P9-C3b: one per track with a bias vertex (written back to Map::SetPedBias)
         int nFloor = 0, nFloorNoObs = 0, nFloorNoZf = 0, nFloorNoNeighbours = 0, nFloorGrazing = 0;
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
@@ -73,6 +79,11 @@ namespace ORB_SLAM3
         // Pedestrians.FloorContact: joint (Variant B), which also un-marginalises the chosen point vertices (a plane factor couples k landmarks).
         static PedGraph Add(g2o::SparseOptimizer &opt, const std::vector<PedGraphKF> &kfs, Map *pMap, bool metric, bool inertialPoses,
                             unsigned long mpVertexBase);
+
+        // P9-C5: per-contact level log (modes levels | levels_shadow), text, hexfloat. One row per (keyframe, track), the last write:
+        //   map_id kf_id stamp track hc level_id level_z transitional n_levels in_call
+        // then `L` rows, the last state of every level seen: L map_id level_id z n_contacts n_f2_points_max n_merges_map
+        static void DumpLevelsLog(const std::string &path);
 
         // Variant A: robust mode of the heights of the points `pts` (map frame, z up) inside the horizontal radius R of `centre` and lower than the
         // camera height `zCamera` by at least `belowCamera`: 3-bin-smoothed histogram (bin width `bin`), highest count (lowest bin on ties), median of

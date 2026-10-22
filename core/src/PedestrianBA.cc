@@ -1,4 +1,5 @@
 #include "PedestrianBA.h"
+#include "PedestrianLevels.h"
 #include "PedestrianFloorGate.h"
 #include "PedestrianGate.h"
 
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <mutex>
 #include <stdexcept>
+#include <tuple>
 #include <type_traits>
 #include <cstdint>
 #include <cstdio>
@@ -42,6 +44,18 @@ namespace ORB_SLAM3
             int stage = 0, nRegion = 0, nQual = 0;
         };
         std::map<std::pair<unsigned long, int>, PxRec> gPxLog;
+        struct LevelRow // P9-C5
+        {
+            double stamp = 0, hc = 0, levelZ = 0;
+            int level = -1, transitional = 0, nLevels = 0;
+        };
+        std::map<std::tuple<unsigned long, unsigned long, int>, LevelRow> gLevelLog; // (map id, kf id, track)
+        struct LevelStat
+        {
+            double z = 0;
+            int nContacts = 0, nPointsMax = 0, merges = 0;
+        };
+        std::map<std::pair<unsigned long, int>, LevelStat> gLevelStat; // (map id, level id)
         long gFloorSkipped[4] = {0, 0, 0, 0}; // no foot observation (not counted), no regional z_f, no neighbours, grazing ray
         struct GateRow
         {
@@ -133,6 +147,8 @@ namespace ORB_SLAM3
             const PedestrianParams &P = PedestrianParams::Get();
             PedGraph G;
             const bool floorOn = metric && P.floorMode != PedestrianParams::FloorMode::None;
+            const bool levelsShadow = P.floorMode == PedestrianParams::FloorMode::LevelsShadow;
+            const bool levelsMode = P.floorMode == PedestrianParams::FloorMode::Levels || levelsShadow;
             const bool pxMode = P.floorMode == PedestrianParams::FloorMode::Shadow || P.floorMode == PedestrianParams::FloorMode::RegionalPx || P.floorMode == PedestrianParams::FloorMode::JointPx;
             const bool shadowMode = P.floorMode == PedestrianParams::FloorMode::Shadow;
             const bool jointPx = P.floorMode == PedestrianParams::FloorMode::JointPx;
@@ -155,7 +171,7 @@ namespace ORB_SLAM3
                     if (!mp || mp->isBad())
                         continue;
                     g2o::VertexSBAPointXYZ *vv = nullptr;
-                    if (P.floorMode == PedestrianParams::FloorMode::Joint || jointPx)
+                    if (P.floorMode == PedestrianParams::FloorMode::Joint || jointPx || levelsMode)
                         vv = dynamic_cast<g2o::VertexSBAPointXYZ *>(opt.vertex(static_cast<int>(mp->mnId + mpVertexBase)));
                     statics.push_back({mp->mnId, mp->GetWorldPos().cast<double>(), vv});
                 }
@@ -294,7 +310,7 @@ namespace ORB_SLAM3
 
                 // P9-C3b: per-track log-scale bias b_j (Variants A / B only; "none" keeps b = 0 and the 2-vertex range edge)
                 ped::VertexPedBias *vbias = nullptr;
-                if (floorOn && !shadowMode)
+                if (floorOn && !shadowMode && !levelsShadow)
                 {
                     const int contacts = static_cast<int>(std::count_if(E.begin(), E.end(), [](const Entry &en) { return en.obs->hasFoot && !en.fixed; }));
                     if (contacts >= P.biasMinContacts)
@@ -497,7 +513,7 @@ namespace ORB_SLAM3
                         std::lock_guard<std::mutex> lk(gLogMutex);
                         gPxLog[{e.kf->mnId, track}] = rec;
                     }
-                    if (floorOn && !pxMode && e.obs->hasFoot && !e.fixed)
+                    if (floorOn && !levelsMode && !pxMode && e.obs->hasFoot && !e.fixed)
                     {
                         const Sophus::SE3f Twc = e.kf->GetPoseInverse();
                         const Eigen::Vector3d cam = Twc.translation().cast<double>();
@@ -687,6 +703,209 @@ namespace ORB_SLAM3
                     }
                 }
             }
+
+            // ------------------------------------------------------------------------------------------------ P9-C5 floor levels
+            if (levelsMode && floorOn)
+            {
+                const ped::LevelParams LP = ped::DesignLevelParams(P.levelSigmaA, P.levelSigmaPt, P.levelSMax);
+                // implied contact heights h_c from the current person states (tracks in id order, entries in time order: deterministic)
+                std::vector<ped::Contact> cs;
+                std::vector<const Entry *> ce;
+                for (auto &tr : tracks)
+                    for (const Entry &e : tr.second)
+                    {
+                        if (!e.obs->hasFoot || !e.v)
+                            continue;
+                        const Cam c = CameraOf(e.kf);
+                        const Sophus::SE3f Twc = e.kf->GetPoseInverse();
+                        const Eigen::Vector3d cam = Twc.translation().cast<double>();
+                        const Eigen::Vector3d bray((e.obs->footU - c.cx) / c.fx, (e.obs->footV - c.cy) / c.fy, 1.0);
+                        const Eigen::Vector3d dw = (Twc.rotationMatrix() * bray.cast<float>()).cast<double>();
+                        const Eigen::Vector3d p0 = e.v->p();
+                        const double dh2 = dw(0) * dw(0) + dw(1) * dw(1);
+                        // the foot ray must point down by more than ~1.1 deg (design constant, the grazing limit of Variant A) and have a horizontal component
+                        if (dw(2) / dw.norm() > -0.02 || dh2 < 1e-12)
+                            continue;
+                        // ray point nearest (horizontally) to the vertical line through the root state; its height minus delta_v
+                        const double sr = (dw(0) * (p0(0) - cam(0)) + dw(1) * (p0(1) - cam(1))) / dh2;
+                        if (!(sr > 0))
+                            continue;
+                        ped::Contact k;
+                        k.track = tr.first;
+                        k.kf = e.kf->mnId;
+                        k.t = e.kf->mTimeStamp;
+                        k.x = p0(0);
+                        k.y = p0(1);
+                        k.h = cam(2) + sr * dw(2) - P.floorMidDeltaM;
+                        cs.push_back(k);
+                        ce.push_back(&e);
+                    }
+                std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
+                ped::LevelSet &LS = pMap->PedLevels(LP);
+                ped::FlagTransitional(cs, LP);
+                LS.Update(cs);
+                const unsigned long mapId = pMap->GetId();
+                std::map<int, ped::VertexFloorLevel *> lvVert;
+                std::map<int, std::vector<size_t>> lvContacts; // level id -> indices into cs (non-transitional, free state)
+                for (size_t i = 0; i < cs.size(); ++i)
+                    if (cs[i].level >= 0 && !ce[i]->fixed)
+                        lvContacts[cs[i].level].push_back(i);
+                for (const auto &lv : LS.Levels())
+                {
+                    LevelStat &st = gLevelStat[{mapId, lv.id}];
+                    st.z = lv.z;
+                    st.nContacts = lv.nContacts;
+                    st.merges = LS.Merges();
+                }
+                for (size_t i = 0; i < cs.size(); ++i)
+                {
+                    LevelRow lr;
+                    lr.stamp = cs[i].t;
+                    lr.hc = cs[i].h;
+                    lr.level = cs[i].level;
+                    lr.transitional = cs[i].transitional ? 1 : 0;
+                    lr.nLevels = static_cast<int>(LS.Levels().size());
+                    for (const auto &lv : LS.Levels())
+                        if (lv.id == cs[i].level)
+                            lr.levelZ = lv.z;
+                    std::lock_guard<std::mutex> lk(gLogMutex);
+                    gLevelLog[{mapId, cs[i].kf, cs[i].track}] = lr;
+                }
+                if (!levelsShadow)
+                {
+                    for (const auto &lc : lvContacts)
+                    {
+                        double z0 = 0;
+                        for (const auto &lv : LS.Levels())
+                            if (lv.id == lc.first)
+                                z0 = lv.z;
+                        auto *vl = new ped::VertexFloorLevel();
+                        vl->setId(nextId++);
+                        vl->setEstimate(z0);
+                        vl->setFixed(false);
+                        opt.addVertex(vl);
+                        lvVert[lc.first] = vl;
+                        G.levels.push_back({lc.first, vl});
+                        // F1 contact factors
+                        for (size_t i : lc.second)
+                        {
+                            const Entry &e = *ce[i];
+                            auto *vpose = dynamic_cast<PoseV *>(opt.vertex(e.kf->mnId));
+                            if (!vpose)
+                                throw std::runtime_error("[Pedestrians] keyframe pose vertex missing from the graph");
+                            const Cam c = CameraOf(e.kf);
+                            auto *f1 = new ped::EdgePedLevelPx<PoseV>(c.fx, c.fy, c.cx, c.cy, e.obs->footU, e.obs->footV, P.floorMidDeltaM);
+                            f1->setVertex(0, e.v);
+                            f1->setVertex(1, vpose);
+                            f1->setVertex(2, vl);
+                            Eigen::Matrix2d I = Eigen::Matrix2d::Zero();
+                            I(0, 0) = 1.0 / (P.floorSigmaPxU * P.floorSigmaPxU);
+                            I(1, 1) = 1.0 / (P.floorSigmaPxV * P.floorSigmaPxV);
+                            f1->setInformation(I);
+                            auto *rk = new g2o::RobustKernelHuber();
+                            rk->setDelta(kHuber2D * P.huberScale);
+                            f1->setRobustKernel(rk);
+                            opt.addEdge(f1);
+                            Tag(G, PedGraph::FLOOR, f1);
+                            ++G.nFloor;
+                            G.pxFloors.push_back({e.kf->mnId, cs[i].track, f1});
+                            PxRec rec;
+                            rec.stamp = e.kf->mTimeStamp;
+                            rec.u = e.obs->footU;
+                            rec.v = e.obs->footV;
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            gPxLog[{e.kf->mnId, cs[i].track}] = rec;
+                        }
+                        // F2: RANSAC points of the level (never creates a level)
+                        std::vector<ped::PointZ> pz;
+                        pz.reserve(statics.size());
+                        for (size_t q = 0; q < statics.size(); ++q)
+                            pz.push_back({static_cast<int>(q), statics[q].x(0), statics[q].x(1), statics[q].x(2)});
+                        std::vector<ped::Contact> mine;
+                        for (size_t i : lc.second)
+                            mine.push_back(cs[i]);
+                        const ped::PlaneFit fit = ped::RansacLevelPoints(pz, mine, z0, LP);
+                        if (fit.ok)
+                        {
+                            std::vector<std::pair<double, int>> order;
+                            for (int q : fit.inliers)
+                            {
+                                double dmin = 1e18;
+                                for (const auto &m : mine)
+                                    dmin = std::min(dmin, std::hypot(statics[q].x(0) - m.x, statics[q].x(1) - m.y));
+                                order.push_back({dmin, q});
+                            }
+                            std::sort(order.begin(), order.end(), [&](const std::pair<double, int> &a, const std::pair<double, int> &b) {
+                                return a.first != b.first ? a.first < b.first : statics[a.second].id < statics[b.second].id;
+                            });
+                            if (order.size() > 50)
+                                order.resize(50);
+                            for (const auto &o : order)
+                            {
+                                g2o::VertexSBAPointXYZ *pv = statics[o.second].v;
+                                if (pv)
+                                    pv->setMarginalized(false); // a level couples its points: they cannot stay in the Schur landmark block
+                                else
+                                {
+                                    pv = new g2o::VertexSBAPointXYZ(); // not in this BA's point set: fixed
+                                    pv->setId(nextId++);
+                                    pv->setEstimate(statics[o.second].x);
+                                    pv->setFixed(true);
+                                    opt.addVertex(pv);
+                                }
+                                auto *f2 = new ped::EdgePedPointOnLevel();
+                                f2->setVertex(0, pv);
+                                f2->setVertex(1, vl);
+                                f2->setMeasurement(0.0);
+                                f2->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.levelSigmaPt * P.levelSigmaPt));
+                                auto *rk = new g2o::RobustKernelHuber();
+                                rk->setDelta(kHuber1D * P.huberScale);
+                                f2->setRobustKernel(rk);
+                                opt.addEdge(f2);
+                                Tag(G, PedGraph::LVPT, f2);
+                            }
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            LevelStat &st = gLevelStat[{mapId, lc.first}];
+                            st.nPointsMax = std::max(st.nPointsMax, static_cast<int>(order.size()));
+                        }
+                    }
+                    // F3: platform height (levels whose height is within 3 sigma_a of "camera height - h_cam" for the keyframe; see report: the spatial
+                    // "under the camera" test is replaced by this height gate because walkers are never under the camera)
+                    if (P.platformHeight)
+                        for (const PedGraphKF &g : kfs)
+                        {
+                            if (!g.kf || g.kf->isBad())
+                                continue;
+                            auto *vpose = dynamic_cast<PoseV *>(opt.vertex(g.kf->mnId));
+                            if (!vpose)
+                                continue;
+                            const double zc = ped::EdgePedPlatformHeight<PoseV>::CamZ(vpose);
+                            int best = -1;
+                            double bd = 3.0 * P.levelSigmaA;
+                            for (const auto &lv : lvVert)
+                            {
+                                const double d = std::abs(zc - lv.second->estimate() - P.platformHeightM);
+                                if (d < bd)
+                                {
+                                    bd = d;
+                                    best = lv.first;
+                                }
+                            }
+                            if (best < 0 || (g.fixed && lvVert[best]->fixed()))
+                                continue;
+                            auto *f3 = new ped::EdgePedPlatformHeight<PoseV>();
+                            f3->setVertex(0, vpose);
+                            f3->setVertex(1, lvVert[best]);
+                            f3->setMeasurement(P.platformHeightM);
+                            f3->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.platformSigmaM * P.platformSigmaM));
+                            auto *rk = new g2o::RobustKernelHuber();
+                            rk->setDelta(kHuber1D * P.huberScale);
+                            f3->setRobustKernel(rk);
+                            opt.addEdge(f3);
+                            Tag(G, PedGraph::PLAT, f3);
+                        }
+                }
+            }
             if (DL().f)
             {
                 Fnv hObs, hPose, hV, hE;
@@ -810,10 +1029,10 @@ namespace ORB_SLAM3
         };
         std::vector<CallRec> gCalls;
         long gCreatedT[PedGraph::NTYPES] = {0}, gActiveT[PedGraph::NTYPES] = {0};
-        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor", "bias"};
+        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor", "bias", "lvpt", "plat"};
         // inside the robust-kernel threshold: the Huber deltas of PedestrianBA.cc (chi2 95 %: 5.991 for 2 dof, 3.841 for 1 dof);
         // the WNA prior (6 dof, no kernel) uses its own 95 % chi2 (12.592)
-        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991, 3.841};
+        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991, 3.841, 3.841, 3.841};
     } // namespace
 
     void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
@@ -920,6 +1139,27 @@ namespace ORB_SLAM3
         }
     }
 
+    void PedestrianBA::DumpLevelsLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "# P9-C5 contacts. map_id kf_id stamp track hc level_id level_z transitional n_levels\n";
+        f << "# L map_id level_id z n_contacts n_f2_points_max n_merges_map\n";
+        char buf[384];
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        for (const auto &kv : gLevelLog)
+        {
+            const LevelRow &r = kv.second;
+            std::snprintf(buf, sizeof(buf), "%lu %lu %.9f %d %a %d %a %d %d\n", std::get<0>(kv.first), std::get<1>(kv.first), r.stamp, std::get<2>(kv.first), r.hc, r.level, r.levelZ,
+                          r.transitional, r.nLevels);
+            f << buf;
+        }
+        for (const auto &kv : gLevelStat)
+        {
+            std::snprintf(buf, sizeof(buf), "L %lu %d %a %d %d %d\n", kv.first.first, kv.first.second, kv.second.z, kv.second.nContacts, kv.second.nPointsMax, kv.second.merges);
+            f << buf;
+        }
+    }
+
     void PedestrianBA::DumpFloorLog(const std::string &path)
     {
         std::ofstream f(path);
@@ -940,6 +1180,18 @@ namespace ORB_SLAM3
     {
         for (const auto &bh : g.biases)
             pMap->SetPedBias(bh.track, bh.v->estimate());
+        if (!g.levels.empty())
+        {
+            std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
+            const ped::LevelParams LP = ped::DesignLevelParams(PedestrianParams::Get().levelSigmaA, PedestrianParams::Get().levelSigmaPt, PedestrianParams::Get().levelSMax);
+            ped::LevelSet &LS = pMap->PedLevels(LP);
+            for (const auto &lh : g.levels)
+            {
+                LS.SetHeight(lh.id, lh.v->estimate());
+                std::lock_guard<std::mutex> lk(gLogMutex);
+                gLevelStat[{pMap->GetId(), lh.id}].z = lh.v->estimate();
+            }
+        }
         for (const auto &h : g.pxFloors)
         {
             h.e->computeError(); // residual of the contact pixel at the solution
