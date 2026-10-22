@@ -725,7 +725,7 @@ static void LevelTests(const char *tag)
     f1.computeError();
     CHECK(std::abs(f1.error()(0) - 4.0) < 1e-9 && std::abs(f1.error()(1) + 3.0) < 1e-9, std::string("F1 level contact [") + tag + "]: e = contact pixel - pi(F), F = (p_x, p_y, z_l + delta_v)");
     CheckEdge(&f1, std::string("F1 level contact [") + tag + "]");
-    CHECK(f1.Jac(2).cwiseAbs().maxCoeff() > 0.1, std::string("F1 level contact [") + tag + "]: the level block is non-trivial");
+    CHECK(Analytic(&f1, 2).cwiseAbs().maxCoeff() > 0.1, std::string("F1 level contact [") + tag + "]: the level block is non-trivial");
     lvl.setEstimate(zl + 0.3);
     CheckEdge(&f1, std::string("F1 level contact, other level [") + tag + "]");
 
