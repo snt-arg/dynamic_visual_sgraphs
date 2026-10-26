@@ -851,9 +851,7 @@ namespace ORB_SLAM3
 
     ped::LevelSet &Map::PedLevels(const ped::LevelParams &p)
     {
-        if (!mPedLevels)
-            mPedLevels.reset(new ped::LevelSet(p));
-        return *mPedLevels;
+        return mPedLevels.Get(p);
     }
 
     void Map::ResetPedestriansLocked()
@@ -864,7 +862,7 @@ namespace ORB_SLAM3
         }
         {
             unique_lock<mutex> lock(mMutexPedLevels);
-            mPedLevels.reset(); // [P9-C5] levels are world-frame heights: map reset / merge / scaled rotation / loop correction invalidate them as they do the person states
+            mPedLevels.Reset(); // [P9-C5 / P9-L: Reset also advances the epoch] levels are world-frame heights: map reset / merge / scaled rotation / loop correction invalidate them as they do the person states
         }
         for (KeyFrame *pKF : mspKeyFrames)
             pKF->ClearPedStates();

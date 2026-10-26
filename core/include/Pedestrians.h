@@ -97,7 +97,9 @@ namespace ORB_SLAM3
         double floorPlaneSigmaMaxM = 0;  // B': the qualifying static points must have a height scatter below this
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
         // P9-C5 (read only when FloorContact is levels | levels_shadow; calibrated on tuning data, constants_c5.md; the design constants are in PedestrianLevels.h)
-        double levelSigmaA = 0, levelSigmaPt = 0, levelSMax = 0;
+        double levelSigmaA = 0, levelSigmaPt = 0;
+        double levelTransRate = 0;   // P9-L: transitional flag threshold on the robust |dh/dt| of the contact height [m/s] (replaces LevelSMax)
+        double footGateTau = 0;      // P9-L: foot-validity gate, a contact whose foot pixel is more than tau * maskH above the mask bottom is rejected; 0 = off
         bool platformHeight = false;                   // Pedestrians.PlatformHeight: off | on (F3)
         double platformHeightM = 0, platformSigmaM = 0; // h_cam, sigma_h (read only when on)
         // P9-C3b per-track log-scale bias b_j (read only when FloorContact != none): prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with

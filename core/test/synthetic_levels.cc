@@ -15,7 +15,7 @@
 //            keyframes along y, walkers on two levels (z 0 textured, z 1.5 textureless); S5 = S1 + furniture cluster; S6 two levels 2.8 m apart joined by stairs
 //            (16 x 17.5 cm, 28 cm treads), two walkers on the stairs, two on the levels, camera on the upper level.
 //  candidates none | levels | levels_platform
-// usage: synthetic_levels SCEN(S1..S6|S0nofeet) CAND NKF NSEEDS SIGMA_A SIGMA_PT SMAX   -> one line of key=value pairs (and per-track rows with PER_TRACK=1)
+// usage: synthetic_levels SCEN(S1..S6|S0nofeet) CAND NKF NSEEDS SIGMA_A SIGMA_PT TRANS_RATE   -> one line of key=value pairs (and per-track rows with PER_TRACK=1)
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -54,10 +54,14 @@ struct Terrain
 {
     // true floor height under (x, y); stairs: descending along +x from x0 over 16 treads of 0.28 m, risers 0.175 m
     bool stairs = false;
+    bool ramp = false;                     // P9-L: S6e escalator, a plane inclined at rampSlope from x0 to x1 (30 degrees), then the lower floor
+    double rampSlope = 0.57735, x1 = 14.0;
     double zUpper = 0, zLower = 0, x0 = 9.0;
     double zl2 = -1e9, xSplit = 1e9;       // S3 / S4: a second level for x >= xSplit (S3) -- S4 uses the walker's own level id instead
     double Floor(double x) const
     {
+        if (ramp)
+            return x <= x0 ? zUpper : (x >= x1 ? zUpper - rampSlope * (x1 - x0) : zUpper - rampSlope * (x - x0));
         if (!stairs)
             return x >= xSplit ? zl2 : zUpper;
         if (x <= x0)
@@ -67,7 +71,7 @@ struct Terrain
             return zLower;
         return zUpper - 0.175 * (step + 1);
     }
-    bool OnStairs(double x) const { return stairs && x > x0 && x < x0 + 16 * 0.28; }
+    bool OnStairs(double x) const { return ramp ? (x > x0 && x < x1) : (stairs && x > x0 && x < x0 + 16 * 0.28); }
 };
 
 struct KF
@@ -84,6 +88,7 @@ struct Obs
     double u = 0, v = 0, lpx = 0, mu = 0, mv = 0;
     bool hasFoot = false;
     bool stairContact = false;
+    bool excluded = false;        // P9-L S6e: within the transition window of an escalator turn-around (an artefact of the synthetic back-and-forth ride), not counted
     double floorTrue = 0;
     Eigen::Vector3d vel = Eigen::Vector3d::Zero();   // true root velocity (posterior sigma of the levels is evaluated at the true state)
     bool informative = false;                        // c5_gate_revision.md: foot-ray depression >= 5 deg below the horizon, from the true geometry
@@ -126,7 +131,7 @@ struct Scen
     std::vector<Eigen::Vector2d> region;   // per walker centre
     std::vector<int> level;                // per walker: 0 upper, 1 lower
     std::vector<double> bTrue = {-0.05, 0.0, 0.05, 0.0};
-    bool texturedUpper = true, texturedLower = false, furniture = false, noFeet = false, camClimb = false, stairWalkers = false;
+    bool texturedUpper = true, texturedLower = false, furniture = false, noFeet = false, camClimb = false, stairWalkers = false, escalator = false;
     double pitch = 12.0;
     double lowerZ = -0.8;                  // S3: second level; S4: 1.5 (the upper); S6: -2.8
     std::vector<double> trueLevels;
@@ -181,6 +186,22 @@ static Scen MakeScen(const std::string &n)
         s.texturedLower = true;   // patch C does not make S6 textureless (only S3's lower level is, task step 4)
         s.pitch = 14.0;
     }
+    if (n == "S6e")    // P9-L step 3: an escalator instead of stairs; walkers 2, 3 stand still on a surface that moves at 0.5 m/s along a 30-degree incline (0.25 m/s vertical)
+    {
+        s.terrain.ramp = true;
+        s.terrain.zUpper = 0.0;
+        s.terrain.x0 = 9.0;
+        s.terrain.x1 = 14.0;
+        s.terrain.zLower = -s.terrain.rampSlope * (s.terrain.x1 - s.terrain.x0);
+        s.stairWalkers = true;
+        s.escalator = true;
+        s.region = {{5.5, -1.0}, {6.5, 1.0}, {11.5, 0.0}, {11.5, 0.5}};
+        s.level = {0, 0, 2, 2};
+        s.bTrue = {-0.05, 0.05, 0.05, -0.05};
+        s.trueLevels = {0.0, s.terrain.zLower};
+        s.texturedLower = true;
+        s.pitch = 14.0;
+    }
     return s;
 }
 
@@ -219,6 +240,18 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
         for (int w = 0; w < NTRK; ++w)
         {
             Wk &a = wk[w];
+            bool turn = false;
+            if (S.escalator && S.level[w] == 2)
+            {
+                // P9-L S6e: rides down 4.5 m of horizontal run (10.4 s at 0.433 m/s), then up again; the person stands still on the step, the foot swing is off below
+                const double run = S.terrain.x1 - S.terrain.x0 - 0.5, vh = 0.5 * std::cos(std::atan(S.terrain.rampSlope)), T = run / vh;
+                const double ph = std::fmod(kf.t + 0.37 * T * (w - 2) + a.stairPhase / 6.28318 * 2 * T, 2 * T);
+                const double s1 = ph < T ? ph : 2 * T - ph;
+                a.p = Eigen::Vector2d(S.terrain.x0 + 0.25 + vh * s1, a.p(1));
+                a.v = Eigen::Vector2d(ph < T ? vh : -vh, 0.0);
+                const double dEdge = std::min(std::min(ph, std::abs(T - ph)), std::abs(2 * T - ph));
+                turn = dEdge < 1.5;
+            }
             Eigen::Vector2d centre = S.region[w];
             if (S.stairWalkers && S.level[w] == 2)
                 centre = Eigen::Vector2d(11.5 + 4.2 * std::sin(0.045 * kf.t * 2 * M_PI / 2.0 + a.stairPhase), 0.0 + 0.4 * w);   // sweeps x in [7.3, 15.7]: up, down, ...
@@ -230,9 +263,13 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
                 acc = 4.0 * (centre - a.p) - 2.5 * a.v;
             }
             const double q = std::sqrt(QV * DT);
-            a.v += DT * acc + q * Eigen::Vector2d(N(rng), N(rng));
-            a.p += DT * a.v;
+            if (!(S.escalator && S.level[w] == 2))
+            {
+                a.v += DT * acc + q * Eigen::Vector2d(N(rng), N(rng));
+                a.p += DT * a.v;
+            }
             Obs &o = W.obs[w][k];
+            o.excluded = turn;
             const double fl = S.camClimb ? (S.level[w] == 1 ? 1.5 : 0.0) : S.terrain.Floor(a.p(0));
             o.floorTrue = fl;
             o.stairContact = S.terrain.OnStairs(a.p(0));
@@ -251,7 +288,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             const Eigen::Vector2d dir = a.v.norm() > 0.2 ? Eigen::Vector2d(a.v.normalized()) : Eigen::Vector2d(0, 1);
             const Eigen::Vector2d lat(-dir(1), dir(0));
             a.phase += 2 * M_PI * 1.8 * DT;
-            const double sw = 0.30 * std::sin(a.phase);
+            const double sw = (S.escalator && S.level[w] == 2) ? 0.0 : 0.30 * std::sin(a.phase);
             const Eigen::Vector2d fL = a.p + dir * sw + lat * 0.12, fR = a.p - dir * sw - lat * 0.12;
             a.hL = 0.6 * a.hL + 0.8 * 0.015 * N(rng);
             a.hR = 0.6 * a.hR + 0.8 * 0.015 * N(rng);
@@ -288,6 +325,11 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     {
         if (S.texturedUpper) addFloor(0.0, 2.5, 17.0, 3000);          // level A (z = 0) textured
         if (S.texturedLower) addFloor(1.5, 2.5, 17.0, 3000);
+    }
+    else if (S.name == "S6e")
+    {
+        addFloor(0.0, 2.5, 9.0, 3000);
+        addFloor(S.terrain.zLower, 14.5, 17.0, 3000);
     }
     else if (S.name == "S6")
     {
@@ -380,12 +422,12 @@ int main(int argc, char **argv)
 {
     if (argc < 8)
     {
-        std::cerr << "usage: synthetic_levels SCEN CAND NKF NSEEDS SIGMA_A SIGMA_PT SMAX\n";
+        std::cerr << "usage: synthetic_levels SCEN CAND NKF NSEEDS SIGMA_A SIGMA_PT TRANS_RATE\n";
         return 2;
     }
     const std::string scen = argv[1], cand = argv[2];
     const int NKF = std::atoi(argv[3]), nseeds = std::atoi(argv[4]);
-    const double sigmaA = std::atof(argv[5]), sigmaPt = std::atof(argv[6]), sMax = std::atof(argv[7]);
+    const double sigmaA = std::atof(argv[5]), sigmaPt = std::atof(argv[6]), transRate = std::atof(argv[7]);   // P9-L: the 7th argument is the transitional rate threshold [m/s] (was s_max)
     const bool useLevels = cand == "levels" || cand == "levels_platform", usePlat = cand == "levels_platform";
     if (!(cand == "none" || useLevels))
     {
@@ -393,7 +435,7 @@ int main(int argc, char **argv)
         return 2;
     }
     const Scen S = MakeScen(scen);
-    const LevelParams LP = DesignLevelParams(sigmaA, sigmaPt, sMax);
+    const LevelParams LP = DesignLevelParams(sigmaA, sigmaPt, transRate);
     const bool perTrack = std::getenv("PER_TRACK") != nullptr;
 
     std::vector<double> trackMedSigned, trackMedAbs, trackMedAbsPm5, trackMedAbsPm5Upper;
@@ -789,6 +831,8 @@ int main(int argc, char **argv)
         for (const auto &kv : flagLast)
         {
             const int k = kv.first.first, w = kv.first.second;
+            if (W.obs[w][k].excluded)
+                continue;
             const bool stair = W.obs[w][k].stairContact;
             (stair ? nStairC : nLevelC) += 1;
             if (kv.second)

@@ -168,6 +168,13 @@ namespace ORB_SLAM3
         // The caller locks PedLevelsMutex() for as long as it uses the returned set; created on first use with `p`.
         std::mutex &PedLevelsMutex() { return mMutexPedLevels; }
         ped::LevelSet &PedLevels(const ped::LevelParams &p);
+        // [P9-L] reset counter of the level set: incremented under PedLevelsMutex() whenever the set is destroyed; a BA records it in Add and checks it in WriteBack
+        unsigned long PedLevelsEpoch() const { return mPedLevels.Epoch(); }
+        // [P9-L] writes solved level heights recorded at `epoch`; false (counted in *skipped) when the set has been destroyed since. The caller holds PedLevelsMutex().
+        bool ApplyPedLevelHeights(unsigned long epoch, const std::vector<std::pair<int, double>> &heights, const ped::LevelParams &p, long *skipped)
+        {
+            return ped::ApplyLevelHeights(mPedLevels, epoch, heights, p, skipped);
+        }
 
         void clear();
 
@@ -213,7 +220,7 @@ namespace ORB_SLAM3
         std::mutex mMutexPedMap;
         std::map<int, double> mPedBias;
         std::mutex mMutexPedLevels;
-        std::unique_ptr<ped::LevelSet> mPedLevels;
+        ped::LevelStore mPedLevels;
         vector<KeyFrame *> mvpKeyFrameOrigins;
         vector<unsigned long int> mvBackupKeyFrameOriginsId;
 

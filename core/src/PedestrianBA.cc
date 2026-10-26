@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <mutex>
+#include <set>
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
@@ -56,6 +57,23 @@ namespace ORB_SLAM3
             int nContacts = 0, nPointsMax = 0, merges = 0;
         };
         std::map<std::pair<unsigned long, int>, LevelStat> gLevelStat; // (map id, level id)
+        long gFootGateRejected = 0, gFootGateKept = 0; // P9-L step 2: contacts rejected / kept by the foot-validity gate (counted once per (window, contact))
+        long gLevelWritebackSkipped = 0;               // P9-L step 4: WriteBack calls whose level update was skipped because the level-set epoch changed
+        struct FoundRow // P9-L step 5: one founding contact of a level
+        {
+            double t, u, v, h;
+            int track;
+            unsigned long kf;
+        };
+        struct FoundLevel
+        {
+            unsigned long mapId, epoch;
+            int id;
+            double tCreated, z;
+            std::vector<FoundRow> rows;
+        };
+        std::vector<FoundLevel> gFound;
+        std::set<std::tuple<unsigned long, unsigned long, int>> gFoundSeen; // (map id, epoch, level id)
         std::map<std::tuple<unsigned long, unsigned long, int>, double> gBiasRow; // P9-C5: (map id, kf id, track) -> the track's log-scale bias b at the last write
         struct PtRow // P9-C5 (levels_shadow only): a static map point within the RANSAC radius of a non-transitional contact, its latest position and nearest contact
         {
@@ -715,7 +733,7 @@ namespace ORB_SLAM3
             // ------------------------------------------------------------------------------------------------ P9-C5 floor levels
             if (levelsMode && floorOn)
             {
-                const ped::LevelParams LP = ped::DesignLevelParams(P.levelSigmaA, P.levelSigmaPt, P.levelSMax);
+                const ped::LevelParams LP = ped::DesignLevelParams(P.levelSigmaA, P.levelSigmaPt, P.levelTransRate);
                 // implied contact heights h_c from the current person states (tracks in id order, entries in time order: deterministic)
                 std::vector<ped::Contact> cs;
                 std::vector<const Entry *> ce;
@@ -738,10 +756,23 @@ namespace ORB_SLAM3
                         const double sr = (dw(0) * (p0(0) - cam(0)) + dw(1) * (p0(1) - cam(1))) / dh2;
                         if (!(sr > 0))
                             continue;
+                        // P9-L step 2: foot-validity gate (GT-free): the foot pixel must not lie more than tau * maskH above the mask bottom
+                        if (!ped::FootContactValid(e.obs->footV, e.obs->rootV, e.obs->maskH, P.footGateTau))
+                        {
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            ++gFootGateRejected;
+                            continue;
+                        }
+                        {
+                            std::lock_guard<std::mutex> lk(gLogMutex);
+                            ++gFootGateKept;
+                        }
                         ped::Contact k;
                         k.track = tr.first;
                         k.kf = e.kf->mnId;
                         k.t = e.kf->mTimeStamp;
+                        k.footU = e.obs->footU;
+                        k.footV = e.obs->footV;
                         k.x = p0(0);
                         k.y = p0(1);
                         k.h = cam(2) + sr * dw(2) - P.floorMidDeltaM;
@@ -753,6 +784,24 @@ namespace ORB_SLAM3
                 ped::FlagTransitional(cs, LP);
                 LS.Update(cs);
                 const unsigned long mapId = pMap->GetId();
+                G.levelEpoch = pMap->PedLevelsEpoch(); // read under the level mutex, together with the set (P9-L step 4)
+                for (const auto &lv : LS.Levels()) // P9-L step 5: log the founding contacts of every level once, when it first appears
+                    if (!lv.founding.empty() && gFoundSeen.insert({mapId, G.levelEpoch, lv.id}).second)
+                    {
+                        FoundLevel fl;
+                        fl.mapId = mapId;
+                        fl.epoch = G.levelEpoch;
+                        fl.id = lv.id;
+                        fl.z = lv.z;
+                        fl.tCreated = 0;
+                        for (const ped::Contact &fc : lv.founding)
+                        {
+                            fl.tCreated = std::max(fl.tCreated, fc.t);
+                            fl.rows.push_back({fc.t, fc.footU, fc.footV, fc.h, fc.track, fc.kf});
+                        }
+                        std::lock_guard<std::mutex> lk(gLogMutex);
+                        gFound.push_back(std::move(fl));
+                    }
                 std::map<int, ped::VertexFloorLevel *> lvVert;
                 std::map<int, std::vector<size_t>> lvContacts; // level id -> indices into cs (non-transitional, free state)
                 for (size_t i = 0; i < cs.size(); ++i)
@@ -1180,6 +1229,7 @@ namespace ORB_SLAM3
         f << "# L map_id level_id z n_contacts n_f2_points_max n_merges_map\n";
         f << "# P map_id point_id x y z dist_to_nearest_contact kf_of_that_contact track_of_that_contact (levels_shadow only)\n";
         f << "# B map_id kf_id track b  (the track's log-scale bias at the last write of that state; levels / levels_platform)\n";
+        f << "# P9-L counters: foot_gate_rejected " << gFootGateRejected << " foot_gate_kept " << gFootGateKept << " level_writeback_skipped " << gLevelWritebackSkipped << "\n";
         char buf[384];
         std::lock_guard<std::mutex> lk(gLogMutex);
         for (const auto &kv : gLevelLog)
@@ -1203,6 +1253,23 @@ namespace ORB_SLAM3
         {
             std::snprintf(buf, sizeof(buf), "L %lu %d %a %d %d %d\n", kv.first.first, kv.first.second, kv.second.z, kv.second.nContacts, kv.second.nPointsMax, kv.second.merges);
             f << buf;
+        }
+        // P9-L step 5: ped_levels_found.log next to ped_levels.log
+        std::string fp = path;
+        const size_t dot = fp.rfind(".log");
+        fp = (dot == std::string::npos ? fp : fp.substr(0, dot)) + "_found.log";
+        std::ofstream ff(fp);
+        ff << "# P9-L founding contacts. F map_id epoch level_id t_created z_at_creation n_contacts ; then one C row per founding contact: C map_id epoch level_id t track u v h_c kf\n";
+        ff << "# epoch = the level-set epoch of the map (advances on reset / merge / scaled rotation / loop correction; level ids restart at 0 each epoch)\n";
+        for (const FoundLevel &fl : gFound)
+        {
+            std::snprintf(buf, sizeof(buf), "F %lu %lu %d %.9f %a %zu\n", fl.mapId, fl.epoch, fl.id, fl.tCreated, fl.z, fl.rows.size());
+            ff << buf;
+            for (const FoundRow &r : fl.rows)
+            {
+                std::snprintf(buf, sizeof(buf), "C %lu %lu %d %.9f %d %.2f %.2f %a %lu\n", fl.mapId, fl.epoch, fl.id, r.t, r.track, r.u, r.v, r.h, r.kf);
+                ff << buf;
+            }
         }
     }
 
@@ -1236,15 +1303,19 @@ namespace ORB_SLAM3
         }
         if (!g.levels.empty())
         {
+            // P9-L step 4: the solved heights belong to the level-set epoch Add read; if the set was destroyed since (map reset / merge / scaled rotation / loop correction) they are dropped
             std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
-            const ped::LevelParams LP = ped::DesignLevelParams(PedestrianParams::Get().levelSigmaA, PedestrianParams::Get().levelSigmaPt, PedestrianParams::Get().levelSMax);
-            ped::LevelSet &LS = pMap->PedLevels(LP);
+            const ped::LevelParams LP = ped::DesignLevelParams(PedestrianParams::Get().levelSigmaA, PedestrianParams::Get().levelSigmaPt, PedestrianParams::Get().levelTransRate);
+            std::vector<std::pair<int, double>> heights;
             for (const auto &lh : g.levels)
-            {
-                LS.SetHeight(lh.id, lh.v->estimate());
-                std::lock_guard<std::mutex> lk(gLogMutex);
-                gLevelStat[{pMap->GetId(), lh.id}].z = lh.v->estimate();
-            }
+                heights.push_back({lh.id, lh.v->estimate()});
+            long skipped = 0;
+            const bool applied = pMap->ApplyPedLevelHeights(g.levelEpoch, heights, LP, &skipped);
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            gLevelWritebackSkipped += skipped;
+            if (applied)
+                for (const auto &h : heights)
+                    gLevelStat[{pMap->GetId(), h.first}].z = h.second;
         }
         for (const auto &h : g.pxFloors)
         {

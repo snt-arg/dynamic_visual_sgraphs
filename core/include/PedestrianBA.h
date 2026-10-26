@@ -32,6 +32,7 @@ namespace ORB_SLAM3
             bool fixed;
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
+        unsigned long levelEpoch = 0;                          // P9-L: epoch of the map's level set when Add read it (WriteBack skips the level update if it changed)
         enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, LVPT, PLAT, NTYPES }; // LVPT = F2 point on level, PLAT = F3 platform height (P9-C5)
         struct FloorHandle // one floor-contact edge (P9-C3): written back with the state it belongs to
         {

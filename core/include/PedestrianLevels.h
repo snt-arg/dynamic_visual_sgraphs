@@ -3,8 +3,10 @@
 //
 // Every threshold is a field of LevelParams and has NO default: the caller (settings reader) must provide it, or fail (fail-fast rule of P9-C5).
 // Design constants declared in task_C5.md: creation needs >= 10 contacts from >= 2 tracks agreeing within +-2 sigma_a, association < 3 sigma_a,
-// merge < 2 sigma_a, transitional window 1.5 s with >= 4 contacts and >= 0.5 m travel, RANSAC threshold 2 sigma_pt.
-// Calibrated (constants_c5.md): sigma_a, sigma_pt, s_max.
+// merge < 2 sigma_a, transitional window 1.5 s with >= 4 contacts, RANSAC threshold 2 sigma_pt.
+// Calibrated (constants_c5.md): sigma_a, sigma_pt. P9-L (p9l_part2.md step 3): the transitional test is the rate |dh/dt| of the contact height (robust slope against time,
+// no travel condition) with threshold transRateMax [m/s]; it replaces the slope against the walked path length (s_max), which stair windows defeat because the
+// root-state path is inflated about 4x there (diagnosis.md D1).
 #ifndef PEDESTRIAN_LEVELS_H
 #define PEDESTRIAN_LEVELS_H
 
@@ -12,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -23,12 +26,12 @@ namespace ORB_SLAM3
     {
         struct LevelParams
         {
-            double sigmaA, sigmaPt, sMax;              // calibrated
+            double sigmaA, sigmaPt, transRateMax;      // sigmaA, sigmaPt calibrated (C5); transRateMax [m/s] set on the synthetic stair scenarios (P9-L step 3)
             double assocK, createK, mergeK;            // 3, 2, 2 (multiples of sigmaA)
             int createMinContacts, createMinTracks;    // 10, 2
             double createMinExtentM;                   // 1.0: founding contacts must span >= this horizontally (c5_gate_revision.md, design change 2)
             double edgeGuardS;                         // 1.5 (= transWindowS): a contact this close in time to a transitional contact of its track never enters the pool (design change 1)
-            double transWindowS, transMinTravelM;      // 1.5, 0.5
+            double transWindowS;                       // 1.5
             int transMinContacts;                      // 4
             double ransacThrK, ransacRadiusM;          // 2 (x sigmaPt), 1.0
             int ransacMinInliers;                      // 5
@@ -36,13 +39,13 @@ namespace ORB_SLAM3
             int ransacIters;                           // RansacIterations(0.99, 0.5)
         };
 
-        // The design constants of task_C5.md / patch_stairs_ransac.md; only the three calibrated values are inputs.
-        inline LevelParams DesignLevelParams(double sigmaA, double sigmaPt, double sMax)
+        // The design constants of task_C5.md / patch_stairs_ransac.md; only the three calibrated / set values are inputs.
+        inline LevelParams DesignLevelParams(double sigmaA, double sigmaPt, double transRateMax)
         {
             LevelParams P;
             P.sigmaA = sigmaA;
             P.sigmaPt = sigmaPt;
-            P.sMax = sMax;
+            P.transRateMax = transRateMax;
             P.assocK = 3;
             P.createK = 2;
             P.mergeK = 2;
@@ -51,7 +54,6 @@ namespace ORB_SLAM3
             P.createMinExtentM = 1.0;
             P.edgeGuardS = 1.5;
             P.transWindowS = 1.5;
-            P.transMinTravelM = 0.5;
             P.transMinContacts = 4;
             P.ransacThrK = 2;
             P.ransacRadiusM = 1.0;
@@ -75,13 +77,32 @@ namespace ORB_SLAM3
             double t;           // seconds
             double x, y;        // person footprint, world (horizontal)
             double h;           // implied floor height h_c
+            double footU = 0, footV = 0; // P9-L: the contact (lowest foot keypoint) pixel; only logged (ped_levels_found.log)
             bool transitional = false;
             int level = -1;     // level id or -1
         };
 
-        // ------------------------------------------------------------------------------------------- transitional segments (patch B)
-        // Marks, per track, the contacts of every window (<= transWindowS long, >= transMinContacts contacts, >= transMinTravelM walked) whose regression
-        // slope of h_c on the walked horizontal distance exceeds sMax. Contacts of one track must be time-ordered. Returns the number flagged.
+        // ------------------------------------------------------------------------------------------- transitional segments (patch B, P9-L rate rule)
+        // Marks, per track, the contacts of every window (<= transWindowS long, >= transMinContacts contacts) whose robust slope of h_c against TIME (Theil-Sen: the median of the
+        // pairwise slopes) exceeds transRateMax in magnitude [m/s]. No travel condition: a person standing on an escalator changes floor height without walking. Contacts of one
+        // track must be time-ordered. Returns the number flagged.
+        inline double TheilSenRate(const std::vector<Contact> &cs, const std::vector<int> &ix, int a, int b)
+        {
+            std::vector<double> sl;
+            for (int i = a; i <= b; ++i)
+                for (int j = i + 1; j <= b; ++j)
+                {
+                    const double dt = cs[ix[j]].t - cs[ix[i]].t;
+                    if (dt > 1e-6)
+                        sl.push_back((cs[ix[j]].h - cs[ix[i]].h) / dt);
+                }
+            if (sl.empty())
+                return 0.0;
+            std::sort(sl.begin(), sl.end());
+            const size_t m = sl.size();
+            return m % 2 ? sl[m / 2] : 0.5 * (sl[m / 2 - 1] + sl[m / 2]);
+        }
+
         inline int FlagTransitional(std::vector<Contact> &cs, const LevelParams &P)
         {
             std::map<int, std::vector<int>> byTrack;
@@ -92,38 +113,17 @@ namespace ORB_SLAM3
             {
                 const std::vector<int> &ix = kv.second;
                 const int m = static_cast<int>(ix.size());
-                std::vector<double> s(m, 0.0); // cumulative walked distance
                 for (int a = 1; a < m; ++a)
-                {
                     if (cs[ix[a]].t < cs[ix[a - 1]].t)
                         throw std::runtime_error("[Levels] FlagTransitional: contacts of a track are not time-ordered");
-                    s[a] = s[a - 1] + std::hypot(cs[ix[a]].x - cs[ix[a - 1]].x, cs[ix[a]].y - cs[ix[a - 1]].y);
-                }
                 for (int b = 0; b < m; ++b) // window ends at contact b
                 {
                     int a = b;
                     while (a > 0 && cs[ix[b]].t - cs[ix[a - 1]].t <= P.transWindowS)
                         --a;
-                    const int cnt = b - a + 1;
-                    if (cnt < P.transMinContacts || s[b] - s[a] < P.transMinTravelM)
+                    if (b - a + 1 < P.transMinContacts)
                         continue;
-                    double ms = 0, mh = 0;
-                    for (int k = a; k <= b; ++k)
-                    {
-                        ms += s[k];
-                        mh += cs[ix[k]].h;
-                    }
-                    ms /= cnt;
-                    mh /= cnt;
-                    double sxx = 0, sxy = 0;
-                    for (int k = a; k <= b; ++k)
-                    {
-                        sxx += (s[k] - ms) * (s[k] - ms);
-                        sxy += (s[k] - ms) * (cs[ix[k]].h - mh);
-                    }
-                    if (sxx <= 0)
-                        continue;
-                    if (std::abs(sxy / sxx) > P.sMax)
+                    if (std::abs(TheilSenRate(cs, ix, a, b)) > P.transRateMax)
                         for (int k = a; k <= b; ++k)
                             cs[ix[k]].transitional = true;
                 }
@@ -139,6 +139,7 @@ namespace ORB_SLAM3
             int id;
             double z;
             int nContacts = 0;
+            std::vector<Contact> founding; // P9-L step 5: the contacts that created the level (ped_levels_found.log)
         };
 
         class LevelSet
@@ -268,6 +269,8 @@ namespace ORB_SLAM3
                     L.id = nextId++;
                     L.z = med;
                     L.nContacts = static_cast<int>(hh.size());
+                    for (const Contact *c : in)
+                        L.founding.push_back(*c);
                     levels.push_back(L);
                     std::vector<Contact> rest;
                     for (const Contact &c : pool)
@@ -293,6 +296,7 @@ namespace ORB_SLAM3
                                 const double wi = std::max(1, levels[i].nContacts), wj = std::max(1, levels[j].nContacts); // int -> double below
                                 levels[i].z = (wi * levels[i].z + wj * levels[j].z) / (wi + wj);
                                 levels[i].nContacts += levels[j].nContacts;
+                                levels[i].founding.insert(levels[i].founding.end(), levels[j].founding.begin(), levels[j].founding.end());
                                 levels.erase(levels.begin() + j);
                                 ++merges;
                                 again = true;
@@ -301,6 +305,13 @@ namespace ORB_SLAM3
             }
 
             void SetHeight(int id, double z) { Find(id).z = z; }
+            bool Has(int id) const
+            {
+                for (const Level &L : levels)
+                    if (L.id == id)
+                        return true;
+                return false;
+            }
             void Clear()
             {
                 levels.clear();
@@ -324,6 +335,64 @@ namespace ORB_SLAM3
             int nextId;
             int merges = 0;
         };
+
+        // ------------------------------------------------------------------------------------------- P9-L step 4: epoch guard
+        // The level set of a map is destroyed on map reset, merge, scaled rotation and loop correction (Map::ResetPedestriansLocked) and rebuilt with ids from 0. A BA that read
+        // the set in Add and writes the solved heights back later (WriteBack) must not write into a rebuilt set: its ids belong to the old epoch. The store counts resets; Add
+        // records the epoch it read, WriteBack skips the update (and counts it) when the epoch has changed. Callers hold the map's level mutex around every call.
+        class LevelStore
+        {
+        public:
+            LevelSet &Get(const LevelParams &p)
+            {
+                if (!set)
+                    set.reset(new LevelSet(p));
+                return *set;
+            }
+            void Reset()
+            {
+                set.reset();
+                ++epoch;
+            }
+            unsigned long Epoch() const { return epoch; }
+
+        private:
+            std::unique_ptr<LevelSet> set;
+            unsigned long epoch = 0;
+        };
+
+        // Writes the solved heights (level id, z) of a BA that read the store at `recordedEpoch`. Returns false (and counts, if `skipped`) when the epoch has changed since.
+        inline bool ApplyLevelHeights(LevelStore &store, unsigned long recordedEpoch, const std::vector<std::pair<int, double>> &heights, const LevelParams &P, long *skipped = nullptr)
+        {
+            if (store.Epoch() != recordedEpoch)
+            {
+                if (skipped)
+                    ++*skipped;
+                return false;
+            }
+            LevelSet &LS = store.Get(P);
+            for (const auto &h : heights)
+            {
+                if (!LS.Has(h.first)) // merged away by another BA's Update since Add: same epoch, but the id is gone
+                {
+                    if (skipped)
+                        ++*skipped;
+                    continue;
+                }
+                LS.SetHeight(h.first, h.second);
+            }
+            return true;
+        }
+
+        // ------------------------------------------------------------------------------------------- P9-L step 2: foot-validity gate
+        // A foot contact is rejected when its pixel lies more than tau * maskH above the expected mask bottom (root_v + 0.55 maskH; the root is defined as (cu, vb - 0.55 h), so this is
+        // the bottom of the person's mask). tau <= 0 switches the gate off; a person without a mask height is not gated.
+        inline bool FootContactValid(double footV, double rootV, double maskH, double tau)
+        {
+            if (!(tau > 0) || !(maskH > 0))
+                return true;
+            return (rootV + 0.55 * maskH - footV) <= tau * maskH;
+        }
 
         // ------------------------------------------------------------------------------------------- RANSAC for the points of a level (patch A)
         struct PointZ

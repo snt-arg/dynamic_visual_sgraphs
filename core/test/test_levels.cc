@@ -11,10 +11,10 @@ static int failures = 0;
 static LevelParams TP()
 {
     LevelParams P;
-    P.sigmaA = 0.05; P.sigmaPt = 0.03; P.sMax = 0.2;
+    P.sigmaA = 0.05; P.sigmaPt = 0.03; P.transRateMax = 0.15;
     P.assocK = 3; P.createK = 2; P.mergeK = 2;
     P.createMinContacts = 10; P.createMinTracks = 2; P.createMinExtentM = 1.0; P.edgeGuardS = 1.5;
-    P.transWindowS = 1.5; P.transMinTravelM = 0.5; P.transMinContacts = 4;
+    P.transWindowS = 1.5; P.transMinContacts = 4;
     P.ransacThrK = 2; P.ransacRadiusM = 1.0; P.ransacMinInliers = 5; P.ransacMaxOffsetK = 3;
     P.ransacIters = RansacIterations(0.99, 0.5);
     return P;
@@ -41,11 +41,42 @@ int main()
     std::mt19937 g(5);
     CHECK(RansacIterations(0.99, 0.5) == 7 && DesignLevelParams(1,1,1).ransacIters == 7, "RANSAC iterations for 99% at 50% inliers, 1-D model = 7");
 
-    // ---- transitional
-    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "flat walk (noise 1.5 cm) is not flagged"); }
-    { auto c = Walk(1, 30, 0.6, 0.0, 0.175 / 0.28, 0, &g, 0.015); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n >= 27, "stairs (slope 0.625) are flagged"); }
-    { auto c = Walk(1, 30, 0.0, 0.0, 0.0, 0, &g, 0.05); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "standing still (noisy heights) is not flagged"); }
-    { auto c = Walk(1, 30, 0.2, 0.0, 0.0, 0, &g, 0.0); for (size_t i = 0; i < c.size(); ++i) c[i].h = 0.4 * (i % 2); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "slow shuffle (travel < 0.5 m per window) with jumping heights is not flagged");}
+    // ---- transitional (P9-L: robust |dh/dt| over the 1.5 s window, no travel condition)
+    auto flagged = [](const std::vector<Contact> &c) { int n = 0; for (auto &x : c) n += x.transitional; return n; };
+    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); FlagTransitional(c, P); CHECK(flagged(c) == 0, "flat walk (noise 1.5 cm) is not flagged"); }
+    { auto c = Walk(1, 30, 0.6, 0.0, 0.175 / 0.28, 0, &g, 0.015); FlagTransitional(c, P); CHECK(flagged(c) >= 27, "stairs (0.375 m/s) are flagged"); }
+    { auto c = Walk(1, 30, 0.0, 0.0, 0.0, 0, &g, 0.05); FlagTransitional(c, P); CHECK(flagged(c) == 0, "standing still (noisy heights, sigma 5 cm) is not flagged"); }
+    { std::vector<Contact> c; for (int i = 0; i < 40; ++i) { Contact x; x.track = 1; x.kf = i; x.t = i / 6.0; x.x = 3.0; x.y = 0.0; x.h = -0.25 * x.t; c.push_back(x); } FlagTransitional(c, P);
+      CHECK(flagged(c) >= 36, "an escalator rider (standing still, floor moving at 0.25 m/s) is flagged: no travel condition"); }
+    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); c[15].h += 0.6; c[16].h -= 0.5; FlagTransitional(c, P); CHECK(flagged(c) == 0, "two outlier heights (+0.6 m, -0.5 m) in a flat walk do not flag it (Theil-Sen)"); }
+    { auto c = Walk(1, 3, 0.6, 0.0, 0.625, 0, &g, 0.0); FlagTransitional(c, P); CHECK(flagged(c) == 0, "fewer than 4 contacts in a window are never flagged"); }
+    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); auto d = Walk(2, 30, 0.6, 0.0, 0.625, 0, &g, 0.015); c.insert(c.end(), d.begin(), d.end()); FlagTransitional(c, P);
+      int a = 0, b = 0; for (auto &x : c) (x.track == 1 ? a : b) += x.transitional; CHECK(a == 0 && b >= 27, "flags are per track: the stair walker is flagged, the flat walker next to it is not"); }
+
+    // ---- P9-L step 2: foot-validity gate
+    CHECK(FootContactValid(250.0, 200.0, 100.0, 0.08), "foot pixel 5 px above the mask bottom (root_v 200 + 0.55 * 100 = 255) is kept at tau 0.08 (0.05 maskH)");
+    CHECK(!FootContactValid(240.0, 200.0, 100.0, 0.08), "foot pixel 15 px above the mask bottom (0.15 maskH) is rejected at tau 0.08");
+    CHECK(FootContactValid(262.0, 200.0, 100.0, 0.08), "foot pixel below the mask bottom is kept");
+    CHECK(FootContactValid(100.0, 200.0, 100.0, 0.0), "tau = 0 switches the gate off");
+    CHECK(FootContactValid(100.0, 200.0, 0.0, 0.08), "a person without a mask height is not gated");
+
+    // ---- P9-L step 4: epoch guard (reset between Add and WriteBack)
+    { LevelStore st; LevelSet &S = st.Get(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01); S.Update(a); S.Update(b);
+      CHECK(st.Get(P).Levels().size() == 1, "epoch test setup: one level at z ~ 0");
+      const unsigned long e0 = st.Epoch(); std::vector<std::pair<int, double>> solved = {{st.Get(P).Levels()[0].id, 0.07}}; long skipped = 0;
+      CHECK(ApplyLevelHeights(st, e0, solved, P, &skipped) && std::abs(st.Get(P).Levels()[0].z - 0.07) < 1e-12 && skipped == 0, "same epoch: the solved height is written");
+      // a BA reads the set (epoch e0), then the map is reset and a new set is built whose level 0 is at -1.3 m
+      st.Reset(); LevelSet &N = st.Get(P); auto c = Walk(3, 12, 1.0, -1.3, 0, 0, &g, 0.01), d = Walk(4, 12, 1.0, -1.3, 0, 0, &g, 0.01); N.Update(c); N.Update(d);
+      CHECK(st.Epoch() == e0 + 1 && N.Levels().size() == 1 && N.Levels()[0].id == 0, "reset advances the epoch; the rebuilt set restarts its ids at 0");
+      const double zNew = N.Levels()[0].z; std::vector<std::pair<int, double>> stale = {{0, 0.5}};
+      CHECK(!ApplyLevelHeights(st, e0, stale, P, &skipped) && skipped == 1 && std::abs(st.Get(P).Levels()[0].z - zNew) < 1e-12, "reset between Add and WriteBack: nothing is written into the new level 0, the skip is counted");
+      std::vector<std::pair<int, double>> gone = {{7, 0.1}}; CHECK(ApplyLevelHeights(st, st.Epoch(), gone, P, &skipped) && skipped == 2, "same epoch but the level id was merged away: skipped and counted, no exception"); }
+
+    // ---- P9-L step 5: founding contacts
+    { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01); for (auto &x : a) { x.footU = 300 + x.kf; x.footV = 280; } S.Update(a); S.Update(b);
+      CHECK(S.Levels().size() == 1 && S.Levels()[0].founding.size() >= 10, "a created level carries its founding contacts (>= 10)");
+      int withPx = 0; for (auto &c : S.Levels()[0].founding) withPx += c.footV == 280; CHECK(withPx > 0, "founding contacts keep their contact pixel");
+      std::set<int> tr; for (auto &c : S.Levels()[0].founding) tr.insert(c.track); CHECK(tr.size() >= 2, "the founding contacts come from >= 2 tracks"); }
 
     // ---- creation / association / merging
     { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.02, 0, 0, &g, 0.01); S.Update(a); CHECK(S.Levels().empty() && S.PoolSize() == 12, "12 contacts from one track create no level");
