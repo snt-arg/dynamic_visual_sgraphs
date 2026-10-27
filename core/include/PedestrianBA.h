@@ -86,6 +86,13 @@ namespace ORB_SLAM3
         // then `L` rows, the last state of every level seen: L map_id level_id z n_contacts n_f2_points_max n_merges_map
         static void DumpLevelsLog(const std::string &path);
 
+        // P9-H A2: append a deterministic event record. Sensor time and frame index
+        // are required for every event, including runner-owned IMU/reset/scale events.
+        static void RecordEvent(const std::string &type, double sensorTimestamp, unsigned long frameIndex,
+                                unsigned long mapId, unsigned long epoch, int id = -1, int otherId = -1,
+                                double height = 0, double otherHeight = 0, int contacts = 0, int otherContacts = 0,
+                                double scale = 0);
+
         // P9-L Part 4 step 1b: poster rejection (Pedestrians.PosterReject). IsPosterTrack: the track has been flagged (latched); the runner leaves the instance mask of a flagged track out of the ORB mask.
         // DumpPosterLog: skipped (keyframe, track) entries and the flagged tracks with the flag time and the features that triggered it.
         static bool IsPosterTrack(int trackId);
