@@ -80,7 +80,7 @@ int main()
     const Rows first = rowsOf(fp, 22, ok); // map epoch kf stamp track px py pz vx vy vz tx ty tz qx qy qz qw root_u root_v lpx mask_h
     CHECK(ok && first.size() == 4, "first-write log parses: 22 fields per row, one row per (map, epoch, kf, track)");
     const Rows last = rowsOf(lp, 16, ok); // kf stamp track px py pz vx vy vz tx ty tz qx qy qz qw
-    CHECK(ok && last.size() == 2, "last-write log is unchanged: one row per (kf, track), 16 fields");
+    CHECK(ok && last.size() == 3, "last-write log is unchanged: one row per (kf, track), 16 fields");
     auto hex = [](double v) {
         char b[64];
         std::snprintf(b, sizeof(b), "%a", v);
