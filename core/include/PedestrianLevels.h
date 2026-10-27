@@ -3,10 +3,11 @@
 //
 // Every threshold is a field of LevelParams and has NO default: the caller (settings reader) must provide it, or fail (fail-fast rule of P9-C5).
 // Design constants declared in task_C5.md: creation needs >= 10 contacts from >= 2 tracks agreeing within +-2 sigma_a, association < 3 sigma_a,
-// merge < 2 sigma_a, transitional window 1.5 s with >= 4 contacts, RANSAC threshold 2 sigma_pt.
-// Calibrated (constants_c5.md): sigma_a, sigma_pt. P9-L (p9l_part2.md step 3): the transitional test is the rate |dh/dt| of the contact height (robust slope against time,
-// no travel condition) with threshold transRateMax [m/s]; it replaces the slope against the walked path length (s_max), which stair windows defeat because the
-// root-state path is inflated about 4x there (diagnosis.md D1).
+// merge < 2 sigma_a, transitional window 1.5 s with >= 4 contacts and >= 0.5 m travel, RANSAC threshold 2 sigma_pt.
+// Calibrated (constants_c5.md): sigma_a, sigma_pt, s_max.
+// P9-L Part 4 (p9l_part4.md step 2.4): the dh/dt transitional rule of P9-L Part 2 step 3 is REVERTED to this path-length slope rule (no rate met the fixed criterion on the recalibrated
+// synthetic harness); the foot gate, epoch guard, founding log and the poster detector below are P9-L additions.
+
 #ifndef PEDESTRIAN_LEVELS_H
 #define PEDESTRIAN_LEVELS_H
 
@@ -26,12 +27,12 @@ namespace ORB_SLAM3
     {
         struct LevelParams
         {
-            double sigmaA, sigmaPt, transRateMax;      // sigmaA, sigmaPt calibrated (C5); transRateMax [m/s] set on the synthetic stair scenarios (P9-L step 3)
+            double sigmaA, sigmaPt, sMax;              // calibrated
             double assocK, createK, mergeK;            // 3, 2, 2 (multiples of sigmaA)
             int createMinContacts, createMinTracks;    // 10, 2
             double createMinExtentM;                   // 1.0: founding contacts must span >= this horizontally (c5_gate_revision.md, design change 2)
             double edgeGuardS;                         // 1.5 (= transWindowS): a contact this close in time to a transitional contact of its track never enters the pool (design change 1)
-            double transWindowS;                       // 1.5
+            double transWindowS, transMinTravelM;      // 1.5, 0.5
             int transMinContacts;                      // 4
             double ransacThrK, ransacRadiusM;          // 2 (x sigmaPt), 1.0
             int ransacMinInliers;                      // 5
@@ -40,12 +41,12 @@ namespace ORB_SLAM3
         };
 
         // The design constants of task_C5.md / patch_stairs_ransac.md; only the three calibrated / set values are inputs.
-        inline LevelParams DesignLevelParams(double sigmaA, double sigmaPt, double transRateMax)
+        inline LevelParams DesignLevelParams(double sigmaA, double sigmaPt, double sMax)
         {
             LevelParams P;
             P.sigmaA = sigmaA;
             P.sigmaPt = sigmaPt;
-            P.transRateMax = transRateMax;
+            P.sMax = sMax;
             P.assocK = 3;
             P.createK = 2;
             P.mergeK = 2;
@@ -54,6 +55,7 @@ namespace ORB_SLAM3
             P.createMinExtentM = 1.0;
             P.edgeGuardS = 1.5;
             P.transWindowS = 1.5;
+            P.transMinTravelM = 0.5;
             P.transMinContacts = 4;
             P.ransacThrK = 2;
             P.ransacRadiusM = 1.0;
@@ -82,27 +84,9 @@ namespace ORB_SLAM3
             int level = -1;     // level id or -1
         };
 
-        // ------------------------------------------------------------------------------------------- transitional segments (patch B, P9-L rate rule)
-        // Marks, per track, the contacts of every window (<= transWindowS long, >= transMinContacts contacts) whose robust slope of h_c against TIME (Theil-Sen: the median of the
-        // pairwise slopes) exceeds transRateMax in magnitude [m/s]. No travel condition: a person standing on an escalator changes floor height without walking. Contacts of one
-        // track must be time-ordered. Returns the number flagged.
-        inline double TheilSenRate(const std::vector<Contact> &cs, const std::vector<int> &ix, int a, int b)
-        {
-            std::vector<double> sl;
-            for (int i = a; i <= b; ++i)
-                for (int j = i + 1; j <= b; ++j)
-                {
-                    const double dt = cs[ix[j]].t - cs[ix[i]].t;
-                    if (dt > 1e-6)
-                        sl.push_back((cs[ix[j]].h - cs[ix[i]].h) / dt);
-                }
-            if (sl.empty())
-                return 0.0;
-            std::sort(sl.begin(), sl.end());
-            const size_t m = sl.size();
-            return m % 2 ? sl[m / 2] : 0.5 * (sl[m / 2 - 1] + sl[m / 2]);
-        }
-
+        // ------------------------------------------------------------------------------------------- transitional segments (patch B)
+        // Marks, per track, the contacts of every window (<= transWindowS long, >= transMinContacts contacts, >= transMinTravelM walked) whose regression
+        // slope of h_c on the walked horizontal distance exceeds sMax. Contacts of one track must be time-ordered. Returns the number flagged.
         inline int FlagTransitional(std::vector<Contact> &cs, const LevelParams &P)
         {
             std::map<int, std::vector<int>> byTrack;
@@ -113,17 +97,38 @@ namespace ORB_SLAM3
             {
                 const std::vector<int> &ix = kv.second;
                 const int m = static_cast<int>(ix.size());
+                std::vector<double> s(m, 0.0); // cumulative walked distance
                 for (int a = 1; a < m; ++a)
+                {
                     if (cs[ix[a]].t < cs[ix[a - 1]].t)
                         throw std::runtime_error("[Levels] FlagTransitional: contacts of a track are not time-ordered");
+                    s[a] = s[a - 1] + std::hypot(cs[ix[a]].x - cs[ix[a - 1]].x, cs[ix[a]].y - cs[ix[a - 1]].y);
+                }
                 for (int b = 0; b < m; ++b) // window ends at contact b
                 {
                     int a = b;
                     while (a > 0 && cs[ix[b]].t - cs[ix[a - 1]].t <= P.transWindowS)
                         --a;
-                    if (b - a + 1 < P.transMinContacts)
+                    const int cnt = b - a + 1;
+                    if (cnt < P.transMinContacts || s[b] - s[a] < P.transMinTravelM)
                         continue;
-                    if (std::abs(TheilSenRate(cs, ix, a, b)) > P.transRateMax)
+                    double ms = 0, mh = 0;
+                    for (int k = a; k <= b; ++k)
+                    {
+                        ms += s[k];
+                        mh += cs[ix[k]].h;
+                    }
+                    ms /= cnt;
+                    mh /= cnt;
+                    double sxx = 0, sxy = 0;
+                    for (int k = a; k <= b; ++k)
+                    {
+                        sxx += (s[k] - ms) * (s[k] - ms);
+                        sxy += (s[k] - ms) * (cs[ix[k]].h - mh);
+                    }
+                    if (sxx <= 0)
+                        continue;
+                    if (std::abs(sxy / sxx) > P.sMax)
                         for (int k = a; k <= b; ++k)
                             cs[ix[k]].transitional = true;
                 }
@@ -393,6 +398,83 @@ namespace ORB_SLAM3
                 return true;
             return (rootV + 0.55 * maskH - footV) <= tau * maskH;
         }
+
+        // ------------------------------------------------------------------------------------------- P9-L Part 4 step 1b: poster / static-person rejection
+        // GT-free. A printed person (a poster on an advertising column) is detected as a person; it is static, so its estimated world root hardly moves while the camera passes. Rule (calibrated on
+        // subway_s1_24h, p9l_part4 report): a track is a poster once, within one continuous record (one map frame, gaps <= gapS), it has lasted >= minDurationS, the camera baseline since the first
+        // state subtends >= minParallaxDeg at the mean range, and the horizontal bounding box of its (latest) root estimates is <= maxExtentM across. The decision is latched for the sequence.
+        struct PosterParams
+        {
+            double minDurationS, minParallaxDeg, maxExtentM;
+        };
+        struct PosterInfo
+        {
+            double tFlag = 0, durationS = 0, extentM = 0, parallaxDeg = 0;
+        };
+        class PosterDetector
+        {
+        public:
+            explicit PosterDetector(const PosterParams &p) : P(p) {}
+            // One estimated person state: its keyframe id, time, root (x, y), camera centre (cx, cy, cz) in the same map frame; `epoch` identifies the map frame (a new epoch restarts the record).
+            void Observe(int track, unsigned long epoch, unsigned long kf, double t, double rx, double ry, double rz, double cx, double cy, double cz)
+            {
+                if (flagged.count(track))
+                    return;
+                Rec &r = rec[track];
+                if (!r.pts.empty() && (r.epoch != epoch || t - r.tMax > gapS))
+                    r = Rec();
+                r.epoch = epoch;
+                r.tMax = std::max(r.tMax, t);
+                r.pts[kf] = {t, rx, ry, rz, cx, cy, cz};
+                Evaluate(track, r, t);
+            }
+            bool IsPoster(int track) const { return flagged.count(track) > 0; }
+            const std::map<int, PosterInfo> &Flagged() const { return flagged; }
+            static constexpr double gapS = 1.0;
+
+        private:
+            struct Pt
+            {
+                double t, x, y, z, cx, cy, cz;
+            };
+            struct Rec
+            {
+                unsigned long epoch = 0;
+                double tMax = -1e30;
+                std::map<unsigned long, Pt> pts;
+            };
+            void Evaluate(int track, const Rec &r, double now)
+            {
+                if (r.pts.size() < 4)
+                    return;
+                const Pt *first = nullptr, *last = nullptr;
+                double xmin = 1e30, xmax = -1e30, ymin = 1e30, ymax = -1e30, rangeSum = 0;
+                for (const auto &kv : r.pts)
+                {
+                    const Pt &p = kv.second;
+                    if (!first || p.t < first->t) first = &p;
+                    if (!last || p.t > last->t) last = &p;
+                    xmin = std::min(xmin, p.x); xmax = std::max(xmax, p.x); ymin = std::min(ymin, p.y); ymax = std::max(ymax, p.y);
+                    rangeSum += std::sqrt((p.x - p.cx) * (p.x - p.cx) + (p.y - p.cy) * (p.y - p.cy) + (p.z - p.cz) * (p.z - p.cz));
+                }
+                const double dur = last->t - first->t;
+                if (dur < P.minDurationS)
+                    return;
+                const double extent = std::hypot(xmax - xmin, ymax - ymin);
+                const double base = std::sqrt((last->cx - first->cx) * (last->cx - first->cx) + (last->cy - first->cy) * (last->cy - first->cy) + (last->cz - first->cz) * (last->cz - first->cz));
+                const double range = rangeSum / static_cast<double>(r.pts.size());
+                const double par = std::atan2(base, range) * 180.0 / M_PI;
+                if (par >= P.minParallaxDeg && extent <= P.maxExtentM)
+                {
+                    PosterInfo f;
+                    f.tFlag = now; f.durationS = dur; f.extentM = extent; f.parallaxDeg = par;
+                    flagged[track] = f;
+                }
+            }
+            PosterParams P;
+            std::map<int, Rec> rec;
+            std::map<int, PosterInfo> flagged;
+        };
 
         // ------------------------------------------------------------------------------------------- RANSAC for the points of a level (patch A)
         struct PointZ

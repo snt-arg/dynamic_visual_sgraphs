@@ -15,7 +15,7 @@
 //            keyframes along y, walkers on two levels (z 0 textured, z 1.5 textureless); S5 = S1 + furniture cluster; S6 two levels 2.8 m apart joined by stairs
 //            (16 x 17.5 cm, 28 cm treads), two walkers on the stairs, two on the levels, camera on the upper level.
 //  candidates none | levels | levels_platform
-// usage: synthetic_levels SCEN(S1..S6|S0nofeet) CAND NKF NSEEDS SIGMA_A SIGMA_PT TRANS_RATE   -> one line of key=value pairs (and per-track rows with PER_TRACK=1)
+// usage: synthetic_levels SCEN(S1..S6|S0nofeet) CAND NKF NSEEDS SIGMA_A SIGMA_PT SMAX   -> one line of key=value pairs (and per-track rows with PER_TRACK=1)
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -43,6 +43,29 @@ using namespace ORB_SLAM3::ped;
 static const double F = 415.69219381653056, CXP = 360.0, CYP = 240.0;
 static const double CL = 0.855387, SIGB = 0.0422, QV = 0.1386, LOGSIG = 0.031, PXSIG = 1.5, H0 = 1.70;
 static const double HCAM = 1.4895, HCAM_SCATTER = 0.036, DELTA_V = 0.053, CPX_U = 6.0, CPX_V = 3.0;
+// P9-L step 2: noise model of the synthetic contact pixel. The TRUE noise is (NOISE_U, NOISE_V) px with AR(1) correlation RHO between consecutive keyframes of a walker; the F1 factor still assumes (CPX_U, CPX_V).
+static double EnvD(const char *k, double d) { const char *v = std::getenv(k); return v ? std::atof(v) : d; }
+static const double NOISE_U = EnvD("P9L_NOISE_U", 6.0), NOISE_V = EnvD("P9L_NOISE_V", 3.0), NOISE_RHO = EnvD("P9L_RHO", 0.0);
+// episodes of a vertical contact-pixel offset (a wrong keypoint for a few keyframes): start probability per keyframe, mean length [keyframes], sigma of the offset [px]
+static const double FOOT_SCALE = EnvD("P9L_FOOT", 1.0);   // scale of the foot-keypoint height variation (swing offset above the sole and its AR noise); 1 = the C5 model
+static const double OUT_P = EnvD("P9L_OUTP", 0.0), OUT_LEN = EnvD("P9L_OUTLEN", 5.0), OUT_V = EnvD("P9L_OUTV", 0.0);
+// P9-L Part 4: the harness-side Theil-Sen rate of a contact window (used only to report the windowed |dh/dt| distribution of the synthetic level walkers; the production rule is the path-length slope rule)
+static double TheilSenRate(const std::vector<Contact> &cs, const std::vector<int> &ix, int a, int b)
+{
+    std::vector<double> sl;
+    for (int i = a; i <= b; ++i)
+        for (int j = i + 1; j <= b; ++j)
+        {
+            const double dt = cs[ix[j]].t - cs[ix[i]].t;
+            if (dt > 1e-6)
+                sl.push_back((cs[ix[j]].h - cs[ix[i]].h) / dt);
+        }
+    if (sl.empty())
+        return 0.0;
+    std::sort(sl.begin(), sl.end());
+    const size_t m = sl.size();
+    return m % 2 ? sl[m / 2] : 0.5 * (sl[m / 2 - 1] + sl[m / 2]);
+}
 static const double kHuber2D = std::sqrt(5.991), kHuber1D = std::sqrt(3.841);
 static const double DT = 0.1;
 static const int NTRK = 4;
@@ -217,7 +240,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     W.stepSurfaces = S.stepSurfaces;
     const Eigen::Matrix3d Rcw0 = CamRot(S.pitch);
     // walkers
-    struct Wk { Eigen::Vector2d p, v; double hL = 0, hR = 0, phase; double stairPhase; };
+    struct Wk { Eigen::Vector2d p, v; double hL = 0, hR = 0, phase; double stairPhase; double nu = 0, nv = 0; int epLeft = 0; double epBias = 0; };
     std::vector<Wk> wk(NTRK);
     for (int w = 0; w < NTRK; ++w)
     {
@@ -290,10 +313,10 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             a.phase += 2 * M_PI * 1.8 * DT;
             const double sw = (S.escalator && S.level[w] == 2) ? 0.0 : 0.30 * std::sin(a.phase);
             const Eigen::Vector2d fL = a.p + dir * sw + lat * 0.12, fR = a.p - dir * sw - lat * 0.12;
-            a.hL = 0.6 * a.hL + 0.8 * 0.015 * N(rng);
-            a.hR = 0.6 * a.hR + 0.8 * 0.015 * N(rng);
+            a.hL = 0.6 * a.hL + 0.8 * 0.015 * FOOT_SCALE * N(rng);
+            a.hR = 0.6 * a.hR + 0.8 * 0.015 * FOOT_SCALE * N(rng);
             const bool leftSwing = std::cos(a.phase) > 0;
-            const double zL = std::max(0.0, (leftSwing ? SWING_BASE + 0.05 * std::abs(N(rng)) : 0.03) + a.hL), zR = std::max(0.0, (leftSwing ? 0.03 : SWING_BASE + 0.05 * std::abs(N(rng))) + a.hR);
+            const double zL = std::max(0.0, (leftSwing ? 0.03 + (SWING_BASE - 0.03 + 0.05 * std::abs(N(rng))) * FOOT_SCALE : 0.03) + a.hL), zR = std::max(0.0, (leftSwing ? 0.03 : 0.03 + (SWING_BASE - 0.03 + 0.05 * std::abs(N(rng))) * FOOT_SCALE) + a.hR);
             Eigen::Vector2d pL, pR;
             double dzL, dzR;
             const double flL = S.camClimb ? fl : S.terrain.Floor(fL(0)), flR = S.camClimb ? fl : S.terrain.Floor(fR(0));
@@ -303,8 +326,17 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             {
                 o.informative = std::atan2(kf.cam(2) - (fl + DELTA_V), std::hypot(a.p(0) - kf.cam(0), a.p(1) - kf.cam(1))) >= 5.0 * M_PI / 180.0;
                 const Eigen::Vector2d mid = 0.5 * (pL + pR);
-                o.mu = mid(0) + CPX_U * N(rng);
-                o.mv = mid(1) + CPX_V * N(rng);
+                const double q = std::sqrt(1.0 - NOISE_RHO * NOISE_RHO);
+                a.nu = NOISE_RHO * a.nu + q * N(rng);
+                a.nv = NOISE_RHO * a.nv + q * N(rng);
+                o.mu = mid(0) + NOISE_U * a.nu;
+                if (a.epLeft > 0) --a.epLeft;
+                else if (OUT_P > 0 && U01(rng) < OUT_P)
+                {
+                    a.epLeft = 1 + static_cast<int>(-std::log(1.0 - U01(rng) * 0.999) * OUT_LEN);
+                    a.epBias = OUT_V * N(rng);
+                }
+                o.mv = mid(1) + NOISE_V * a.nv + (a.epLeft > 0 ? a.epBias : 0.0);
             }
         }
         W.kf.push_back(kf);
@@ -422,12 +454,12 @@ int main(int argc, char **argv)
 {
     if (argc < 8)
     {
-        std::cerr << "usage: synthetic_levels SCEN CAND NKF NSEEDS SIGMA_A SIGMA_PT TRANS_RATE\n";
+        std::cerr << "usage: synthetic_levels SCEN CAND NKF NSEEDS SIGMA_A SIGMA_PT SMAX\n";
         return 2;
     }
     const std::string scen = argv[1], cand = argv[2];
     const int NKF = std::atoi(argv[3]), nseeds = std::atoi(argv[4]);
-    const double sigmaA = std::atof(argv[5]), sigmaPt = std::atof(argv[6]), transRate = std::atof(argv[7]);   // P9-L: the 7th argument is the transitional rate threshold [m/s] (was s_max)
+    const double sigmaA = std::atof(argv[5]), sigmaPt = std::atof(argv[6]), sMax = std::atof(argv[7]);   // the path-length slope threshold s_max (P9-L Part 4: the dh/dt rule was reverted)
     const bool useLevels = cand == "levels" || cand == "levels_platform", usePlat = cand == "levels_platform";
     if (!(cand == "none" || useLevels))
     {
@@ -435,11 +467,12 @@ int main(int argc, char **argv)
         return 2;
     }
     const Scen S = MakeScen(scen);
-    const LevelParams LP = DesignLevelParams(sigmaA, sigmaPt, transRate);
+    const LevelParams LP = DesignLevelParams(sigmaA, sigmaPt, sMax);
     const bool perTrack = std::getenv("PER_TRACK") != nullptr;
 
     std::vector<double> trackMedSigned, trackMedAbs, trackMedAbsPm5, trackMedAbsPm5Upper;
     long nStairC = 0, nStairFlag = 0, nLevelC = 0, nLevelFlag = 0;
+    std::vector<double> allRates; // P9-L: windowed |dh/dt| of the level walkers' contacts
     int seedsWrongLevel = 0;
     long nLevelNearEdge = 0, nLevelNearEdgeFlag = 0;
     int seedsLevelAtStep = 0, seedsFurnitureLevel = 0, seedsAnyLevelAt = 0, nLevelsNoContactsCheck = 0;
@@ -457,6 +490,7 @@ int main(int argc, char **argv)
         std::vector<double> bPers(NTRK, 0.0);
         LevelSet LS(LP);
         std::map<std::pair<int, int>, bool> flagLast; // (kf, track) -> transitional at the last call
+        std::map<std::pair<int, int>, double> rateLast; // P9-L: (kf, track) -> |Theil-Sen dh/dt| of the window ending at the contact, at the last call
         std::map<std::pair<int, int>, int> levelLast;
         for (int i = std::min(2, n - 1); i < n; ++i)
         {
@@ -590,6 +624,17 @@ int main(int argc, char **argv)
                         cs.push_back(c);
                         who.push_back({w, k});
                     }
+                {
+                    std::map<int, std::vector<int>> by;
+                    for (int q = 0; q < static_cast<int>(cs.size()); ++q) by[cs[q].track].push_back(q);
+                    for (auto &kv : by)
+                        for (int b = 0; b < static_cast<int>(kv.second.size()); ++b)
+                        {
+                            int a = b;
+                            while (a > 0 && cs[kv.second[b]].t - cs[kv.second[a - 1]].t <= LP.transWindowS) --a;
+                            if (b - a + 1 >= LP.transMinContacts) rateLast[{static_cast<int>(cs[kv.second[b]].kf), kv.first}] = std::abs(TheilSenRate(cs, kv.second, a, b));
+                        }
+                }
                 FlagTransitional(cs, LP);
                 LS.Update(cs);
                 for (size_t c = 0; c < cs.size(); ++c)
@@ -828,6 +873,8 @@ int main(int argc, char **argv)
         if (S.noFeet && !LS.Levels().empty())
             ++nLevelsNoContactsCheck;
         // S6 flag rates (the last call's flag of every contact)
+        for (const auto &kv : rateLast)
+            if (W.levelOf[kv.first.second] != 2 && !W.obs[kv.first.second][kv.first.first].stairContact) allRates.push_back(kv.second);
         for (const auto &kv : flagLast)
         {
             const int k = kv.first.first, w = kv.first.second;
@@ -858,5 +905,11 @@ int main(int argc, char **argv)
                 "stair_contacts=%ld stair_flagged=%ld level_contacts=%ld level_flagged=%ld median_abs_bhat=%.4f seeds_levels_when_nofeet=%d seeds_wrong_level=%d level_near_edge=%ld level_near_edge_flagged=%ld\n",
                 scen.c_str(), cand.c_str(), NKF, nseeds, trackMedSigned.size(), sd(trackMedSigned), med(trackMedAbs), med(trackMedAbsPm5), med(trackMedAbsPm5Upper), med(trackMedSigned), nLevelsTotal,
                 nLevelsBad, levelErr.empty() ? 0.0 : levelErr.back(), nSeedsWithLevels, seedsFurnitureLevel, seedsLevelAtStep, nStairC, nStairFlag, nLevelC, nLevelFlag, med(bHatAbs), nLevelsNoContactsCheck, seedsWrongLevel, nLevelNearEdge, nLevelNearEdgeFlag);
+    if (!allRates.empty())
+    {
+        std::sort(allRates.begin(), allRates.end());
+        auto qn = [&](double p) { return allRates[static_cast<size_t>(p * (allRates.size() - 1))]; };
+        std::printf("RATES scen=%s n=%zu median=%.4f p90=%.4f p99=%.4f noise_u=%.2f noise_v=%.2f rho=%.2f\n", scen.c_str(), allRates.size(), qn(0.5), qn(0.9), qn(0.99), NOISE_U, NOISE_V, NOISE_RHO);
+    }
     return 0;
 }

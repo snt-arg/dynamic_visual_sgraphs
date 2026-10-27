@@ -86,6 +86,11 @@ namespace ORB_SLAM3
         // then `L` rows, the last state of every level seen: L map_id level_id z n_contacts n_f2_points_max n_merges_map
         static void DumpLevelsLog(const std::string &path);
 
+        // P9-L Part 4 step 1b: poster rejection (Pedestrians.PosterReject). IsPosterTrack: the track has been flagged (latched); the runner leaves the instance mask of a flagged track out of the ORB mask.
+        // DumpPosterLog: skipped (keyframe, track) entries and the flagged tracks with the flag time and the features that triggered it.
+        static bool IsPosterTrack(int trackId);
+        static void DumpPosterLog(const std::string &path);
+
         // Variant A: robust mode of the heights of the points `pts` (map frame, z up) inside the horizontal radius R of `centre` and lower than the
         // camera height `zCamera` by at least `belowCamera`: 3-bin-smoothed histogram (bin width `bin`), highest count (lowest bin on ties), median of
         // the points of the winning 3 bins. `lowModeFraction` q < 1: the winning window is instead the LOWEST local maximum of the smoothed histogram whose

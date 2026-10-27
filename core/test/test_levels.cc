@@ -11,10 +11,10 @@ static int failures = 0;
 static LevelParams TP()
 {
     LevelParams P;
-    P.sigmaA = 0.05; P.sigmaPt = 0.03; P.transRateMax = 0.15;
+    P.sigmaA = 0.05; P.sigmaPt = 0.03; P.sMax = 0.2;
     P.assocK = 3; P.createK = 2; P.mergeK = 2;
     P.createMinContacts = 10; P.createMinTracks = 2; P.createMinExtentM = 1.0; P.edgeGuardS = 1.5;
-    P.transWindowS = 1.5; P.transMinContacts = 4;
+    P.transWindowS = 1.5; P.transMinTravelM = 0.5; P.transMinContacts = 4;
     P.ransacThrK = 2; P.ransacRadiusM = 1.0; P.ransacMinInliers = 5; P.ransacMaxOffsetK = 3;
     P.ransacIters = RansacIterations(0.99, 0.5);
     return P;
@@ -41,17 +41,11 @@ int main()
     std::mt19937 g(5);
     CHECK(RansacIterations(0.99, 0.5) == 7 && DesignLevelParams(1,1,1).ransacIters == 7, "RANSAC iterations for 99% at 50% inliers, 1-D model = 7");
 
-    // ---- transitional (P9-L: robust |dh/dt| over the 1.5 s window, no travel condition)
-    auto flagged = [](const std::vector<Contact> &c) { int n = 0; for (auto &x : c) n += x.transitional; return n; };
-    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); FlagTransitional(c, P); CHECK(flagged(c) == 0, "flat walk (noise 1.5 cm) is not flagged"); }
-    { auto c = Walk(1, 30, 0.6, 0.0, 0.175 / 0.28, 0, &g, 0.015); FlagTransitional(c, P); CHECK(flagged(c) >= 27, "stairs (0.375 m/s) are flagged"); }
-    { auto c = Walk(1, 30, 0.0, 0.0, 0.0, 0, &g, 0.05); FlagTransitional(c, P); CHECK(flagged(c) == 0, "standing still (noisy heights, sigma 5 cm) is not flagged"); }
-    { std::vector<Contact> c; for (int i = 0; i < 40; ++i) { Contact x; x.track = 1; x.kf = i; x.t = i / 6.0; x.x = 3.0; x.y = 0.0; x.h = -0.25 * x.t; c.push_back(x); } FlagTransitional(c, P);
-      CHECK(flagged(c) >= 36, "an escalator rider (standing still, floor moving at 0.25 m/s) is flagged: no travel condition"); }
-    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); c[15].h += 0.6; c[16].h -= 0.5; FlagTransitional(c, P); CHECK(flagged(c) == 0, "two outlier heights (+0.6 m, -0.5 m) in a flat walk do not flag it (Theil-Sen)"); }
-    { auto c = Walk(1, 3, 0.6, 0.0, 0.625, 0, &g, 0.0); FlagTransitional(c, P); CHECK(flagged(c) == 0, "fewer than 4 contacts in a window are never flagged"); }
-    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); auto d = Walk(2, 30, 0.6, 0.0, 0.625, 0, &g, 0.015); c.insert(c.end(), d.begin(), d.end()); FlagTransitional(c, P);
-      int a = 0, b = 0; for (auto &x : c) (x.track == 1 ? a : b) += x.transitional; CHECK(a == 0 && b >= 27, "flags are per track: the stair walker is flagged, the flat walker next to it is not"); }
+    // ---- transitional (the C5 path-length slope rule, restored in P9-L Part 4)
+    { auto c = Walk(1, 30, 1.2, 0.0, 0.0, 0, &g, 0.015); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "flat walk (noise 1.5 cm) is not flagged"); }
+    { auto c = Walk(1, 30, 0.6, 0.0, 0.175 / 0.28, 0, &g, 0.015); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n >= 27, "stairs (slope 0.625) are flagged"); }
+    { auto c = Walk(1, 30, 0.0, 0.0, 0.0, 0, &g, 0.05); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "standing still (noisy heights) is not flagged"); }
+    { auto c = Walk(1, 30, 0.2, 0.0, 0.0, 0, &g, 0.0); for (size_t i = 0; i < c.size(); ++i) c[i].h = 0.4 * (i % 2); FlagTransitional(c, P); int n = 0; for (auto &x : c) n += x.transitional; CHECK(n == 0, "slow shuffle (travel < 0.5 m per window) with jumping heights is not flagged");}
 
     // ---- P9-L step 2: foot-validity gate
     CHECK(FootContactValid(250.0, 200.0, 100.0, 0.08), "foot pixel 5 px above the mask bottom (root_v 200 + 0.55 * 100 = 255) is kept at tau 0.08 (0.05 maskH)");
@@ -112,6 +106,26 @@ int main()
     { LevelSet S(P); auto a = Walk(1, 4, 1.0, 0.0, 0, 0, &g, 0.005); S.Update(a); CHECK(S.PoolSize() == 4, "edge guard setup: 4 contacts pooled (t = 0, 1/6, 1/3, 1/2 s)"); std::vector<Contact> cs = a; Contact f; f.track = 1; f.kf = 90; f.t = tf; f.x = 2; f.y = 0; f.h = -0.5; f.transitional = true; cs.push_back(f);
       S.Update(cs); const size_t expect = tf == 1.2 ? 0 : 2;   // 1.2 s: all four within 1.5 s; 1.8 s: only t = 1/3 and 1/2 s (1.47, 1.30 s)
       CHECK(S.PoolSize() == expect, std::string("edge guard is retrospective: flag at t = ") + std::to_string(tf) + " s leaves " + std::to_string(expect) + " pooled contacts (got " + std::to_string(S.PoolSize()) + ")"); }
+
+    // ---- P9-L Part 4 step 1b: poster detector
+    {
+        PosterParams PP{3.0, 5.0, 1.5};
+        auto feed = [&](PosterDetector &d, int track, double extent, double speedCam, double seconds, unsigned long epoch = 0, double range = 6.0)
+        {   // 10 Hz states: the root wanders over `extent` m (triangle wave along x), the camera moves at speedCam m/s along x, `range` m away
+            for (int i = 0; i <= static_cast<int>(seconds * 10); ++i)
+            {
+                const double t = i * 0.1, ph = std::fmod(t / seconds * 2.0, 2.0), w = ph < 1.0 ? ph : 2.0 - ph;
+                d.Observe(track, epoch, 1000 + i, t, 5.0 + extent * w, 0.0, 1.0, speedCam * t, -range, 1.5);
+            }
+        };
+        { PosterDetector d(PP); feed(d, 1, 0.8, 1.0, 4.0); CHECK(d.IsPoster(1), "a static root (0.8 m wander) seen for 4 s with the camera moving 4 m at 6 m range is a poster"); }
+        { PosterDetector d(PP); feed(d, 1, 4.0, 1.0, 4.0); CHECK(!d.IsPoster(1), "a root that moves 4 m is not a poster"); }
+        { PosterDetector d(PP); feed(d, 1, 0.5, 1.0, 2.0); CHECK(!d.IsPoster(1), "2 s are too short (min 3 s)"); }
+        { PosterDetector d(PP); feed(d, 1, 0.5, 0.05, 5.0); CHECK(!d.IsPoster(1), "a static root with no camera parallax (camera moved 0.25 m at 6 m = 2.4 deg) is not rejected: a person standing still"); }
+        { PosterDetector d(PP); feed(d, 1, 0.5, 1.0, 2.5, 0); feed(d, 1, 0.5, 1.0, 2.5, 1); CHECK(!d.IsPoster(1), "a map reset (new epoch) restarts the record: 2.5 s + 2.5 s do not add up"); }
+        { PosterDetector d(PP); feed(d, 1, 0.8, 1.0, 4.0); feed(d, 1, 6.0, 1.0, 2.0, 1); CHECK(d.IsPoster(1), "the decision is latched for the sequence"); }
+        { PosterDetector d(PP); feed(d, 1, 0.8, 1.0, 4.0); feed(d, 2, 3.0, 1.0, 4.0); CHECK(d.IsPoster(1) && !d.IsPoster(2), "decisions are per track"); }
+    }
 
     // ---- RANSAC
     {

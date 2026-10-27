@@ -97,8 +97,11 @@ namespace ORB_SLAM3
         double floorPlaneSigmaMaxM = 0;  // B': the qualifying static points must have a height scatter below this
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
         // P9-C5 (read only when FloorContact is levels | levels_shadow; calibrated on tuning data, constants_c5.md; the design constants are in PedestrianLevels.h)
-        double levelSigmaA = 0, levelSigmaPt = 0;
-        double levelTransRate = 0;   // P9-L: transitional flag threshold on the robust |dh/dt| of the contact height [m/s] (replaces LevelSMax)
+        double levelSigmaA = 0, levelSigmaPt = 0, levelSMax = 0;
+        // P9-L Part 4 step 1b: poster / static-person rejection (GT-free). A track whose estimated world-root extent stays <= posterMaxExtentM over >= posterMinDurationS while the camera subtends >=
+        // posterMinParallaxDeg at its range is a poster: it creates no pedestrian factors and the runner leaves its instance mask out of the ORB mask. Pedestrians.PosterReject: 0 | 1 (default 0 = off).
+        bool posterReject = false;
+        double posterMinDurationS = 0, posterMinParallaxDeg = 0, posterMaxExtentM = 0;
         double footGateTau = 0;      // P9-L: foot-validity gate, a contact whose foot pixel is more than tau * maskH above the mask bottom is rejected; 0 = off
         bool platformHeight = false;                   // Pedestrians.PlatformHeight: off | on (F3)
         double platformHeightM = 0, platformSigmaM = 0; // h_cam, sigma_h (read only when on)

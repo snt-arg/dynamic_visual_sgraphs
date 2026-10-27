@@ -33,6 +33,20 @@ namespace ORB_SLAM3
         p.enabled = !e.empty() && static_cast<int>(e) != 0;
         if (!p.enabled)
             return false;
+        {
+            // P9-L Part 4 step 1b: optional (default off); the three thresholds are required when on
+            const cv::FileNode pr = fs["Pedestrians.PosterReject"];
+            p.posterReject = !pr.empty() && static_cast<int>(pr) != 0;
+            if (p.posterReject)
+            {
+                p.posterMinDurationS = Req(fs, "Pedestrians.PosterMinDurationS");
+                p.posterMinParallaxDeg = Req(fs, "Pedestrians.PosterMinParallaxDeg");
+                p.posterMaxExtentM = Req(fs, "Pedestrians.PosterMaxExtentM");
+                if (!(p.posterMinDurationS > 0 && p.posterMinParallaxDeg > 0 && p.posterMaxExtentM > 0))
+                    throw std::runtime_error("[Pedestrians] PosterReject on: PosterMinDurationS, PosterMinParallaxDeg, PosterMaxExtentM must be > 0");
+                std::cout << "[Pedestrians] poster rejection ON: >= " << p.posterMinDurationS << " s, parallax >= " << p.posterMinParallaxDeg << " deg, extent <= " << p.posterMaxExtentM << " m" << std::endl;
+            }
+        }
         p.rootPxSigma = Req(fs, "Pedestrians.RootPxSigma");
         p.logDepthSigma = Req(fs, "Pedestrians.LogDepthSigma");
         p.skelOverStature = Req(fs, "Pedestrians.SkeletonOverStature");
@@ -85,11 +99,11 @@ namespace ORB_SLAM3
             p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
             p.levelSigmaA = Req(fs, "Pedestrians.LevelSigmaA");
             p.levelSigmaPt = Req(fs, "Pedestrians.LevelSigmaPt");
-            p.levelTransRate = Req(fs, "Pedestrians.LevelTransRate");
+            p.levelSMax = Req(fs, "Pedestrians.LevelSMax");
             p.footGateTau = Req(fs, "Pedestrians.FootGateTau", true);
-            for (double v : {p.floorMidDeltaM, p.floorSigmaPxU, p.floorSigmaPxV, p.biasSigma, p.levelSigmaA, p.levelSigmaPt, p.levelTransRate})
+            for (double v : {p.floorMidDeltaM, p.floorSigmaPxU, p.floorSigmaPxV, p.biasSigma, p.levelSigmaA, p.levelSigmaPt, p.levelSMax})
                 if (!(v > 0))
-                    throw std::runtime_error("[Pedestrians] levels: FloorMidDeltaM, FloorSigmaPx*, BiasSigma, LevelSigmaA, LevelSigmaPt, LevelTransRate must be > 0");
+                    throw std::runtime_error("[Pedestrians] levels: FloorMidDeltaM, FloorSigmaPx*, BiasSigma, LevelSigmaA, LevelSigmaPt, LevelSMax must be > 0");
             if (p.footGateTau < 0)
                 throw std::runtime_error("[Pedestrians] Pedestrians.FootGateTau must be >= 0 (0 = gate off)");
             if (p.biasMinContacts < 0)
@@ -114,7 +128,7 @@ namespace ORB_SLAM3
             else
                 throw std::runtime_error("[Pedestrians] Pedestrians.PlatformHeight must be off or on, got " + phs);
             std::cout << "[Pedestrians] floor contact " << fm << ": delta_v " << p.floorMidDeltaM << " m, sigma px " << p.floorSigmaPxU << "/" << p.floorSigmaPxV << ", bias sigma " << p.biasSigma
-                      << " (min contacts " << p.biasMinContacts << "), sigma_a " << p.levelSigmaA << " m, sigma_pt " << p.levelSigmaPt << " m, transition rate " << p.levelTransRate << " m/s, foot gate tau " << p.footGateTau << ", platform height "
+                      << " (min contacts " << p.biasMinContacts << "), sigma_a " << p.levelSigmaA << " m, sigma_pt " << p.levelSigmaPt << " m, s_max " << p.levelSMax << ", foot gate tau " << p.footGateTau << ", platform height "
                       << (p.platformHeight ? "on" : "off") << std::endl;
         }
         else if (p.floorMode != FloorMode::None)

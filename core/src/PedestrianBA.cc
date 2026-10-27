@@ -8,6 +8,8 @@
 #include <cmath>
 #include <iostream>
 #include <fstream>
+#include <iomanip>
+#include <memory>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -58,6 +60,8 @@ namespace ORB_SLAM3
         };
         std::map<std::pair<unsigned long, int>, LevelStat> gLevelStat; // (map id, level id)
         long gFootGateRejected = 0, gFootGateKept = 0; // P9-L step 2: contacts rejected / kept by the foot-validity gate (counted once per (window, contact))
+        std::unique_ptr<ped::PosterDetector> gPosterDet; // P9-L Part 4 step 1b (created on first use, guarded by gLogMutex)
+        long gPosterSkippedEntries = 0;                  // (keyframe, track) observations left out of the factor graph because their track is a poster
         long gLevelWritebackSkipped = 0;               // P9-L step 4: WriteBack calls whose level update was skipped because the level-set epoch changed
         struct FoundRow // P9-L step 5: one founding contact of a level
         {
@@ -221,6 +225,15 @@ namespace ORB_SLAM3
                     continue;
                 for (const PedObs &o : g.kf->mpPedFrame->obs)
                 {
+                    if (P.posterReject)
+                    {
+                        std::lock_guard<std::mutex> lk(gLogMutex);
+                        if (gPosterDet && gPosterDet->IsPoster(o.trackId))
+                        {
+                            ++gPosterSkippedEntries; // P9-L: a poster creates no pedestrian factors
+                            continue;
+                        }
+                    }
                     // An observation without a nose->heel length has no depth cue: its state would be free along the pixel ray
                     // (root reprojection is flat along it, the 1/z Jacobians diverge as the state approaches the camera; seen in the
                     // first smoke run). It is not a measurement of this system and is skipped.
@@ -733,7 +746,7 @@ namespace ORB_SLAM3
             // ------------------------------------------------------------------------------------------------ P9-C5 floor levels
             if (levelsMode && floorOn)
             {
-                const ped::LevelParams LP = ped::DesignLevelParams(P.levelSigmaA, P.levelSigmaPt, P.levelTransRate);
+                const ped::LevelParams LP = ped::DesignLevelParams(P.levelSigmaA, P.levelSigmaPt, P.levelSMax);
                 // implied contact heights h_c from the current person states (tracks in id order, entries in time order: deterministic)
                 std::vector<ped::Contact> cs;
                 std::vector<const Entry *> ce;
@@ -1222,6 +1235,22 @@ namespace ORB_SLAM3
         }
     }
 
+    bool PedestrianBA::IsPosterTrack(int trackId)
+    {
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        return gPosterDet && gPosterDet->IsPoster(trackId);
+    }
+
+    void PedestrianBA::DumpPosterLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        f << "# P9-L Part 4 poster rejection. skipped_entries " << gPosterSkippedEntries << "\n# track t_flagged duration_s extent_m parallax_deg\n";
+        if (gPosterDet)
+            for (const auto &kv : gPosterDet->Flagged())
+                f << kv.first << " " << std::fixed << std::setprecision(3) << kv.second.tFlag << " " << kv.second.durationS << " " << kv.second.extentM << " " << kv.second.parallaxDeg << "\n";
+    }
+
     void PedestrianBA::DumpLevelsLog(const std::string &path)
     {
         std::ofstream f(path);
@@ -1291,6 +1320,19 @@ namespace ORB_SLAM3
 
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
     {
+        if (PedestrianParams::Get().posterReject) // P9-L Part 4 step 1b: feed the poster detector with the solved root estimates
+        {
+            const PedestrianParams &Q = PedestrianParams::Get();
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            if (!gPosterDet)
+                gPosterDet.reset(new ped::PosterDetector({Q.posterMinDurationS, Q.posterMinParallaxDeg, Q.posterMaxExtentM}));
+            for (const auto &s : g.states)
+            {
+                const Eigen::Vector3d p = s.v->p();
+                const Eigen::Vector3f c = s.kf->GetCameraCenter();
+                gPosterDet->Observe(s.track, pMap->GetId(), s.kf->mnId, s.kf->mTimeStamp, p(0), p(1), p(2), c(0), c(1), c(2));
+            }
+        }
         for (const auto &bh : g.biases)
         {
             pMap->SetPedBias(bh.track, bh.v->estimate());
@@ -1305,7 +1347,7 @@ namespace ORB_SLAM3
         {
             // P9-L step 4: the solved heights belong to the level-set epoch Add read; if the set was destroyed since (map reset / merge / scaled rotation / loop correction) they are dropped
             std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
-            const ped::LevelParams LP = ped::DesignLevelParams(PedestrianParams::Get().levelSigmaA, PedestrianParams::Get().levelSigmaPt, PedestrianParams::Get().levelTransRate);
+            const ped::LevelParams LP = ped::DesignLevelParams(PedestrianParams::Get().levelSigmaA, PedestrianParams::Get().levelSigmaPt, PedestrianParams::Get().levelSMax);
             std::vector<std::pair<int, double>> heights;
             for (const auto &lh : g.levels)
                 heights.push_back({lh.id, lh.v->estimate()});
