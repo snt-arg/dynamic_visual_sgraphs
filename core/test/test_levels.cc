@@ -81,6 +81,16 @@ int main()
       for (auto *v : {&a, &b, &c, &d}) S.Update(*v);
       CHECK(S.Levels().size() == 2, "two levels 0.8 m apart are both created"); S.SetHeight(S.Levels()[1].id, S.Levels()[0].z + 0.04); S.MergeClose();
       CHECK(S.Levels().size() == 1 && S.Merges() == 1, "two levels closer than 2 sigma_a merge"); }
+    // ---- P9-H A2.3: CREATE / MERGE event records (logging only)
+    { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01), c = Walk(3, 12, 1.0, -0.8, 0, 0, &g, 0.01), d = Walk(4, 12, 1.0, -0.8, 0, 0, &g, 0.01);
+      for (auto *v : {&a, &b, &c, &d}) S.Update(*v);
+      auto ev = S.TakeEvents();
+      CHECK(ev.size() == 2 && !ev[0].merge && !ev[1].merge && ev[0].id == 0 && ev[1].id == 1 && ev[0].n >= 10 && std::abs(ev[1].z - ev[0].z + 0.8) < 0.05, "two CREATE events, ids 0 and 1, heights and contact counts recorded");
+      CHECK(S.TakeEvents().empty(), "TakeEvents drains the record");
+      const double z0 = S.Levels()[0].z; S.SetHeight(S.Levels()[1].id, z0 + 0.04); S.MergeClose();
+      ev = S.TakeEvents();
+      CHECK(ev.size() == 1 && ev[0].merge && ev[0].id == 0 && ev[0].otherId == 1 && std::abs(ev[0].z - z0) < 1e-12 && std::abs(ev[0].otherZ - (z0 + 0.04)) < 1e-12 && ev[0].n >= 10 && ev[0].otherN >= 10,
+            "MERGE event: survivor = lower id, both heights and contact counts are the values before the merge"); }
     { LevelSet S(P); auto a = Walk(1, 12, 1.0, 0.0, 0, 0, &g, 0.01), b = Walk(2, 12, 1.0, 0.0, 0, 0, &g, 0.01); for (auto &x : a) x.transitional = true; for (auto &x : b) x.transitional = true;
       S.Update(a); S.Update(b); CHECK(S.Levels().empty() && S.PoolSize() == 0, "transitional contacts never enter the pool nor create a level"); }
     { LevelSet S(P); std::vector<Contact> none; S.Update(none); CHECK(S.Levels().empty(), "a furniture cluster (points only, no contacts) never becomes a level: the level set has no point input"); }

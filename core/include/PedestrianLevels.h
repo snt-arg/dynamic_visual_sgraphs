@@ -76,6 +76,7 @@ namespace ORB_SLAM3
         {
             int track;
             unsigned long kf = 0; // keyframe id: (kf, track) identifies a contact across overlapping BA windows
+            unsigned long frame = 0; // P9-H A2.3: ORB-SLAM3 frame id of that keyframe (logging only)
             double t;           // seconds
             double x, y;        // person footprint, world (horizontal)
             double h;           // implied floor height h_c
@@ -147,10 +148,26 @@ namespace ORB_SLAM3
             std::vector<Contact> founding; // P9-L step 5: the contacts that created the level (ped_levels_found.log)
         };
 
+        // P9-H A2.3: logging only (never read by the estimator). CREATE: id = new level, z / n = its founding median and contact count. MERGE: id = the surviving (lower) id, otherId = the absorbed one;
+        // z / n and otherZ / otherN are the two levels' heights and contact counts BEFORE the merge.
+        struct LevelEvent
+        {
+            bool merge = false;
+            int id = -1, otherId = -1;
+            double z = 0, otherZ = 0;
+            int n = 0, otherN = 0;
+        };
+
         class LevelSet
         {
         public:
             explicit LevelSet(const LevelParams &p) : P(p), nextId(0) {}
+            std::vector<LevelEvent> TakeEvents()
+            {
+                std::vector<LevelEvent> out;
+                out.swap(events);
+                return out;
+            }
             const std::vector<Level> &Levels() const { return levels; }
             int Merges() const { return merges; }
 
@@ -277,6 +294,13 @@ namespace ORB_SLAM3
                     for (const Contact *c : in)
                         L.founding.push_back(*c);
                     levels.push_back(L);
+                    {
+                        LevelEvent ev;
+                        ev.id = L.id;
+                        ev.z = L.z;
+                        ev.n = L.nContacts;
+                        events.push_back(ev);
+                    }
                     std::vector<Contact> rest;
                     for (const Contact &c : pool)
                         if (std::abs(c.h - med) > w)
@@ -298,6 +322,17 @@ namespace ORB_SLAM3
                         for (size_t j = i + 1; j < levels.size() && !again; ++j)
                             if (std::abs(levels[i].z - levels[j].z) < P.mergeK * P.sigmaA)
                             {
+                                {
+                                    LevelEvent ev;
+                                    ev.merge = true;
+                                    ev.id = levels[i].id;
+                                    ev.otherId = levels[j].id;
+                                    ev.z = levels[i].z;
+                                    ev.otherZ = levels[j].z;
+                                    ev.n = levels[i].nContacts;
+                                    ev.otherN = levels[j].nContacts;
+                                    events.push_back(ev);
+                                }
                                 const double wi = std::max(1, levels[i].nContacts), wj = std::max(1, levels[j].nContacts); // int -> double below
                                 levels[i].z = (wi * levels[i].z + wj * levels[j].z) / (wi + wj);
                                 levels[i].nContacts += levels[j].nContacts;
@@ -339,6 +374,7 @@ namespace ORB_SLAM3
             std::vector<Contact> pool;
             int nextId;
             int merges = 0;
+            std::vector<LevelEvent> events; // P9-H A2.3, logging only
         };
 
         // ------------------------------------------------------------------------------------------- P9-L step 4: epoch guard

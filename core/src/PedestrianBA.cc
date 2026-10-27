@@ -68,6 +68,21 @@ namespace ORB_SLAM3
             int id = -1, otherId = -1, contacts = 0, otherContacts = 0;
         };
         std::vector<EventRec> gEvents;
+        // P9-H A2.3 item 2: the level table of every (map, epoch), refreshed after every Update and every write-back; the last snapshot of an epoch is its end-of-epoch table.
+        struct EpochLevel
+        {
+            int id = -1, nContacts = 0;
+            double z = 0, tCreated = 0;
+            unsigned long frameCreated = 0;
+        };
+        struct EpochTable
+        {
+            std::vector<EpochLevel> levels;
+            double lastStamp = 0;
+            unsigned long lastFrame = 0;
+        };
+        std::map<std::pair<unsigned long, unsigned long>, EpochTable> gEpochTables; // (map id, epoch)
+        std::map<std::tuple<unsigned long, unsigned long, int>, std::pair<double, unsigned long>> gLevelCreated; // (map id, epoch, level id) -> (time, frame) of the CREATE event
         long gFootGateRejected = 0, gFootGateKept = 0; // P9-L step 2: contacts rejected / kept by the foot-validity gate (counted once per (window, contact))
         std::unique_ptr<ped::PosterDetector> gPosterDet; // P9-L Part 4 step 1b (created on first use, guarded by gLogMutex)
         long gPosterSkippedEntries = 0;                  // (keyframe, track) observations left out of the factor graph because their track is a poster
@@ -792,6 +807,7 @@ namespace ORB_SLAM3
                         ped::Contact k;
                         k.track = tr.first;
                         k.kf = e.kf->mnId;
+                        k.frame = e.kf->mnFrameId;
                         k.t = e.kf->mTimeStamp;
                         k.footU = e.obs->footU;
                         k.footV = e.obs->footV;
@@ -803,32 +819,45 @@ namespace ORB_SLAM3
                     }
                 std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex());
                 ped::LevelSet &LS = pMap->PedLevels(LP);
-                const auto beforeLevels = LS.Levels();
-                const int beforeMerges = LS.Merges();
                 ped::FlagTransitional(cs, LP);
                 LS.Update(cs);
                 const unsigned long mapId = pMap->GetId();
                 G.levelEpoch = pMap->PedLevelsEpoch(); // read under the level mutex, together with the set (P9-L step 4)
-                const auto eventIt = std::max_element(cs.begin(), cs.end(), [](const ped::Contact &a, const ped::Contact &b) { return a.t < b.t; });
+                const auto eventIt = std::max_element(cs.begin(), cs.end(), [](const ped::Contact &x, const ped::Contact &y) { return x.t < y.t; });
                 const double eventStamp = eventIt == cs.end() ? 0.0 : eventIt->t;
-                const unsigned long eventFrame = eventIt == cs.end() ? 0 : eventIt->kf;
-                for (const auto &lv : LS.Levels())
+                const unsigned long eventFrame = eventIt == cs.end() ? 0 : eventIt->frame;
+                for (const ped::LevelEvent &ev : LS.TakeEvents()) // P9-H A2.3 item 3
                 {
-                    const bool existed = std::any_of(beforeLevels.begin(), beforeLevels.end(), [&](const ped::Level &old) { return old.id == lv.id; });
-                    if (!existed)
-                        PedestrianBA::RecordEvent("CREATE", eventStamp, eventFrame, mapId, G.levelEpoch, lv.id, -1, lv.z, 0, lv.nContacts, 0);
+                    if (ev.merge)
+                        PedestrianBA::RecordEvent("MERGE", eventStamp, eventFrame, mapId, G.levelEpoch, ev.id, ev.otherId, ev.z, ev.otherZ, ev.n, ev.otherN);
+                    else
+                    {
+                        PedestrianBA::RecordEvent("CREATE", eventStamp, eventFrame, mapId, G.levelEpoch, ev.id, -1, ev.z, 0, ev.n, 0);
+                        std::lock_guard<std::mutex> lk(gLogMutex);
+                        gLevelCreated[std::make_tuple(mapId, G.levelEpoch, ev.id)] = std::make_pair(eventStamp, eventFrame);
+                    }
                 }
-                if (LS.Merges() > beforeMerges)
-                    for (const auto &old : beforeLevels)
-                        if (!LS.Has(old.id))
+                {
+                    std::lock_guard<std::mutex> lk(gLogMutex); // P9-H A2.3 item 2: snapshot of the table after this Update
+                    EpochTable &et = gEpochTables[std::make_pair(mapId, G.levelEpoch)];
+                    et.levels.clear();
+                    for (const auto &lv : LS.Levels())
+                    {
+                        EpochLevel el;
+                        el.id = lv.id;
+                        el.z = lv.z;
+                        el.nContacts = lv.nContacts;
+                        const auto cr = gLevelCreated.find(std::make_tuple(mapId, G.levelEpoch, lv.id));
+                        if (cr != gLevelCreated.end())
                         {
-                            const auto survivor = std::min_element(LS.Levels().begin(), LS.Levels().end(), [&](const ped::Level &a, const ped::Level &b) {
-                                return std::abs(a.z - old.z) < std::abs(b.z - old.z);
-                            });
-                            if (survivor != LS.Levels().end())
-                                PedestrianBA::RecordEvent("MERGE", eventStamp, eventFrame, mapId, G.levelEpoch, survivor->id, old.id,
-                                                          survivor->z, old.z, survivor->nContacts, old.nContacts);
+                            el.tCreated = cr->second.first;
+                            el.frameCreated = cr->second.second;
                         }
+                        et.levels.push_back(el);
+                    }
+                    et.lastStamp = std::max(et.lastStamp, eventStamp);
+                    et.lastFrame = std::max(et.lastFrame, eventFrame);
+                }
                 for (const auto &lv : LS.Levels()) // P9-L step 5: log the founding contacts of every level once, when it first appears
                     if (!lv.founding.empty() && gFoundSeen.insert({mapId, G.levelEpoch, lv.id}).second)
                     {
@@ -1317,15 +1346,29 @@ namespace ORB_SLAM3
             f << buf;
         }
         std::string ep = path;
-        const size_t dot = ep.rfind(".log");
-        ep = (dot == std::string::npos ? ep : ep.substr(0, dot)) + "_events.log";
+        const size_t epDot = ep.rfind(".log");
+        ep = (epDot == std::string::npos ? ep : ep.substr(0, epDot)) + "_events.log";
         std::ofstream ef(ep);
-        ef << "# type sensor_timestamp frame_index map_id epoch id other_id height other_height contacts other_contacts scale\n";
-        for (const EventRec &e : gEvents)
-            ef << e.type << " " << std::fixed << std::setprecision(9) << e.sensorTimestamp << " " << e.frameIndex << " "
-               << e.mapId << " " << e.epoch << " " << e.id << " " << e.otherId << " " << std::hexfloat
-               << e.height << " " << e.otherHeight << std::defaultfloat << " " << e.contacts << " " << e.otherContacts << " "
-               << e.scale << "\n";
+        ef << "# P9-H A2.3 events. type sensor_timestamp frame_index map_id epoch id other_id height other_height contacts other_contacts scale\n";
+        ef << "# CREATE: id = new level. MERGE: id = survivor (lower id), other_id = absorbed; height / contacts are the two levels' values before the merge. IMU_INIT / RESET / SCALE: runner events (SCALE: scale = image scale).\n";
+        ef << "# frame_index: ORB-SLAM3 frame id of the keyframe of the latest contact (CREATE / MERGE / EPOCH rows) or the runner's processed-frame count (IMU_INIT / RESET / SCALE).\n";
+        ef << "# LEVEL rows = the level table at the end of the epoch (last Update / write-back of that (map, epoch)): sensor_timestamp, frame_index = creation time / frame; id; height; contacts. EPOCH_END: last stamp / frame seen in the epoch, contacts = number of levels.\n";
+        std::vector<EventRec> evs = gEvents;
+        std::stable_sort(evs.begin(), evs.end(), [](const EventRec &a, const EventRec &b) { // canonical order: the file does not depend on which thread logged first
+            return std::tie(a.sensorTimestamp, a.frameIndex, a.type, a.mapId, a.epoch, a.id, a.otherId) < std::tie(b.sensorTimestamp, b.frameIndex, b.type, b.mapId, b.epoch, b.id, b.otherId);
+        });
+        auto writeEvent = [&](const EventRec &e) {
+            ef << e.type << " " << std::fixed << std::setprecision(9) << e.sensorTimestamp << " " << e.frameIndex << " " << e.mapId << " " << e.epoch << " " << e.id << " " << e.otherId << " "
+               << std::hexfloat << e.height << " " << e.otherHeight << std::defaultfloat << " " << e.contacts << " " << e.otherContacts << " " << e.scale << "\n";
+        };
+        for (const EventRec &e : evs)
+            writeEvent(e);
+        for (const auto &kv : gEpochTables)
+        {
+            writeEvent({"EPOCH_END", kv.second.lastStamp, 0, 0, 0, kv.second.lastFrame, kv.first.first, kv.first.second, -1, -1, static_cast<int>(kv.second.levels.size()), 0});
+            for (const EpochLevel &el : kv.second.levels)
+                writeEvent({"LEVEL", el.tCreated, el.z, 0, 0, el.frameCreated, kv.first.first, kv.first.second, el.id, -1, el.nContacts, 0});
+        }
         // P9-L step 5: ped_levels_found.log next to ped_levels.log
         std::string fp = path;
         const size_t dot = fp.rfind(".log");
@@ -1342,15 +1385,15 @@ namespace ORB_SLAM3
                 std::snprintf(buf, sizeof(buf), "C %lu %lu %d %.9f %d %.2f %.2f %a %lu\n", fl.mapId, fl.epoch, fl.id, r.t, r.track, r.u, r.v, r.h, r.kf);
                 ff << buf;
             }
-
-            void PedestrianBA::RecordEvent(const std::string &type, double sensorTimestamp, unsigned long frameIndex,
-                                           unsigned long mapId, unsigned long epoch, int id, int otherId,
-                                           double height, double otherHeight, int contacts, int otherContacts, double scale)
-            {
-                std::lock_guard<std::mutex> lk(gLogMutex);
-                gEvents.push_back({type, sensorTimestamp, height, otherHeight, scale, frameIndex, mapId, epoch, id, otherId, contacts, otherContacts});
-            }
         }
+    }
+
+    void PedestrianBA::RecordEvent(const std::string &type, double sensorTimestamp, unsigned long frameIndex,
+                                   unsigned long mapId, unsigned long epoch, int id, int otherId,
+                                   double height, double otherHeight, int contacts, int otherContacts, double scale)
+    {
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        gEvents.push_back({type, sensorTimestamp, height, otherHeight, scale, frameIndex, mapId, epoch, id, otherId, contacts, otherContacts});
     }
 
     void PedestrianBA::DumpFloorLog(const std::string &path)
@@ -1408,7 +1451,14 @@ namespace ORB_SLAM3
             gLevelWritebackSkipped += skipped;
             if (applied)
                 for (const auto &h : heights)
+                {
                     gLevelStat[{pMap->GetId(), h.first}].z = h.second;
+                    const auto et = gEpochTables.find(std::make_pair(pMap->GetId(), g.levelEpoch)); // P9-H A2.3 item 2: the solved height belongs to this epoch's table
+                    if (et != gEpochTables.end())
+                        for (EpochLevel &el : et->second.levels)
+                            if (el.id == h.first)
+                                el.z = h.second;
+                }
         }
         for (const auto &h : g.pxFloors)
         {
