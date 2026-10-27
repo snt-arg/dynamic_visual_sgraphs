@@ -34,6 +34,15 @@ namespace ORB_SLAM3
             Eigen::Matrix<double, 7, 1> twc;
         };
         std::map<std::pair<unsigned long, int>, LogRec> gLog; // ordered: deterministic dump
+        // P9-H A3.1: the FIRST write-back of every (map, epoch, keyframe, track), never overwritten (ped_log_first.txt). Keyed by map and epoch as well: keyframe ids restart with the map
+        // (N-4 in the P9-D checks), so a bare (kf, track) key would let a later map's first write be dropped.
+        struct FirstRec
+        {
+            double stamp = 0, rootU = 0, rootV = 0, lpx = 0, maskH = 0;
+            Eigen::Matrix<double, 6, 1> x;
+            Eigen::Matrix<double, 7, 1> twc;
+        };
+        std::map<std::tuple<unsigned long, unsigned long, unsigned long, int>, FirstRec> gFirstLog; // (map id, epoch, kf id, track)
         struct FloorRec
         {
             double stamp, zp, zRegional, s, b;
@@ -1264,6 +1273,46 @@ namespace ORB_SLAM3
         }
     }
 
+    void PedestrianBA::RecordWrite(unsigned long mapId, unsigned long epoch, unsigned long kfId, int track, double stamp, const Eigen::Matrix<double, 6, 1> &x,
+                                   const Eigen::Matrix<double, 7, 1> &twc, double rootU, double rootV, double lpx, double maskH)
+    {
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        LogRec r;
+        r.stamp = stamp;
+        r.x = x;
+        r.twc = twc;
+        gLog[{kfId, track}] = r; // last write (ped_log.txt): unchanged behaviour
+        const auto fkey = std::make_tuple(mapId, epoch, kfId, track);
+        if (gFirstLog.find(fkey) == gFirstLog.end()) // A3.1: first write only, never overwritten
+        {
+            FirstRec fr;
+            fr.stamp = stamp;
+            fr.x = x;
+            fr.twc = twc;
+            fr.rootU = rootU;
+            fr.rootV = rootV;
+            fr.lpx = lpx;
+            fr.maskH = maskH;
+            gFirstLog.emplace(fkey, fr);
+        }
+    }
+
+    void PedestrianBA::DumpFirstLog(const std::string &path)
+    {
+        std::ofstream f(path);
+        f << "# P9-H A3.1 first write-back of every (map, epoch, kf, track); never overwritten. map_id epoch kf_id stamp track px py pz vx vy vz tx ty tz qx qy qz qw root_u root_v lpx mask_h\n";
+        f << "# (world positions/velocities and Twc of the keyframe as they stand after that same BA; root_u root_v lpx mask_h = the measurement inputs of the observation, 0 if none; B0 reads root pixel and lpx)\n";
+        char buf[640];
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        for (const auto &kv : gFirstLog)
+        {
+            const FirstRec &r = kv.second;
+            std::snprintf(buf, sizeof(buf), "%lu %lu %lu %.9f %d %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a %a\n", std::get<0>(kv.first), std::get<1>(kv.first), std::get<2>(kv.first), r.stamp,
+                          std::get<3>(kv.first), r.x(0), r.x(1), r.x(2), r.x(3), r.x(4), r.x(5), r.twc(0), r.twc(1), r.twc(2), r.twc(3), r.twc(4), r.twc(5), r.twc(6), r.rootU, r.rootV, r.lpx, r.maskH);
+            f << buf;
+        }
+    }
+
     void PedestrianBA::DumpGateLog(const std::string &path)
     {
         std::ofstream f(path);
@@ -1492,6 +1541,11 @@ namespace ORB_SLAM3
             std::lock_guard<std::mutex> lk(gLogMutex);
             gFloorLog[{h.kf->mnId, h.track}] = r;
         }
+        unsigned long firstEpoch = 0;
+        {
+            std::lock_guard<std::mutex> lvLock(pMap->PedLevelsMutex()); // before gLogMutex (the lock order used everywhere else: level mutex, then log mutex)
+            firstEpoch = pMap->PedLevelsEpoch();
+        }
         for (const auto &s : g.states)
         {
             if (s.fixed)
@@ -1506,8 +1560,18 @@ namespace ORB_SLAM3
             r.stamp = s.kf->mTimeStamp;
             r.x << st.p, st.v;
             r.twc << Twc.translation().cast<double>(), q.x(), q.y(), q.z(), q.w();
-            std::lock_guard<std::mutex> lk(gLogMutex);
-            gLog[{s.kf->mnId, s.track}] = r;
+            double rootU = 0, rootV = 0, lpx = 0, maskH = 0;
+            if (s.kf->mpPedFrame)
+                for (const PedObs &o : s.kf->mpPedFrame->obs)
+                    if (o.trackId == s.track)
+                    {
+                        rootU = o.rootU;
+                        rootV = o.rootV;
+                        lpx = o.lpx;
+                        maskH = o.maskH;
+                        break;
+                    }
+            PedestrianBA::RecordWrite(pMap->GetId(), firstEpoch, s.kf->mnId, s.track, r.stamp, r.x, r.twc, rootU, rootV, lpx, maskH);
         }
         if (DL().f)
         {

@@ -136,6 +136,11 @@ namespace ORB_SLAM3
         // map resets; the final map export only holds keyframes that are still alive). Hexfloat text, ordered by (keyframe id, track).
         // Columns: kf_id stamp track px py pz vx vy vz tx ty tz qx qy qz qw (Twc)
         static void DumpLog(const std::string &path);
+        // P9-H A3.1: ped_log_first.txt, the first write-back of every (map, epoch, kf, track); DumpLog (last write) is unchanged
+        static void DumpFirstLog(const std::string &path);
+        // P9-H A3.1: one pedestrian-state write as WriteBack does it: overwrites the last-write record (kf, track), keeps the first-write record (map, epoch, kf, track). WriteBack calls it; the unit test calls it.
+        static void RecordWrite(unsigned long mapId, unsigned long epoch, unsigned long kfId, int track, double stamp, const Eigen::Matrix<double, 6, 1> &x,
+                                const Eigen::Matrix<double, 7, 1> &twc, double rootU, double rootV, double lpx, double maskH);
 
         // Per-factor-type accounting (P9-C2 step 2). Call after the solve: counts, per type, the edges created in this call and the
         // ones inside their robust threshold; keeps one record per call and process-wide totals.
