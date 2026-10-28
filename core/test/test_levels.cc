@@ -194,17 +194,6 @@ int main()
         std::vector<PointZ> noFloor(pts.begin() + 100, pts.end() - 70); auto n = RansacLevelPoints(noFloor, cs, 0.0, P); CHECK(!n.ok && n.inliers.empty(), "with no floor points no F2 is created");
         auto none = RansacLevelPoints(pts, std::vector<Contact>(), 0.0, P); CHECK(!none.ok, "no contacts -> no candidate points -> no F2");
     }
-    // ---- P9-H A7.1: footprint association and the F1-replacement rule
-    {
-        const std::vector<std::pair<int, double>> cand = {{0, 0.0}, {1, -3.0}};
-        CHECK(AssociateFootprint({-1, 1, 0}, 0.0, cand, 0.1) == 1, "association: the first assigned entry of the run decides (its own contact's level)");
-        CHECK(AssociateFootprint({-1, -1}, 0.25, cand, 0.1) == 0, "association: no assigned contact -> nearest level within 3 sigma_a (0.25 < 0.3)");
-        CHECK(AssociateFootprint({-1, -1}, 0.35, cand, 0.1) == -1, "association: nearest level farther than 3 sigma_a -> none");
-        CHECK(AssociateFootprint({-1}, -2.9, cand, 0.1) == 1, "association: the nearest of several levels is chosen");
-        CHECK(AssociateFootprint({}, 0.0, {}, 0.1) == -1, "association: no level at all -> none (FL never creates a level)");
-        CHECK(AssociateFootprint({-1}, 0.301, cand, 0.1) == -1 && AssociateFootprint({-1}, 0.299, cand, 0.1) == 0, "association: the 3 sigma_a boundary (0.299 in, 0.301 out)");
-        CHECK(FootprintReplacesF1(true, 0) && !FootprintReplacesF1(true, -1) && !FootprintReplacesF1(false, 0), "F1 is replaced only with the switch on and a level; with the switch off (or no level) F1 stays");
-    }
     std::cout << (failures ? "FAILURES: " : "all passed, failures = ") << failures << "\n";
     return failures ? 1 : 0;
 }

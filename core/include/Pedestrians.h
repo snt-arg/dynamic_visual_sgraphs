@@ -98,10 +98,6 @@ namespace ORB_SLAM3
         double floorPlausM = 0;         // plausibility: contact height within +- this of the local floor estimate (log + check script)
         // P9-C5 (read only when FloorContact is levels | levels_shadow; calibrated on tuning data, constants_c5.md; the design constants are in PedestrianLevels.h)
         double levelSigmaA = 0, levelSigmaPt = 0, levelSMax = 0;
-        // P9-H A7 footprint-on-level factor FL (read only in levels mode): Pedestrians.FootprintLevel 0 | 1 (absent = 0). When 1 the constants are required:
-        // Pedestrians.FootprintLevelDeltaM (delta_f) and Pedestrians.FootprintLevelSigmaM (sigma_fl), calibrated on the FL-off development runs (p9h_fl_calib.py).
-        bool footprintLevel = false;
-        double footprintLevelDeltaM = 0, footprintLevelSigmaM = 0;
         // P9-L Part 4 step 1b: poster / static-person rejection (GT-free). A track whose estimated world-root extent stays <= posterMaxExtentM over >= posterMinDurationS while the camera subtends >=
         // posterMinParallaxDeg at its range is a poster: it creates no pedestrian factors and the runner leaves its instance mask out of the ORB mask. Pedestrians.PosterReject: 0 | 1 (default 0 = off).
         bool posterReject = false;

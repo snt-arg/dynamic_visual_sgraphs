@@ -634,27 +634,6 @@ namespace ORB_SLAM3
             f.ok = true;
             return f;
         }
-
-        // P9-H A7.1 association of a stance footprint with a level. `entryLevels`: for every entry (keyframe) of the stance run, in time order, the level its own (keyframe, track) contact was
-        // assigned to (-1 if the contact is unassigned or absent). The footprint joins the first assigned one; otherwise the nearest of `candidates` (id, z) within 3 sigma_a of z_f (strictly
-        // inside, ties to the first in the given order); otherwise -1 (no FL). Never creates or merges a level.
-        inline int AssociateFootprint(const std::vector<int> &entryLevels, double zf, const std::vector<std::pair<int, double>> &candidates, double sigmaA)
-        {
-            for (int l : entryLevels)
-                if (l >= 0)
-                    return l;
-            int best = -1;
-            double bd = 3.0 * sigmaA;
-            for (const auto &c : candidates)
-                if (std::abs(zf - c.second) < bd)
-                {
-                    bd = std::abs(zf - c.second);
-                    best = c.first;
-                }
-            return best;
-        }
-        // A7.1 "no double counting": the F1 contact factor of a (keyframe, track) pair is dropped when its footprint gets an FL factor.
-        inline bool FootprintReplacesF1(bool footprintLevelOn, int footprintLevelId) { return footprintLevelOn && footprintLevelId >= 0; }
     } // namespace ped
 } // namespace ORB_SLAM3
 #endif

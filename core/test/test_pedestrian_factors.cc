@@ -148,7 +148,7 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J) ||
         TryMulti<EdgePedFloorPx<SE3>>(e, vi, J) || TryMulti<EdgePedFloorPx<VertexPose>>(e, vi, J) ||
         TryMulti<EdgePedLevelPx<SE3>>(e, vi, J) || TryMulti<EdgePedLevelPx<VertexPose>>(e, vi, J) ||
-        TryBinary<EdgePedPointOnLevel>(e, vi, J) || TryBinary<EdgePedFootprintLevel>(e, vi, J) || TryBinary<EdgePedPlatformHeight<SE3>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<VertexPose>>(e, vi, J))
+        TryBinary<EdgePedPointOnLevel>(e, vi, J) || TryBinary<EdgePedPlatformHeight<SE3>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
@@ -416,20 +416,6 @@ static void FloorIoTests()
     threw = false;
     try { cfg("Pedestrians.FloorContact: bogus\n"); } catch (const std::runtime_error &) { threw = true; }
     CHECK(threw, "settings: an unknown FloorContact value throws");
-    // P9-H A7: Pedestrians.FootprintLevel (absent = 0; 1 requires its two constants; only read in levels mode)
-    const std::string lv = "Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\nPedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\n"
-                           "Pedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\nPedestrians.LevelSigmaA: 0.1\nPedestrians.LevelSigmaPt: 0.05\nPedestrians.LevelSMax: 0.2\nPedestrians.FootGateTau: 0.1\n";
-    CHECK(cfg(lv) && !PedestrianParams::Get().footprintLevel, "settings: FootprintLevel absent = off (existing LEV configs are unchanged)");
-    CHECK(cfg(lv + "Pedestrians.FootprintLevel: 0\n") && !PedestrianParams::Get().footprintLevel, "settings: FootprintLevel 0 = off, needs no constants");
-    threw = false;
-    try { cfg(lv + "Pedestrians.FootprintLevel: 1\n"); } catch (const std::runtime_error &) { threw = true; }
-    CHECK(threw, "settings: FootprintLevel 1 without its constants throws (no defaults)");
-    threw = false;
-    try { cfg(lv + "Pedestrians.FootprintLevel: 2\n"); } catch (const std::runtime_error &) { threw = true; }
-    CHECK(threw, "settings: FootprintLevel other than 0 | 1 throws");
-    CHECK(cfg(lv + "Pedestrians.FootprintLevel: 1\nPedestrians.FootprintLevelDeltaM: 0.02\nPedestrians.FootprintLevelSigmaM: 0.05\n") && PedestrianParams::Get().footprintLevel &&
-              PedestrianParams::Get().footprintLevelDeltaM == 0.02 && PedestrianParams::Get().footprintLevelSigmaM == 0.05,
-          "settings: FootprintLevel 1 with delta_f and sigma_fl");
     PedestrianParams::Get() = PedestrianParams();
 }
 
@@ -779,21 +765,6 @@ static void LevelTests(const char *tag)
     f2.computeError();
     CHECK(std::abs(f2.error()(0) - 0.07) < 1e-12, std::string("F2 point on level [") + tag + "]: e = z_point - z_l");
     CheckEdge(&f2, std::string("F2 point on level [") + tag + "]");
-
-    // P9-H A7 FL: e = z_f - z_l - delta_f, with and without an offset; the Jacobian is checked against numerical differentiation at several points
-    for (double delta : {0.0, 0.037})
-        for (double zf : {0.31, -2.2})
-        {
-            g2o::VertexSBAPointXYZ ft;
-            ft.setEstimate(Eigen::Vector3d(1.5, -0.4, zf));
-            EdgePedFootprintLevel fl;
-            fl.setVertex(0, &ft);
-            fl.setVertex(1, &lvl);
-            fl.setMeasurement(delta);
-            fl.computeError();
-            CHECK(std::abs(fl.error()(0) - (zf - lvl.estimate() - delta)) < 1e-12, std::string("FL footprint on level [") + tag + "]: e = z_f - z_l - delta_f");
-            CheckEdge(&fl, std::string("FL footprint on level [") + tag + "]", 1e-6);
-        }
 
     // F3: e = C_z - z_l - h_cam
     EdgePedPlatformHeight<PoseV> f3;

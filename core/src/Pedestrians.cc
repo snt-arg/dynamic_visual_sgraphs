@@ -108,22 +108,6 @@ namespace ORB_SLAM3
                 throw std::runtime_error("[Pedestrians] Pedestrians.FootGateTau must be >= 0 (0 = gate off)");
             if (p.biasMinContacts < 0)
                 throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
-            const cv::FileNode fln = fs["Pedestrians.FootprintLevel"]; // P9-H A7: absent = 0 (off)
-            if (!fln.empty())
-            {
-                const int fl = static_cast<int>(Req(fs, "Pedestrians.FootprintLevel", true));
-                if (fl != 0 && fl != 1)
-                    throw std::runtime_error("[Pedestrians] Pedestrians.FootprintLevel must be 0 or 1");
-                p.footprintLevel = fl == 1;
-            }
-            if (p.footprintLevel)
-            {
-                p.footprintLevelDeltaM = Req(fs, "Pedestrians.FootprintLevelDeltaM");
-                p.footprintLevelSigmaM = Req(fs, "Pedestrians.FootprintLevelSigmaM");
-                if (!(p.footprintLevelSigmaM > 0))
-                    throw std::runtime_error("[Pedestrians] Pedestrians.FootprintLevelSigmaM must be > 0");
-                std::cout << "[Pedestrians] footprint-on-level factor FL on: delta_f " << p.footprintLevelDeltaM << " m, sigma_fl " << p.footprintLevelSigmaM << " m" << std::endl;
-            }
             const cv::FileNode ph = fs["Pedestrians.PlatformHeight"];
             const bool aliasPlatform = fm == "levels_platform";
             if (aliasPlatform && !ph.empty())
