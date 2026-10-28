@@ -62,6 +62,7 @@ namespace ORB_SLAM3
         KeyFrameDatabase(const ORBVocabulary &voc);
 
         void add(KeyFrame *pKF);
+    unsigned long NumAdded() { std::unique_lock<std::mutex> lock(mMutex); return mnAdded; } // [P9-H]
 
         void erase(KeyFrame *pKF);
 
@@ -95,6 +96,7 @@ namespace ORB_SLAM3
 
         // Mutex
         std::mutex mMutex;
+        unsigned long mnAdded = 0; // [P9-H] number of keyframes added (logging only)
     };
 
 } // namespace ORB_SLAM

@@ -21,6 +21,7 @@
  */
 
 #include "Tracking.h"
+#include <iomanip>
 #include "Deterministic.h"
 
 #include "ORBmatcher.h"
@@ -2408,6 +2409,10 @@ namespace ORB_SLAM3
             mLastFrame = Frame(mCurrentFrame);
         }
 
+        // [P9-H] logging only: tracking goes lost (state at the start of this frame was OK, now it is not)
+        if (mLastProcessedState == OK && (mState == LOST || mState == RECENTLY_LOST))
+            std::cout << "LOST " << std::fixed << std::setprecision(9) << mCurrentFrame.mTimeStamp << std::defaultfloat << " " << mCurrentFrame.mnId << " " << mpAtlas->GetCurrentMap()->GetId() << std::endl;
+
         if (mState == OK || mState == RECENTLY_LOST)
         {
             // Store frame pose information to retrieve the complete camera trajectory afterwards.
@@ -4143,6 +4148,8 @@ namespace ORB_SLAM3
         {
             mnLastRelocFrameId = mCurrentFrame.mnId;
             std::cout << "[Tracking] Relocalized!" << std::endl;
+            // [P9-H] logging only
+            std::cout << "RELOC ok " << std::fixed << std::setprecision(9) << mCurrentFrame.mTimeStamp << std::defaultfloat << " " << mCurrentFrame.mnId << " " << mpAtlas->GetCurrentMap()->GetId() << std::endl;
             return true;
         }
     }

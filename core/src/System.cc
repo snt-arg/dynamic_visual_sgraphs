@@ -663,6 +663,7 @@ namespace ORB_SLAM3
         }
 
         cout << "Shutdown" << endl;
+        cout << "KFDB_SIZE " << mpKeyFrameDatabase->NumAdded() << endl; // [P9-H] logging only
 
         mpLocalMapper->RequestFinish();
         mpLoopCloser->RequestFinish();
