@@ -365,7 +365,17 @@ namespace ORB_SLAM3
     {
         // To deactivate placerecognition. No loopclosing nor merging will be performed
         if (!mbActiveLC)
+        {
+            // [P9-H A6.1] VIO mode (settings: loopClosing: 0). The keyframe must still leave the queue, otherwise the synchronous drain (RunSynchronously) never ends and the threaded queue
+            // grows; it enters the place-recognition database as in the other early return below (relocalisation uses it). Nothing is detected, so no loop, merge or global BA can start.
+            {
+                unique_lock<mutex> lock(mMutexLoopQueue);
+                mpCurrentKF = mlpLoopKeyFrameQueue.front();
+                mlpLoopKeyFrameQueue.pop_front();
+            }
+            mpKeyFrameDB->add(mpCurrentKF);
             return false;
+        }
 
         {
             unique_lock<mutex> lock(mMutexLoopQueue);
@@ -998,9 +1008,9 @@ namespace ORB_SLAM3
     void LoopClosing::CorrectLoop()
     {
         // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
-        // [P9-H A5.1] the level set is kept: anchor camera centres are snapshotted here, before any pose changes, and the levels are shifted after the essential-graph optimisation (PedLoopEnd)
+        // [P9-H A6] loop closing is off in the evaluated configuration; if it runs, the level set is destroyed as before (no loop carry)
         if (PedestrianParams::Enabled())
-            mpCurrentKF->GetMap()->PedLoopBegin(mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
+            mpCurrentKF->GetMap()->ResetPedestrians("LOOP", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
 
         // Avoid new keyframes are inserted while correcting the loop
         mpLocalMapper->RequestStop();
@@ -1203,8 +1213,6 @@ namespace ORB_SLAM3
             // cout << "Loop -> Scale correction: " << mg2oLoopScw.scale() << endl;
             Optimizer::OptimizeEssentialGraph(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, bFixedScale);
         }
-        if (PedestrianParams::Enabled())
-            pLoopMap->PedLoopEnd(mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId); // [P9-H A5.1]
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndOpt = std::chrono::steady_clock::now();
 

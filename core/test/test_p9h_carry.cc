@@ -1,6 +1,6 @@
 // P9-H A4.4 / A5 (gate K1): Map-level tests of the epoch logging and the level carry-over. Separate process from test_p9h_logs (the event log is a process-wide static).
 // Covered here: every cause of an EPOCH row (IMU_INIT0, STAGE1, STAGE2, SCALE_REFINE, LOOP, MERGE, OTHER), MAP_SCALE and CARRY rows, the analytic similarity transform of the carried levels,
-// the person-state bias still cleared, the epoch still incremented. A loop correction with keyframes needs a full System; its level arithmetic is in test_levels.cc (CarryShift).
+// the person-state bias still cleared, the epoch still incremented. A6: no loop carry exists.
 #include "Map.h"
 #include "PedestrianBA.h"
 
@@ -92,11 +92,10 @@ int main()
     map.ApplyScaledRotation(Sophus::SE3f(R, t), 0.99f, true, "STAGE2", 30.0, 700);
     map.ApplyScaledRotation(Sophus::SE3f(R, t), 1.01f, true, "SCALE_REFINE", 63.5, 1500);
     map.ApplyScaledRotation(Sophus::SE3f(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero()), 1.f, true, "OTHER", 64.0, 1510);
-    map.PedLoopBegin(612.5, 11000);   // LOOP: epoch advances, levels kept
-    map.PedLoopEnd(612.5, 11000);     // no keyframes: every anchor is gone, the levels are dropped and the drop is logged
+    map.ResetPedestrians("LOOP", 612.5, 11000);   // CorrectLoop (loop closing is off in the VIO configuration; this is the unchanged destroy)
     {
         std::unique_lock<std::mutex> lk(map.PedLevelsMutex());
-        CHECK(map.PedLevels(P).Levels().empty(), "a loop correction whose anchors are all culled drops the levels");
+        CHECK(map.PedLevels(P).Levels().empty(), "a loop correction destroys the level set (no loop carry, A6)");
     }
     Map map2(1);
     {
@@ -138,7 +137,7 @@ int main()
           "every cause appears exactly once (IMU_INIT0, STAGE1, STAGE2, SCALE_REFINE, LOOP, MERGE, OTHER)");
     CHECK(mapScale == 5, "one MAP_SCALE row per ApplyScaledRotation (5)");
     // carried levels: 2 per rotation on map until the loop drop, 2 on map2 for IMU_INIT0; the merge reset carries none
-    CHECK(carry == 2 * 4 + 2 && carryDrop == 2, "10 CARRY rows (2 levels x 4 rotations on map, 2 on map2) and 2 CARRY_DROP rows at the loop");
+    CHECK(carry == 2 * 4 + 2 && carryDrop == 0, "10 CARRY rows (2 levels x 4 rotations on map, 2 on map2), no CARRY_DROP");
     std::cout << (failures ? "FAILURES: " : "all passed, failures = ") << failures << "\n";
     return failures ? 1 : 0;
 }

@@ -163,10 +163,6 @@ namespace ORB_SLAM3
         // [P9-C] the reset used on loop correction / merge / scale-rotation of the map
         // P9-H A4.4: `cause` (IMU_INIT0, STAGE1, STAGE2, SCALE_REFINE, LOOP, MERGE or OTHER), the sensor time and frame id of the current keyframe go into the EPOCH row of ped_levels_events.log.
         void ResetPedestrians(const char *cause = "OTHER", double stamp = -1, unsigned long frame = 0); // locks mMutexMap; destroys the level set (merge)
-        // P9-H A5.1: loop correction keeps the level set. Begin (before CorrectLoop moves any pose): snapshot the anchor camera centres of every level, clear person states, advance the epoch.
-        // End (after the essential-graph optimisation): shift every level by the median anchor displacement; drop a level whose anchors are all gone.
-        void PedLoopBegin(double stamp, unsigned long frame);
-        void PedLoopEnd(double stamp, unsigned long frame);
         // [P9-C3b] persistent per-track log-scale bias b_j (Pedestrians.FloorContact != none); cleared with the person states
         bool GetPedBias(int trackId, double &b);
         void SetPedBias(int trackId, double b);
@@ -225,8 +221,6 @@ namespace ORB_SLAM3
         std::mutex mMutexMapUpdate;
         // caller holds mMutexMap. keepLevels: the level set survives and its epoch advances (A5), with the similarity (T, s) applied to it when T != nullptr; otherwise the set is destroyed.
         void ResetPedestriansLocked(const char *cause, double stamp, unsigned long frame, bool keepLevels = false, const Sophus::SE3f *T = nullptr, float s = 1.f);
-        std::map<unsigned long, std::array<double, 3>> mPedLoopSnap; // P9-H A5: anchor keyframe id -> camera centre before the loop correction
-        unsigned long mPedLoopOldEpoch = 0;
         std::mutex mMutexPedMap;
         std::map<int, double> mPedBias;
         std::mutex mMutexPedLevels;

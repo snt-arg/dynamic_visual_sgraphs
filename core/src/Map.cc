@@ -862,19 +862,14 @@ namespace ORB_SLAM3
         return mPedLevels.Get(p);
     }
 
-    // P9-H A5 / A4.4: logs the CARRY and MERGE rows of a carry that ended with the set at epoch `newEpoch`. Caller holds mMutexPedLevels.
+    // P9-H A5 / A4.4: logs the CARRY and MERGE rows of a similarity carry that ended with the set at epoch `newEpoch`. Caller holds mMutexPedLevels.
     static void LogCarry(const char *cause, unsigned long mapId, unsigned long oldEpoch, unsigned long newEpoch, double stamp, unsigned long frame,
                          const std::vector<ped::CarryRow> &rows, std::vector<ped::LevelEvent> events)
     {
         for (const ped::CarryRow &r : rows)
         {
-            if (r.dropped)
-                PedestrianBA::RecordEvent("CARRY_DROP", stamp, frame, mapId, newEpoch, r.id, static_cast<int>(oldEpoch), r.zBefore, 0, r.nContacts, r.nAnchors, 0, cause);
-            else
-            {
-                PedestrianBA::RecordEvent("CARRY", stamp, frame, mapId, newEpoch, r.id, static_cast<int>(oldEpoch), r.zBefore, r.zAfter, r.nContacts, r.nAnchors, 0, cause);
-                PedestrianBA::CarryLevelRecord(mapId, oldEpoch, newEpoch, r.id);
-            }
+            PedestrianBA::RecordEvent("CARRY", stamp, frame, mapId, newEpoch, r.id, static_cast<int>(oldEpoch), r.zBefore, r.zAfter, r.nContacts, 0, 0, cause);
+            PedestrianBA::CarryLevelRecord(mapId, oldEpoch, newEpoch, r.id);
         }
         for (const ped::LevelEvent &ev : events)
             if (ev.merge)
@@ -921,44 +916,4 @@ namespace ORB_SLAM3
         ResetPedestriansLocked(cause, stamp, frame);
     }
 
-    void Map::PedLoopBegin(double stamp, unsigned long frame)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        std::set<unsigned long> want;
-        {
-            unique_lock<mutex> lk(mMutexPedLevels);
-            if (ped::LevelSet *ls = mPedLevels.Existing())
-                want = ls->AllAnchorKfs();
-            mPedLoopOldEpoch = mPedLevels.Epoch();
-        }
-        mPedLoopSnap.clear();
-        for (KeyFrame *pKF : mspKeyFrames)
-            if (want.count(pKF->mnId))
-            {
-                const Eigen::Vector3f c = pKF->GetCameraCenter();
-                mPedLoopSnap[pKF->mnId] = {c(0), c(1), c(2)};
-            }
-        ResetPedestriansLocked("LOOP", stamp, frame, true);
-    }
-
-    void Map::PedLoopEnd(double stamp, unsigned long frame)
-    {
-        unique_lock<mutex> lock(mMutexMap);
-        std::map<unsigned long, std::array<double, 3>> delta;
-        for (KeyFrame *pKF : mspKeyFrames)
-        {
-            const auto it = mPedLoopSnap.find(pKF->mnId);
-            if (it == mPedLoopSnap.end() || pKF->isBad())
-                continue;
-            const Eigen::Vector3f c = pKF->GetCameraCenter();
-            delta[pKF->mnId] = {c(0) - it->second[0], c(1) - it->second[1], c(2) - it->second[2]};
-        }
-        mPedLoopSnap.clear();
-        unique_lock<mutex> lk(mMutexPedLevels);
-        if (ped::LevelSet *ls = mPedLevels.Existing())
-        {
-            const std::vector<ped::CarryRow> rows = ls->CarryShift(delta);
-            LogCarry("LOOP", mnId, mPedLoopOldEpoch, mPedLevels.Epoch(), stamp, frame, rows, ls->TakeEvents());
-        }
-    }
 } // namespace ORB_SLAM3

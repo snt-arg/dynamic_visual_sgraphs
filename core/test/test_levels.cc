@@ -138,7 +138,7 @@ int main()
         { PosterDetector d(PP); feed(d, 1, 0.8, 1.0, 4.0); feed(d, 2, 3.0, 1.0, 4.0); CHECK(d.IsPoster(1) && !d.IsPoster(2), "decisions are per track"); }
     }
 
-    // ---- P9-H A5 (gate K1): levels persist across epochs
+    // ---- P9-H A5 (gate K1): levels persist across epochs (similarity events; A6: no loop carry)
     {
         auto setup = [&](LevelStore &st, double zLow) { // two levels: z ~ 0 and z ~ zLow, contacts of kf 0..29 spread over x
             LevelSet &S = st.Get(P);
@@ -175,17 +175,10 @@ int main()
         }
         { LevelStore st; LevelSet *S = setup(st, -1.0); const int n0 = S->Levels()[0].nContacts, id0 = S->Levels()[0].id; S->TakeEvents();
           S->CarrySimilarity(R, t, s); CHECK(S->Levels()[0].nContacts == n0 && S->Levels()[0].id == id0, "a carried level keeps its id and contact count"); }
-        { LevelStore st; LevelSet &S = st.Get(P); const auto rows = S.CarrySimilarity(R, t, s); const auto rows2 = S.CarryShift({{1, {0, 0, 1}}}); CHECK(rows.empty() && rows2.empty() && S.Levels().empty() && S.TakeEvents().empty(), "with no levels a carry changes nothing and logs nothing"); }
+        { LevelStore st; LevelSet &S = st.Get(P); const auto rows = S.CarrySimilarity(R, t, s); CHECK(rows.empty() && S.Levels().empty() && S.TakeEvents().empty(), "with no levels a carry changes nothing and logs nothing"); }
         { LevelStore st; LevelSet *S = setup(st, -0.30); CHECK(S->Levels().size() == 2, "merge-after-carry setup: two levels 0.30 m apart (> 2 sigma_a = 0.10)"); S->TakeEvents();
           const std::array<double, 9> I = {1, 0, 0, 0, 1, 0, 0, 0, 1}; S->CarrySimilarity(I, {0, 0, 0}, 0.2);   // the gap shrinks to 0.06 m
           const auto ev = S->TakeEvents(); CHECK(S->Levels().size() == 1 && ev.size() == 1 && ev[0].merge, "the merge rule is applied once after a carry (MERGE event, one level left)"); }
-        { LevelStore st; LevelSet *S = setup(st, -1.0); S->TakeEvents(); std::vector<double> z0; for (const Level &L : S->Levels()) z0.push_back(L.z);
-          std::map<unsigned long, std::array<double, 3>> delta; for (unsigned long kf = 0; kf < 30; ++kf) delta[kf] = {0.05, -0.02, 0.35 + (kf < 4 ? 1.5 : 0.0)};   // 4 of 30 anchors are outliers: the median is robust
-          const auto rows = S->CarryShift(delta);
-          CHECK(rows.size() == 2 && !rows[0].dropped && !rows[1].dropped && std::abs(S->Levels()[0].z - (z0[0] + 0.35)) < 0.01 && std::abs(S->Levels()[1].z - (z0[1] + 0.35)) < 0.01, "a loop correction with a known anchor shift of 0.35 m moves every level by 0.35 m (within 0.01 m)");
-          CHECK(rows[0].nAnchors > 0 && rows[1].nAnchors > 0, "the anchors that survive are counted"); }
-        { LevelStore st; LevelSet *S = setup(st, -1.0); S->TakeEvents(); std::map<unsigned long, std::array<double, 3>> delta = {{5000, {0, 0, 1.0}}};
-          const auto rows = S->CarryShift(delta); CHECK(rows.size() == 2 && rows[0].dropped && rows[1].dropped && S->Levels().empty(), "levels whose anchors are all culled are dropped"); }
         { LevelStore st; LevelSet *S = setup(st, -1.0); const unsigned long e = st.Epoch(); st.Advance(); CHECK(st.Epoch() == e + 1 && st.Existing() == S && S->Levels().size() == 2, "Advance increments the epoch and keeps the set (Reset still destroys it)"); st.Reset(); CHECK(st.Existing() == nullptr && st.Epoch() == e + 2, "Reset destroys the set and increments the epoch"); }
     }
 
