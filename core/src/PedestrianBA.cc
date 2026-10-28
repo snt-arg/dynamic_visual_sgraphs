@@ -75,6 +75,7 @@ namespace ORB_SLAM3
             double sensorTimestamp = 0, height = 0, otherHeight = 0, scale = 0;
             unsigned long frameIndex = 0, mapId = 0, epoch = 0;
             int id = -1, otherId = -1, contacts = 0, otherContacts = 0;
+            std::string tag; // P9-H A4.4: cause of an EPOCH / MAP_SCALE / CARRY row ("-" when empty)
         };
         std::vector<EventRec> gEvents;
         // P9-H A2.3 item 2: the level table of every (map, epoch), refreshed after every Update and every write-back; the last snapshot of an epoch is its end-of-epoch table.
@@ -1398,9 +1399,11 @@ namespace ORB_SLAM3
         const size_t epDot = ep.rfind(".log");
         ep = (epDot == std::string::npos ? ep : ep.substr(0, epDot)) + "_events.log";
         std::ofstream ef(ep);
-        ef << "# P9-H A2.3 events. type sensor_timestamp frame_index map_id epoch id other_id height other_height contacts other_contacts scale\n";
-        ef << "# CREATE: id = new level. MERGE: id = survivor (lower id), other_id = absorbed; height / contacts are the two levels' values before the merge. IMU_INIT / RESET / SCALE: runner events (SCALE: scale = image scale).\n";
-        ef << "# frame_index: ORB-SLAM3 frame id of the keyframe of the latest contact (CREATE / MERGE / EPOCH rows) or the runner's processed-frame count (IMU_INIT / RESET / SCALE).\n";
+        ef << "# P9-H A2.3 / A4.4 / A5 events. type sensor_timestamp frame_index map_id epoch id other_id height other_height contacts other_contacts scale tag\n";
+        ef << "# EPOCH: one row per increment of the level-set epoch of a map (epoch = the new one), tag = cause IMU_INIT0 | STAGE1 | STAGE2 | SCALE_REFINE | LOOP | MERGE | OTHER. MAP_SCALE: ApplyScaledRotation, height / other_height = roll / pitch of R_yw in degrees, scale = s, tag = cause.\n";
+        ef << "# CARRY: a level kept across the epoch change (epoch = new, other_id = old epoch, id = level, height / other_height = z before / after, contacts = n contacts, other_contacts = n surviving anchors, tag = cause). CARRY_DROP: a loop correction found no surviving anchor and dropped the level.\n";
+        ef << "# CREATE: id = new level. MERGE: id = survivor (lower id), other_id = absorbed; height / contacts are the two levels' values before the merge. IMU_INIT / RESET / IMAGE_SCALE: runner events (IMAGE_SCALE: scale = image scale).\n";
+        ef << "# frame_index: ORB-SLAM3 frame id of the keyframe of the latest contact (CREATE / MERGE / EPOCH rows) or the runner's processed-frame count (IMU_INIT / RESET / IMAGE_SCALE).\n";
         ef << "# LEVEL rows = the level table at the end of the epoch (last Update / write-back of that (map, epoch)): sensor_timestamp, frame_index = creation time / frame; id; height; contacts. EPOCH_END: last stamp / frame seen in the epoch, contacts = number of levels.\n";
         std::vector<EventRec> evs = gEvents;
         std::stable_sort(evs.begin(), evs.end(), [](const EventRec &a, const EventRec &b) { // canonical order: the file does not depend on which thread logged first
@@ -1408,7 +1411,7 @@ namespace ORB_SLAM3
         });
         auto writeEvent = [&](const EventRec &e) {
             ef << e.type << " " << std::fixed << std::setprecision(9) << e.sensorTimestamp << " " << e.frameIndex << " " << e.mapId << " " << e.epoch << " " << e.id << " " << e.otherId << " "
-               << std::hexfloat << e.height << " " << e.otherHeight << std::defaultfloat << " " << e.contacts << " " << e.otherContacts << " " << e.scale << "\n";
+               << std::hexfloat << e.height << " " << e.otherHeight << std::defaultfloat << " " << e.contacts << " " << e.otherContacts << " " << e.scale << " " << (e.tag.empty() ? "-" : e.tag) << "\n";
         };
         for (const EventRec &e : evs)
             writeEvent(e);
@@ -1439,10 +1442,20 @@ namespace ORB_SLAM3
 
     void PedestrianBA::RecordEvent(const std::string &type, double sensorTimestamp, unsigned long frameIndex,
                                    unsigned long mapId, unsigned long epoch, int id, int otherId,
-                                   double height, double otherHeight, int contacts, int otherContacts, double scale)
+                                   double height, double otherHeight, int contacts, int otherContacts, double scale, const std::string &tag)
     {
         std::lock_guard<std::mutex> lk(gLogMutex);
-        gEvents.push_back({type, sensorTimestamp, height, otherHeight, scale, frameIndex, mapId, epoch, id, otherId, contacts, otherContacts});
+        gEvents.push_back({type, sensorTimestamp, height, otherHeight, scale, frameIndex, mapId, epoch, id, otherId, contacts, otherContacts, tag});
+    }
+
+    void PedestrianBA::CarryLevelRecord(unsigned long mapId, unsigned long oldEpoch, unsigned long newEpoch, int id)
+    {
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        const auto cr = gLevelCreated.find(std::make_tuple(mapId, oldEpoch, id));
+        if (cr != gLevelCreated.end())
+            gLevelCreated[std::make_tuple(mapId, newEpoch, id)] = cr->second;
+        if (gFoundSeen.count(std::make_tuple(mapId, oldEpoch, id)))
+            gFoundSeen.insert(std::make_tuple(mapId, newEpoch, id));
     }
 
     void PedestrianBA::DumpFloorLog(const std::string &path)

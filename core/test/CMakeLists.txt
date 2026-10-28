@@ -15,6 +15,13 @@ target_link_libraries(test_p9h_logs ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${O
   ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
 set_target_properties(test_p9h_logs PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
+add_executable(test_p9h_carry test_p9h_carry.cc)
+target_include_directories(test_p9h_carry PRIVATE ${ORB_SLAM3_DIR} ${ORB_SLAM3_DIR}/include ${ORB_SLAM3_DIR}/include/CameraModels
+  ${ORB_SLAM3_DIR}/Thirdparty/Sophus ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} ${Pangolin_INCLUDE_DIRS})
+target_link_libraries(test_p9h_carry ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+  ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
+set_target_properties(test_p9h_carry PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
 add_executable(deterministic_guard_test deterministic_guard_test.cc)
 target_include_directories(deterministic_guard_test PRIVATE ${ORB_SLAM3_DIR} ${ORB_SLAM3_DIR}/include ${ORB_SLAM3_DIR}/include/CameraModels
   ${ORB_SLAM3_DIR}/Thirdparty/Sophus ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} ${Pangolin_INCLUDE_DIRS})

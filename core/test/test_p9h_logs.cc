@@ -41,7 +41,7 @@ int main()
     using ORB_SLAM3::PedestrianBA;
     // ------------------------------------------------------------------ A2.3 events
     // recorded out of order on purpose: the file is written in canonical (time, frame, type, ...) order
-    PedestrianBA::RecordEvent("SCALE", 14.0, 39, 5, 3, -1, -1, 0, 0, 0, 0, 1.25);
+    PedestrianBA::RecordEvent("IMAGE_SCALE", 14.0, 39, 5, 3, -1, -1, 0, 0, 0, 0, 1.25);
     PedestrianBA::RecordEvent("IMU_INIT", 12.5, 37, 4, 2);
     PedestrianBA::RecordEvent("CREATE", 13.0, 38, 5, 3, 0, -1, -1.5, 0, 12, 0);
     PedestrianBA::RecordEvent("RESET", 13.0, 38, 5, 3);
@@ -68,14 +68,14 @@ int main()
     PedestrianBA::DumpFirstLog(fp);
 
     bool ok = false;
-    const Rows ev = rowsOf(base + "_events.log", 12, ok); // type stamp frame map epoch id other_id height other_height contacts other_contacts scale
-    CHECK(ok && ev.size() == 4, "event rows: 12 fields each, 4 rows");
+    const Rows ev = rowsOf(base + "_events.log", 13, ok); // type stamp frame map epoch id other_id height other_height contacts other_contacts scale tag
+    CHECK(ok && ev.size() == 4, "event rows: 13 fields each, 4 rows");
     std::vector<std::string> order;
     for (const auto &r : ev)
         order.push_back(r[0]);
-    CHECK(order == std::vector<std::string>({"IMU_INIT", "CREATE", "RESET", "SCALE"}), "events are written in canonical order, not arrival order");
+    CHECK(order == std::vector<std::string>({"IMU_INIT", "CREATE", "RESET", "IMAGE_SCALE"}), "events are written in canonical order, not arrival order");
     CHECK(ev.size() == 4 && ev[0][1] == "12.500000000" && ev[0][2] == "37" && ev[0][3] == "4" && ev[0][4] == "2", "IMU_INIT row: sensor time, frame index, map, epoch");
-    CHECK(ev.size() == 4 && ev[3][0] == "SCALE" && ev[3][11] == "1.25", "SCALE row carries the scale");
+    CHECK(ev.size() == 4 && ev[3][0] == "IMAGE_SCALE" && ev[3][11] == "1.25" && ev[3][12] == "-", "IMAGE_SCALE row carries the image scale, tag \"-\"");
 
     const Rows first = rowsOf(fp, 22, ok); // map epoch kf stamp track px py pz vx vy vz tx ty tz qx qy qz qw root_u root_v lpx mask_h
     CHECK(ok && first.size() == 4, "first-write log parses: 22 fields per row, one row per (map, epoch, kf, track)");

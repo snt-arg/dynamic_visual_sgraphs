@@ -221,7 +221,7 @@ namespace ORB_SLAM3
         bool mbAcceptKeyFrames;
         std::mutex mMutexAccept;
 
-        void InitializeIMU(float priorG = 1e2, float priorA = 1e6, bool bFirst = false);
+        void InitializeIMU(float priorG = 1e2, float priorA = 1e6, bool bFirst = false, const char *cause = "OTHER"); // P9-H A4.4: cause of the epoch change it makes (IMU_INIT0 | STAGE1 | STAGE2)
         void ScaleRefinement();
 
         bool bInitializing;

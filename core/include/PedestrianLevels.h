@@ -12,6 +12,7 @@
 #define PEDESTRIAN_LEVELS_H
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <map>
@@ -146,6 +147,19 @@ namespace ORB_SLAM3
             double z;
             int nContacts = 0;
             std::vector<Contact> founding; // P9-L step 5: the contacts that created the level (ped_levels_found.log)
+            // P9-H A5: contact centroid (x, y) in the map frame (running mean of the founding and assigned contacts; z is the level height) and the keyframes of the most recent
+            // assigned contacts (<= kAnchorRecent). The anchors of a level are its founding keyframes plus these.
+            double mx = 0, my = 0;
+            std::vector<unsigned long> recentKf;
+        };
+
+        // P9-H A5: one row per level of a carry (similarity or loop correction). dropped: all anchors were culled (loop carry only), zAfter is then meaningless.
+        struct CarryRow
+        {
+            int id = -1;
+            double zBefore = 0, zAfter = 0;
+            int nContacts = 0, nAnchors = 0;
+            bool dropped = false;
         };
 
         // P9-H A2.3: logging only (never read by the estimator). CREATE: id = new level, z / n = its founding median and contact count. MERGE: id = the surviving (lower) id, otherId = the absorbed one;
@@ -224,7 +238,16 @@ namespace ORB_SLAM3
                     if (c.level >= 0)
                     {
                         if (fresh)
-                            ++Find(c.level).nContacts;
+                        {
+                            Level &L = Find(c.level);
+                            const double n = L.nContacts; // P9-H A5: centroid and anchors follow the contact count
+                            L.mx = (n * L.mx + c.x) / (n + 1.0);
+                            L.my = (n * L.my + c.y) / (n + 1.0);
+                            ++L.nContacts;
+                            L.recentKf.push_back(c.kf);
+                            if (L.recentKf.size() > kAnchorRecent)
+                                L.recentKf.erase(L.recentKf.begin());
+                        }
                     }
                     else if (!c.transitional && fresh && !guarded(c))
                         pool.push_back(c);
@@ -292,7 +315,11 @@ namespace ORB_SLAM3
                     L.z = med;
                     L.nContacts = static_cast<int>(hh.size());
                     for (const Contact *c : in)
+                    {
                         L.founding.push_back(*c);
+                        L.mx += c->x / static_cast<double>(in.size());
+                        L.my += c->y / static_cast<double>(in.size());
+                    }
                     levels.push_back(L);
                     {
                         LevelEvent ev;
@@ -335,6 +362,11 @@ namespace ORB_SLAM3
                                 }
                                 const double wi = std::max(1, levels[i].nContacts), wj = std::max(1, levels[j].nContacts); // int -> double below
                                 levels[i].z = (wi * levels[i].z + wj * levels[j].z) / (wi + wj);
+                                levels[i].mx = (wi * levels[i].mx + wj * levels[j].mx) / (wi + wj);
+                                levels[i].my = (wi * levels[i].my + wj * levels[j].my) / (wi + wj);
+                                levels[i].recentKf.insert(levels[i].recentKf.end(), levels[j].recentKf.begin(), levels[j].recentKf.end());
+                                if (levels[i].recentKf.size() > kAnchorRecent)
+                                    levels[i].recentKf.erase(levels[i].recentKf.begin(), levels[i].recentKf.end() - kAnchorRecent);
                                 levels[i].nContacts += levels[j].nContacts;
                                 levels[i].founding.insert(levels[i].founding.end(), levels[j].founding.begin(), levels[j].founding.end());
                                 levels.erase(levels.begin() + j);
@@ -342,6 +374,95 @@ namespace ORB_SLAM3
                                 again = true;
                             }
                 }
+            }
+
+            // ---------------------------------------------------------------------------------------- P9-H A5: levels persist across epochs
+            static constexpr size_t kAnchorRecent = 20;
+            // Keyframes whose camera centres anchor a level: the keyframes of its founding contacts and of its most recent assigned contacts.
+            static std::set<unsigned long> AnchorKfs(const Level &L)
+            {
+                std::set<unsigned long> out(L.recentKf.begin(), L.recentKf.end());
+                for (const Contact &c : L.founding)
+                    out.insert(c.kf);
+                return out;
+            }
+            std::set<unsigned long> AllAnchorKfs() const
+            {
+                std::set<unsigned long> out;
+                for (const Level &L : levels)
+                {
+                    const std::set<unsigned long> a = AnchorKfs(L);
+                    out.insert(a.begin(), a.end());
+                }
+                return out;
+            }
+            // Similarity event (Map::ApplyScaledRotation): every level centroid c = (mx, my, z) becomes c' = s R c + t (R row-major). The pool of unassigned contacts holds heights of the old frame and is
+            // dropped; `seen`, the ids, the contact counts and the founding record are kept. The existing merge rule is applied once afterwards (its events are in TakeEvents).
+            std::vector<CarryRow> CarrySimilarity(const std::array<double, 9> &R, const std::array<double, 3> &t, double s)
+            {
+                std::vector<CarryRow> rows;
+                pool.clear();
+                for (Level &L : levels)
+                {
+                    CarryRow r;
+                    r.id = L.id;
+                    r.zBefore = L.z;
+                    r.nContacts = L.nContacts;
+                    r.nAnchors = static_cast<int>(AnchorKfs(L).size());
+                    const double x = L.mx, y = L.my, z = L.z;
+                    L.mx = s * (R[0] * x + R[1] * y + R[2] * z) + t[0];
+                    L.my = s * (R[3] * x + R[4] * y + R[5] * z) + t[1];
+                    L.z = s * (R[6] * x + R[7] * y + R[8] * z) + t[2];
+                    r.zAfter = L.z;
+                    rows.push_back(r);
+                }
+                MergeClose();
+                return rows;
+            }
+            // Loop correction (LoopClosing::CorrectLoop): `delta` = (dx, dy, dz) of the camera centre of every surviving keyframe, after minus before the correction. Each level moves by the median
+            // over its surviving anchors; a level without any surviving anchor is dropped (row.dropped). Pool dropped, merge rule applied once, as above.
+            std::vector<CarryRow> CarryShift(const std::map<unsigned long, std::array<double, 3>> &delta)
+            {
+                std::vector<CarryRow> rows;
+                pool.clear();
+                std::vector<Level> keep;
+                for (Level &L : levels)
+                {
+                    CarryRow r;
+                    r.id = L.id;
+                    r.zBefore = L.z;
+                    r.nContacts = L.nContacts;
+                    std::vector<double> dx, dy, dz;
+                    for (unsigned long kf : AnchorKfs(L))
+                    {
+                        const auto it = delta.find(kf);
+                        if (it == delta.end())
+                            continue;
+                        dx.push_back(it->second[0]);
+                        dy.push_back(it->second[1]);
+                        dz.push_back(it->second[2]);
+                    }
+                    r.nAnchors = static_cast<int>(dz.size());
+                    if (dz.empty())
+                    {
+                        r.dropped = true;
+                        rows.push_back(r);
+                        continue;
+                    }
+                    auto median = [](std::vector<double> &v) {
+                        std::sort(v.begin(), v.end());
+                        return v.size() % 2 ? v[v.size() / 2] : 0.5 * (v[v.size() / 2 - 1] + v[v.size() / 2]);
+                    };
+                    L.mx += median(dx);
+                    L.my += median(dy);
+                    L.z += median(dz);
+                    r.zAfter = L.z;
+                    rows.push_back(r);
+                    keep.push_back(L);
+                }
+                levels.swap(keep);
+                MergeClose();
+                return rows;
             }
 
             void SetHeight(int id, double z) { Find(id).z = z; }
@@ -395,6 +516,9 @@ namespace ORB_SLAM3
                 set.reset();
                 ++epoch;
             }
+            // P9-H A5: the epoch advances and the set is kept (similarity and loop carry)
+            void Advance() { ++epoch; }
+            LevelSet *Existing() { return set.get(); }
             unsigned long Epoch() const { return epoch; }
 
         private:

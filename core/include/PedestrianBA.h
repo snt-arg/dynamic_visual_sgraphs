@@ -91,7 +91,9 @@ namespace ORB_SLAM3
         static void RecordEvent(const std::string &type, double sensorTimestamp, unsigned long frameIndex,
                                 unsigned long mapId, unsigned long epoch, int id = -1, int otherId = -1,
                                 double height = 0, double otherHeight = 0, int contacts = 0, int otherContacts = 0,
-                                double scale = 0);
+                                double scale = 0, const std::string &tag = std::string());
+        // P9-H A4.4 / A5: a carried level keeps its creation record: the (map, new epoch, id) entry copies the (map, old epoch, id) one, and its founding contacts are not logged again.
+        static void CarryLevelRecord(unsigned long mapId, unsigned long oldEpoch, unsigned long newEpoch, int id);
 
         // P9-L Part 4 step 1b: poster rejection (Pedestrians.PosterReject). IsPosterTrack: the track has been flagged (latched); the runner leaves the instance mask of a flagged track out of the ORB mask.
         // DumpPosterLog: skipped (keyframe, track) entries and the flagged tracks with the flag time and the features that triggered it.

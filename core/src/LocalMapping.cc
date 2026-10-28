@@ -209,9 +209,9 @@ namespace ORB_SLAM3
                     if (!mpCurrentKeyFrame->GetMap()->isImuInitialized() && mbInertial)
                     {
                         if (mbMonocular)
-                            InitializeIMU(1e2, 1e10, true);
+                            InitializeIMU(1e2, 1e10, true, "IMU_INIT0");
                         else
-                            InitializeIMU(1e2, 1e5, true);
+                            InitializeIMU(1e2, 1e5, true, "IMU_INIT0");
                     }
 
                     // Check redundant local Keyframes
@@ -247,9 +247,9 @@ namespace ORB_SLAM3
                                     std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#1) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA1();
                                     if (mbMonocular)
-                                        InitializeIMU(1.f, 1e5, true);
+                                        InitializeIMU(1.f, 1e5, true, "STAGE1");
                                     else
-                                        InitializeIMU(1.f, 1e5, true);
+                                        InitializeIMU(1.f, 1e5, true, "STAGE1");
                                     std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#1) ..." << std::endl;
                                 }
                             }
@@ -261,9 +261,9 @@ namespace ORB_SLAM3
                                     std::cout << "[Mapping] Starting IMU bias/scale initialization (stage#2) ..." << std::endl;
                                     mpCurrentKeyFrame->GetMap()->SetIniertialBA2();
                                     if (mbMonocular)
-                                        InitializeIMU(0.f, 0.f, true);
+                                        InitializeIMU(0.f, 0.f, true, "STAGE2");
                                     else
-                                        InitializeIMU(0.f, 0.f, true);
+                                        InitializeIMU(0.f, 0.f, true, "STAGE2");
                                     std::cout << "[Mapping] Ending IMU bias/scale initialization (stage#2) ..." << std::endl;
                                 }
                             }
@@ -1268,7 +1268,7 @@ namespace ORB_SLAM3
         return mbFinished;
     }
 
-    void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA)
+    void LocalMapping::InitializeIMU(float priorG, float priorA, bool bFIBA, const char *cause)
     {
         if (mbResetRequested)
             return;
@@ -1380,7 +1380,7 @@ namespace ORB_SLAM3
             if ((fabs(mScale - 1.f) > 0.00001) || !mbMonocular)
             {
                 Sophus::SE3f Twg(mRwg.cast<float>().transpose(), Eigen::Vector3f::Zero());
-                mpAtlas->GetCurrentMap()->ApplyScaledRotation(Twg, mScale, true);
+                mpAtlas->GetCurrentMap()->ApplyScaledRotation(Twg, mScale, true, cause, mpCurrentKeyFrame->mTimeStamp, mpCurrentKeyFrame->mnFrameId);
                 mpTracker->UpdateFrameIMU(mScale, vpKF[0]->GetImuBias(), mpCurrentKeyFrame);
             }
 
@@ -1579,7 +1579,7 @@ namespace ORB_SLAM3
         if ((fabs(mScale - 1.f) > 0.002) || !mbMonocular)
         {
             Sophus::SE3f Tgw(mRwg.cast<float>().transpose(), Eigen::Vector3f::Zero());
-            mpAtlas->GetCurrentMap()->ApplyScaledRotation(Tgw, mScale, true);
+            mpAtlas->GetCurrentMap()->ApplyScaledRotation(Tgw, mScale, true, "SCALE_REFINE", mpCurrentKeyFrame->mTimeStamp, mpCurrentKeyFrame->mnFrameId);
             mpTracker->UpdateFrameIMU(mScale, mpCurrentKeyFrame->GetImuBias(), mpCurrentKeyFrame);
         }
         std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
@@ -1837,7 +1837,7 @@ namespace ORB_SLAM3
             // without it velocities and positions end up in different units and the next
             // preintegration residual is nonsense (T1 sec 5b).
             Sophus::SE3f Tid(Eigen::Matrix3f::Identity(), Eigen::Vector3f::Zero());
-            pMap->ApplyScaledRotation(Tid, sApply, true);
+            pMap->ApplyScaledRotation(Tid, sApply, true, "OTHER", mpCurrentKeyFrame->mTimeStamp, mpCurrentKeyFrame->mnFrameId);
             mpTracker->UpdateFrameIMU(sApply, mpCurrentKeyFrame->GetImuBias(), mpCurrentKeyFrame);
         }
 

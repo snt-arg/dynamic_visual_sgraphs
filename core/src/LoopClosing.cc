@@ -998,8 +998,9 @@ namespace ORB_SLAM3
     void LoopClosing::CorrectLoop()
     {
         // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
+        // [P9-H A5.1] the level set is kept: anchor camera centres are snapshotted here, before any pose changes, and the levels are shifted after the essential-graph optimisation (PedLoopEnd)
         if (PedestrianParams::Enabled())
-            mpCurrentKF->GetMap()->ResetPedestrians();
+            mpCurrentKF->GetMap()->PedLoopBegin(mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
 
         // Avoid new keyframes are inserted while correcting the loop
         mpLocalMapper->RequestStop();
@@ -1202,6 +1203,8 @@ namespace ORB_SLAM3
             // cout << "Loop -> Scale correction: " << mg2oLoopScw.scale() << endl;
             Optimizer::OptimizeEssentialGraph(pLoopMap, mpLoopMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, bFixedScale);
         }
+        if (PedestrianParams::Enabled())
+            pLoopMap->PedLoopEnd(mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId); // [P9-H A5.1]
 #ifdef REGISTER_TIMES
         std::chrono::steady_clock::time_point time_EndOpt = std::chrono::steady_clock::now();
 
@@ -1240,9 +1243,9 @@ namespace ORB_SLAM3
     {
         // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
         if (PedestrianParams::Enabled())
-            mpCurrentKF->GetMap()->ResetPedestrians();
+            mpCurrentKF->GetMap()->ResetPedestrians("MERGE", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
         if (PedestrianParams::Enabled())
-            mpMergeMatchedKF->GetMap()->ResetPedestrians();
+            mpMergeMatchedKF->GetMap()->ResetPedestrians("MERGE", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
 
         // Variables
         int numTemporalKFs = 25;
@@ -1820,9 +1823,9 @@ namespace ORB_SLAM3
     {
         // [P9-C] loop correction / map merge: person tracks are re-initialised (global BA and loop closing never touch person states)
         if (PedestrianParams::Enabled())
-            mpCurrentKF->GetMap()->ResetPedestrians();
+            mpCurrentKF->GetMap()->ResetPedestrians("MERGE", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
         if (PedestrianParams::Enabled())
-            mpMergeMatchedKF->GetMap()->ResetPedestrians();
+            mpMergeMatchedKF->GetMap()->ResetPedestrians("MERGE", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
 
         int numTemporalKFs = 11; // [TODO] Set by parameter
 
@@ -1877,7 +1880,7 @@ namespace ORB_SLAM3
             bool bScaleVel = false;
             if (s_on != 1)
                 bScaleVel = true;
-            mpAtlas->GetCurrentMap()->ApplyScaledRotation(T_on, s_on, bScaleVel);
+            mpAtlas->GetCurrentMap()->ApplyScaledRotation(T_on, s_on, bScaleVel, "MERGE", mpCurrentKF->mTimeStamp, mpCurrentKF->mnFrameId);
             mpTracker->UpdateFrameIMU(s_on, mpCurrentKF->GetImuBias(), mpTracker->GetLastKeyFrame());
 
             std::chrono::steady_clock::time_point t3 = std::chrono::steady_clock::now();
