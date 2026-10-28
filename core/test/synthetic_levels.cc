@@ -68,6 +68,9 @@ static double TheilSenRate(const std::vector<Contact> &cs, const std::vector<int
 }
 static const double kHuber2D = std::sqrt(5.991), kHuber1D = std::sqrt(3.841);
 static const double DT = 0.1;
+static const bool STANCE = EnvD("P9H_STANCE", 0) != 0, FLON = EnvD("P9H_FL", 0) != 0;     // P9-H A7: stance footprints in the window (T1, T2, toe reprojection); FL factor on top
+static const double STANCE_RATE = EnvD("P9H_STANCE_RATE", 0.0115), FOOT_PX = 2.0, SIGMA_FL = EnvD("P9H_SIGMA_FL", 0.03), DELTA_FL = EnvD("P9H_DELTA_FL", 0.0);
+static const double CROOT = 0.55, T1SIG = 0.02, T2SIG = 0.10;
 static const int NTRK = 4;
 // keypoint height above the sole: stance 0.03, swing SWING_BASE + 0.05 |N|; the mean of the two feet = (0.03 + SWING_BASE + 0.05 * 0.7979) / 2 = delta_v = 0.053 (spec: the vertical
 // offset matches delta_v; the C3c harness comment said 0.053 but its 0.08 + 0.05|N| swing gives 0.075)
@@ -115,6 +118,15 @@ struct Obs
     double floorTrue = 0;
     Eigen::Vector3d vel = Eigen::Vector3d::Zero();   // true root velocity (posterior sigma of the levels is evaluated at the true state)
     bool informative = false;                        // c5_gate_revision.md: foot-ray depression >= 5 deg below the horizon, from the true geometry
+    int stance = -1;                                 // P9-H A7: index into World::stances when this keyframe is part of a stance run
+    double tu = 0, tv = 0;                           // toe pixel of the stance footprint (noise FOOT_PX)
+};
+
+// P9-H A7 gates S1/S2: a stance footprint static over a run of 3..6 keyframes (0.3-0.6 s), at the measured firing rate (~5 % of states); truth z_f = the floor under it (delta_f = 0)
+struct Stance
+{
+    int w, k0, k1;
+    Eigen::Vector3d X;
 };
 
 struct World
@@ -125,6 +137,7 @@ struct World
     std::vector<int> levelOf;           // S3/S4/S6: nominal level of the track (0 upper, 1 lower)
     std::vector<Eigen::Vector3d> pts;   // map points
     std::vector<double> levelsTrue, stepSurfaces;
+    std::vector<Stance> stances;        // P9-H A7 (empty unless P9H_STANCE=1)
 };
 
 static bool Project(const KF &k, const Eigen::Vector3d &Xw, Eigen::Vector2d &px, double &depth)
@@ -341,6 +354,62 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
         }
         W.kf.push_back(kf);
     }
+    if (STANCE) // P9-H A7: separate random stream, so the other quantities of the world do not change with the flag
+    {
+        std::mt19937 rs(seed * 104729 + 31);
+        std::uniform_real_distribution<double> u(0, 1);
+        std::normal_distribution<double> g(0, 1);
+        for (int w = 0; w < NTRK; ++w)
+        {
+            int k = 0;
+            while (k < nkf)
+            {
+                if (!(W.obs[w][k].vis && W.obs[w][k].hasFoot && !W.obs[w][k].stairContact && u(rs) < STANCE_RATE))
+                {
+                    ++k;
+                    continue;
+                }
+                const int L = 3 + static_cast<int>(u(rs) * 4);
+                int k1 = k;
+                while (k1 + 1 < nkf && k1 + 1 < k + L && W.obs[w][k1 + 1].vis && !W.obs[w][k1 + 1].stairContact)
+                    ++k1;
+                if (k1 - k + 1 >= 3)
+                {
+                    const Obs &o0 = W.obs[w][k];
+                    const Eigen::Vector2d dir = o0.vel.head<2>().norm() > 0.2 ? Eigen::Vector2d(o0.vel.head<2>().normalized()) : Eigen::Vector2d(0, 1);
+                    const Eigen::Vector2d lat(-dir(1), dir(0));
+                    const double side = u(rs) < 0.5 ? 1.0 : -1.0;
+                    Stance s;
+                    s.w = w;
+                    s.k0 = k;
+                    s.k1 = k1;
+                    const Eigen::Vector2d xy = o0.p.head<2>() + lat * 0.12 * side;
+                    s.X = Eigen::Vector3d(xy(0), xy(1), o0.floorTrue);
+                    bool allVis = true;
+                    std::vector<Eigen::Vector2d> toe;
+                    for (int kk = k; kk <= k1 && allVis; ++kk)
+                    {
+                        Eigen::Vector2d px;
+                        double d;
+                        allVis = Project(W.kf[kk], s.X, px, d);
+                        toe.push_back(px + FOOT_PX * Eigen::Vector2d(g(rs), g(rs)));
+                    }
+                    if (allVis)
+                    {
+                        const int id = static_cast<int>(W.stances.size());
+                        for (int kk = k; kk <= k1; ++kk)
+                        {
+                            W.obs[w][kk].stance = id;
+                            W.obs[w][kk].tu = toe[kk - k](0);
+                            W.obs[w][kk].tv = toe[kk - k](1);
+                        }
+                        W.stances.push_back(s);
+                    }
+                }
+                k = k1 + 1;
+            }
+        }
+    }
     // map points: floor points of the textured levels over the walking regions (+ furniture)
     std::uniform_real_distribution<double> ux(2.5, 17.0), uy(-3.0, 7.0);
     auto addFloor = [&](double zFloor, double x0, double x1, int n) {
@@ -477,7 +546,8 @@ int main(int argc, char **argv)
     long nLevelNearEdge = 0, nLevelNearEdgeFlag = 0;
     int seedsLevelAtStep = 0, seedsFurnitureLevel = 0, seedsAnyLevelAt = 0, nLevelsNoContactsCheck = 0;
     std::vector<double> levelErr;       // |z - nearest true| of every final level with >= 20 contacts
-    long nLevelsTotal = 0, nLevelsBad = 0, nSeedsWithLevels = 0;
+    long nLevelsTotal = 0, nLevelsBad = 0, nSeedsWithLevels = 0, nFlEdgesLast = 0, nStatesStance = 0, nStatesAll = 0, nRootN = 0;
+    double rootSq = 0;
     std::vector<double> bHatAbs;
     std::map<int, std::vector<double>> byLenAbs;
     for (int seed = 1; seed <= nseeds; ++seed)
@@ -592,6 +662,67 @@ int main(int argc, char **argv)
                     prev = k;
                 }
             }
+            // ---------------------------------------------------------------- P9-H A7: stance footprints (PedestrianBA.cc section 5: toe reprojection, T1, T2), rebuilt every call
+            struct FP
+            {
+                g2o::VertexSBAPointXYZ *v;
+                int w;
+                std::vector<int> ks;
+            };
+            std::vector<FP> fps;
+            if (STANCE)
+                for (const Stance &sn : W.stances)
+                {
+                    FP fp;
+                    fp.w = sn.w;
+                    for (int k = std::max(sn.k0, first); k <= std::min(sn.k1, i); ++k)
+                        if (st[sn.w][k])
+                            fp.ks.push_back(k);
+                    if (fp.ks.size() < 2)
+                        continue;
+                    const int k0 = fp.ks.front();
+                    const Eigen::Vector3d b((W.obs[sn.w][k0].tu - CXP) / F, (W.obs[sn.w][k0].tv - CYP) / F, 1.0);
+                    const Eigen::Vector3d d = W.kf[k0].Rcw.transpose() * b, C = W.kf[k0].cam, p0 = st[sn.w][k0]->p();
+                    const double zf = p0(2) - CROOT * H0;
+                    Eigen::Vector3d X0 = p0 - Eigen::Vector3d(0, 0, CROOT * H0);
+                    if (std::abs(d(2)) > 1e-6 && (zf - C(2)) / d(2) > 0)
+                        X0 = C + (zf - C(2)) / d(2) * d;
+                    fp.v = new g2o::VertexSBAPointXYZ();
+                    fp.v->setId(id++);
+                    fp.v->setEstimate(X0);
+                    opt.addVertex(fp.v);
+                    for (int k : fp.ks)
+                    {
+                        auto *re = new EdgePedReproj<g2o::VertexSBAPointXYZ, g2o::VertexSE3Expmap>(F, F, CXP, CYP);
+                        re->setVertex(0, fp.v);
+                        re->setVertex(1, poses[k - first]);
+                        re->setMeasurement(Eigen::Vector2d(W.obs[sn.w][k].tu, W.obs[sn.w][k].tv));
+                        re->setInformation(Eigen::Matrix2d::Identity() / (FOOT_PX * FOOT_PX));
+                        auto *rk = new g2o::RobustKernelHuber();
+                        rk->setDelta(kHuber2D);
+                        re->setRobustKernel(rk);
+                        opt.addEdge(re);
+                        auto *t1 = new EdgePedTie1(CROOT, H0);
+                        t1->setVertex(0, st[sn.w][k]);
+                        t1->setVertex(1, fp.v);
+                        t1->setMeasurement(0.0);
+                        t1->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (T1SIG * T1SIG));
+                        auto *rk1 = new g2o::RobustKernelHuber();
+                        rk1->setDelta(kHuber1D);
+                        t1->setRobustKernel(rk1);
+                        opt.addEdge(t1);
+                        auto *t2 = new EdgePedTie2(CROOT, H0);
+                        t2->setVertex(0, st[sn.w][k]);
+                        t2->setVertex(1, fp.v);
+                        t2->setMeasurement(0.0);
+                        t2->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (T2SIG * T2SIG));
+                        auto *rk2 = new g2o::RobustKernelHuber();
+                        rk2->setDelta(kHuber1D);
+                        t2->setRobustKernel(rk2);
+                        opt.addEdge(t2);
+                    }
+                    fps.push_back(fp);
+                }
             // ---------------------------------------------------------------- levels (the logic of PedestrianBA.cc, levels section)
             std::vector<VertexFloorLevel *> lvVert;
             if (useLevels)
@@ -646,6 +777,32 @@ int main(int argc, char **argv)
                 for (size_t c = 0; c < cs.size(); ++c)
                     if (cs[c].level >= 0 && who[c].second >= firstFree)
                         lc[cs[c].level].push_back(c);
+                // P9-H A7.1 association (as PedestrianBA.cc): the level of the first run entry whose contact is assigned to a level with a free contact, else the nearest level within 3 sigma_a of z_f
+                std::map<std::pair<int, int>, int> pairLevel;
+                for (const auto &kv : lc)
+                    for (size_t c : kv.second)
+                        pairLevel[{who[c].first, who[c].second}] = kv.first;
+                std::vector<int> fpLevel(fps.size(), -1);
+                std::set<std::pair<int, int>> flPairs;
+                for (size_t q = 0; q < fps.size(); ++q)
+                {
+                    std::vector<int> entryLevels;
+                    for (int k : fps[q].ks)
+                    {
+                        const auto it = pairLevel.find({fps[q].w, k});
+                        entryLevels.push_back(it != pairLevel.end() ? it->second : -1);
+                    }
+                    std::vector<std::pair<int, double>> cand;
+                    for (const auto &kv : lc)
+                        for (const auto &L : LS.Levels())
+                            if (L.id == kv.first)
+                                cand.push_back({L.id, L.z});
+                    const int lev = AssociateFootprint(entryLevels, fps[q].v->estimate()(2), cand, sigmaA);
+                    fpLevel[q] = lev;
+                    if (FootprintReplacesF1(FLON, lev))
+                        for (int k : fps[q].ks)
+                            flPairs.insert({fps[q].w, k});
+                }
                 std::map<int, VertexFloorLevel *> lv;
                 for (const auto &kv : lc)
                 {
@@ -661,6 +818,8 @@ int main(int argc, char **argv)
                     for (size_t c : kv.second)
                     {
                         const int w = who[c].first, k = who[c].second;
+                        if (flPairs.count({w, k}))
+                            continue;   // P9-H A7.1: no F1 for a pair with an FL factor
                         const Obs &o = W.obs[w][k];
                         auto *f1 = new EdgePedLevelPx<g2o::VertexSE3Expmap>(F, F, CXP, CYP, o.mu, o.mv, DELTA_V);
                         f1->setVertex(0, st[w][k]);
@@ -715,6 +874,21 @@ int main(int argc, char **argv)
                         }
                     }
                 }
+                for (size_t q = 0; q < fps.size(); ++q)   // P9-H A7.1 FL
+                    if (FootprintReplacesF1(FLON, fpLevel[q]))
+                    {
+                        auto *ef = new EdgePedFootprintLevel();
+                        ef->setVertex(0, fps[q].v);
+                        ef->setVertex(1, lv.at(fpLevel[q]));
+                        ef->setMeasurement(DELTA_FL);
+                        ef->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (SIGMA_FL * SIGMA_FL));
+                        auto *rk = new g2o::RobustKernelHuber();
+                        rk->setDelta(kHuber1D);
+                        ef->setRobustKernel(rk);
+                        opt.addEdge(ef);
+                        if (i == n - 1)
+                            ++nFlEdgesLast;
+                    }
                 if (usePlat)
                     for (int k = first; k <= i; ++k)
                     {
@@ -814,6 +988,10 @@ int main(int argc, char **argv)
                 const Eigen::Vector3d Xc = W.kf[k].Rcw * est[w][k].head<3>() + W.kf[k].tcw, Xt = W.kf[k].Rcw * o.p + W.kf[k].tcw;
                 // S6 / S3 / S4 criteria 1-3 are judged on contacts on level ground; the range error is judged for all samples of the track in the scenarios other than S6
                 sg.push_back((Xc.norm() - Xt.norm()) / Xt.norm() * 100.0);
+                rootSq += (est[w][k].head<3>() - o.p).squaredNorm();   // P9-H A7 S2: root-position error (world frame; the camera poses are exact)
+                ++nRootN;
+                ++nStatesAll;
+                nStatesStance += o.stance >= 0 ? 1 : 0;
             }
             if (sg.size() < 5)
                 continue;
@@ -899,6 +1077,11 @@ int main(int argc, char **argv)
     }
     auto med = [](std::vector<double> v) { if (v.empty()) return 0.0; std::sort(v.begin(), v.end()); return v[v.size() / 2]; };
     auto sd = [](const std::vector<double> &v) { if (v.size() < 2) return 0.0; double m = 0; for (double x : v) m += x; m /= v.size(); double s = 0; for (double x : v) s += (x - m) * (x - m); return std::sqrt(s / (v.size() - 1)); };
+    double lvSq = 0;
+    for (double e : levelErr)
+        lvSq += e * e;
+    std::printf("FLRES scen=%s cand=%s stance=%d fl=%d seeds=%d nkf=%d level_rmse_m=%.5f levels_n=%zu root_rmse_m=%.5f root_n=%ld stance_frac=%.4f fl_edges_last_call=%ld\n", scen.c_str(), cand.c_str(), STANCE ? 1 : 0, FLON ? 1 : 0, nseeds, NKF,
+                levelErr.empty() ? 0.0 : std::sqrt(lvSq / levelErr.size()), levelErr.size(), nRootN ? std::sqrt(rootSq / nRootN) : 0.0, nRootN, nStatesAll ? double(nStatesStance) / nStatesAll : 0.0, nFlEdgesLast);
     std::sort(levelErr.begin(), levelErr.end());
     std::printf("scen=%s cand=%s NKF=%d seeds=%d tracks=%zu spread_sd_pct=%.4f median_abs_pct_all=%.4f median_abs_pct_pm5=%.4f median_abs_pct_pm5_upper=%.4f median_signed_pct=%.4f "
                 "levels_ge20=%ld levels_bad_5cm=%ld max_level_err_m=%.4f seeds_with_levels=%ld seeds_furniture_level=%d seeds_level_off_truth_10cm=%d "

@@ -92,6 +92,14 @@ namespace ORB_SLAM3
             unsigned long lastFrame = 0;
         };
         std::map<std::pair<unsigned long, unsigned long>, EpochTable> gEpochTables; // (map id, epoch)
+        struct FootRow // P9-H A7.1: one stance footprint per BA call (post-solve z_f)
+        {
+            double stamp;
+            unsigned long frame, kf, epoch, map;
+            int track, level, fl;
+            double zf, zcam;
+        };
+        std::vector<FootRow> gFootRows;
         std::map<std::tuple<unsigned long, unsigned long, int>, std::pair<double, unsigned long>> gLevelCreated; // (map id, epoch, level id) -> (time, frame) of the CREATE event
         long gFootGateRejected = 0, gFootGateKept = 0; // P9-L step 2: contacts rejected / kept by the foot-validity gate (counted once per (window, contact))
         std::unique_ptr<ped::PosterDetector> gPosterDet; // P9-L Part 4 step 1b (created on first use, guarded by gLogMutex)
@@ -365,6 +373,14 @@ namespace ORB_SLAM3
             int nextId = 0; // above every id in the graph (the container is unordered; the maximum does not depend on its order)
             for (const auto &kv : opt.vertices())
                 nextId = std::max(nextId, kv.first + 1);
+
+            struct FootRec // P9-H A7: a stance footprint vertex with the entries (keyframes) of its run
+            {
+                g2o::VertexSBAPointXYZ *v;
+                int track;
+                std::vector<const Entry *> ents;
+            };
+            std::vector<FootRec> footRecs;
 
             for (auto &tr : tracks)
             {
@@ -731,6 +747,14 @@ namespace ORB_SLAM3
                             VX->setFixed(false);
                             opt.addVertex(VX);
                             ++G.nFootVertices;
+                            {
+                                FootRec fr;
+                                fr.v = VX;
+                                fr.track = tr.first;
+                                for (size_t k = i; k < j; ++k)
+                                    fr.ents.push_back(&E[k]);
+                                footRecs.push_back(std::move(fr));
+                            }
                             for (size_t k = i; k < j; ++k)
                             {
                                 const Entry &e = E[k];
@@ -890,6 +914,35 @@ namespace ORB_SLAM3
                 for (size_t i = 0; i < cs.size(); ++i)
                     if (cs[i].level >= 0 && !ce[i]->fixed)
                         lvContacts[cs[i].level].push_back(i);
+                // P9-H A7.1 association of every stance footprint (computed in every levels call; the FL factor itself needs Pedestrians.FootprintLevel: 1):
+                // the level of its own (keyframe, track) contact (the first entry of the run whose contact is assigned to a level with a free contact), else the nearest level
+                // within 3 sigma_a of z_f (among the levels that have a vertex in this call), else none. Never creates or merges a level.
+                std::map<std::pair<unsigned long, int>, int> pairLevel;
+                for (const auto &lc : lvContacts)
+                    for (size_t i : lc.second)
+                        pairLevel[{cs[i].kf, cs[i].track}] = lc.first;
+                std::vector<int> footLevel(footRecs.size(), -1);
+                std::set<std::pair<unsigned long, int>> flPairs; // (keyframe, track) pairs that get an FL factor: no F1 for them
+                for (size_t fi = 0; fi < footRecs.size(); ++fi)
+                {
+                    const FootRec &fr = footRecs[fi];
+                    std::vector<int> entryLevels;
+                    for (const Entry *en : fr.ents)
+                    {
+                        const auto it = pairLevel.find({en->kf->mnId, fr.track});
+                        entryLevels.push_back(it != pairLevel.end() ? it->second : -1);
+                    }
+                    std::vector<std::pair<int, double>> cand;
+                    for (const auto &lc : lvContacts)
+                        for (const auto &lv : LS.Levels())
+                            if (lv.id == lc.first)
+                                cand.push_back({lv.id, lv.z});
+                    const int lev = ped::AssociateFootprint(entryLevels, fr.v->estimate()(2), cand, P.levelSigmaA);
+                    footLevel[fi] = lev;
+                    if (ped::FootprintReplacesF1(P.footprintLevel, lev))
+                        for (const Entry *en : fr.ents)
+                            flPairs.insert({en->kf->mnId, fr.track});
+                }
                 for (const auto &lv : LS.Levels())
                 {
                     LevelStat &st = gLevelStat[{mapId, lv.id}];
@@ -957,6 +1010,8 @@ namespace ORB_SLAM3
                         for (size_t i : lc.second)
                         {
                             const Entry &e = *ce[i];
+                            if (flPairs.count({e.kf->mnId, cs[i].track})) // P9-H A7.1: a pair with an FL factor gets no F1
+                                continue;
                             auto *vpose = dynamic_cast<PoseV *>(opt.vertex(e.kf->mnId));
                             if (!vpose)
                                 throw std::runtime_error("[Pedestrians] keyframe pose vertex missing from the graph");
@@ -1035,6 +1090,27 @@ namespace ORB_SLAM3
                             LevelStat &st = gLevelStat[{mapId, lc.first}];
                             st.nPointsMax = std::max(st.nPointsMax, static_cast<int>(order.size()));
                         }
+                    }
+                    // P9-H A7.1 FL: footprint on its level (z_f - z_l - delta_f, Huber); the footprint is still rebuilt every call
+                    for (size_t fi = 0; fi < footRecs.size(); ++fi)
+                    {
+                        const FootRec &fr = footRecs[fi];
+                        PedGraph::FootprintHandle fh{fr.track, fr.ents.front()->kf, fr.v, footLevel[fi], false};
+                        if (ped::FootprintReplacesF1(P.footprintLevel, footLevel[fi]))
+                        {
+                            auto *ef = new ped::EdgePedFootprintLevel();
+                            ef->setVertex(0, fr.v);
+                            ef->setVertex(1, lvVert.at(footLevel[fi]));
+                            ef->setMeasurement(P.footprintLevelDeltaM);
+                            ef->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.footprintLevelSigmaM * P.footprintLevelSigmaM));
+                            auto *rk = new g2o::RobustKernelHuber();
+                            rk->setDelta(kHuber1D * P.huberScale);
+                            ef->setRobustKernel(rk);
+                            opt.addEdge(ef);
+                            Tag(G, PedGraph::FTLV, ef);
+                            fh.fl = true;
+                        }
+                        G.footprints.push_back(fh);
                     }
                     // F3: platform height (levels whose height is within 3 sigma_a of "camera height - h_cam" for the keyframe; see report: the spatial
                     // "under the camera" test is replaced by this height gate because walkers are never under the camera)
@@ -1196,10 +1272,10 @@ namespace ORB_SLAM3
         };
         std::vector<CallRec> gCalls;
         long gCreatedT[PedGraph::NTYPES] = {0}, gActiveT[PedGraph::NTYPES] = {0};
-        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor", "bias", "lvpt", "plat"};
+        const char *kTypeName[PedGraph::NTYPES] = {"root", "range", "wna", "foot", "t1", "t2", "floor", "bias", "lvpt", "plat", "fl"};
         // inside the robust-kernel threshold: the Huber deltas of PedestrianBA.cc (chi2 95 %: 5.991 for 2 dof, 3.841 for 1 dof);
         // the WNA prior (6 dof, no kernel) uses its own 95 % chi2 (12.592)
-        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991, 3.841, 3.841, 3.841};
+        const double kActiveChi2[PedGraph::NTYPES] = {5.991, 3.841, 12.592, 5.991, 3.841, 3.841, 5.991, 3.841, 3.841, 3.841, 3.841};
     } // namespace
 
     void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
@@ -1421,6 +1497,21 @@ namespace ORB_SLAM3
             for (const EpochLevel &el : kv.second.levels)
                 writeEvent({"LEVEL", el.tCreated, el.z, 0, 0, el.frameCreated, kv.first.first, kv.first.second, el.id, -1, el.nContacts, 0});
         }
+        // P9-H A7.1: ped_footprints.log next to ped_levels.log (one row per stance footprint per BA call; z_cam = the camera height of the row's keyframe, appended for the A7.2 calibration)
+        if (!gFootRows.empty())
+        {
+            std::string fpath = path;
+            const size_t pl = fpath.rfind("ped_levels.log");
+            fpath = pl != std::string::npos && pl + 14 == fpath.size() ? fpath.substr(0, pl) + "ped_footprints.log" : fpath.substr(0, fpath.rfind(".log")) + "_footprints.log";
+            std::ofstream pf(fpath);
+            pf << "# P9-H A7.1 stance footprints, one row per footprint per BA call (post-solve). sensor_timestamp frame_index kf track map epoch z_f level_id fl_added z_cam\n";
+            pf << "# kf = first keyframe of the stance run; level_id = associated level (-1 none); fl_added = an FL factor was added in that call; z_f, z_cam hexfloat\n";
+            for (const FootRow &r : gFootRows)
+            {
+                pf << std::fixed << std::setprecision(9) << r.stamp << std::defaultfloat << " " << r.frame << " " << r.kf << " " << r.track << " " << r.map << " " << r.epoch << " " << std::hexfloat << r.zf
+                   << std::defaultfloat << " " << r.level << " " << r.fl << " " << std::hexfloat << r.zcam << std::defaultfloat << "\n";
+            }
+        }
         // P9-L step 5: ped_levels_found.log next to ped_levels.log
         std::string fp = path;
         const size_t dot = fp.rfind(".log");
@@ -1488,6 +1579,13 @@ namespace ORB_SLAM3
                 const Eigen::Vector3f c = s.kf->GetCameraCenter();
                 gPosterDet->Observe(s.track, pMap->GetId(), s.kf->mnId, s.kf->mTimeStamp, p(0), p(1), p(2), c(0), c(1), c(2));
             }
+        }
+        if (!g.footprints.empty())
+        {
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            for (const auto &fh : g.footprints)
+                gFootRows.push_back({fh.kf->mTimeStamp, fh.kf->mnFrameId, fh.kf->mnId, g.levelEpoch, pMap->GetId(), fh.track, fh.levelId, fh.fl ? 1 : 0, fh.v->estimate()(2),
+                                     static_cast<double>(fh.kf->GetPoseInverse().translation()(2))});
         }
         for (const auto &bh : g.biases)
         {

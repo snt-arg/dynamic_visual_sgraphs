@@ -621,6 +621,27 @@ namespace ORB_SLAM3
             }
         };
 
+        // P9-H A7 FL: footprint on a level. Vertices: (0) g2o::VertexSBAPointXYZ (the stance footprint), (1) VertexFloorLevel.  e = z_f - z_l - delta_f (_measurement = delta_f).
+        class EdgePedFootprintLevel : public g2o::BaseBinaryEdge<1, double, g2o::VertexSBAPointXYZ, VertexFloorLevel>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedFootprintLevel() {}
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            void computeError() override
+            {
+                this->_error(0) = static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[0])->estimate()(2) -
+                                  static_cast<const VertexFloorLevel *>(this->_vertices[1])->estimate() - this->_measurement;
+            }
+            void linearizeOplus() override
+            {
+                this->_jacobianOplusXi.setZero();
+                this->_jacobianOplusXi(0, 2) = 1.0;
+                this->_jacobianOplusXj(0, 0) = -1.0;
+            }
+        };
+
         // F3: platform-height prior. Vertices: (0) camera pose, (1) VertexFloorLevel of the level under the camera.  e = z_cam - z_l - h_cam, z_cam the
         // camera-centre height C_z, C = -Rcw^T tcw. A fixed world point at C has Xc = 0, and dXc = -Rcw dC for any pose update (the rotation terms
         // multiply Xc = 0), so dC/dxi = -Rcw^T M(0), M = PoseTraits::dXc(., 0); the Jacobian row is the third row of that.

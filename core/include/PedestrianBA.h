@@ -33,7 +33,7 @@ namespace ORB_SLAM3
         };
         std::vector<StateHandle> states;                       // deterministic order: track id, then keyframe time
         unsigned long levelEpoch = 0;                          // P9-L: epoch of the map's level set when Add read it (WriteBack skips the level update if it changed)
-        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, LVPT, PLAT, NTYPES }; // LVPT = F2 point on level, PLAT = F3 platform height (P9-C5)
+        enum Type { ROOT = 0, RANGE, WNA, FOOT, T1, T2, FLOOR, BIAS, LVPT, PLAT, FTLV, NTYPES }; // LVPT = F2 point on level, PLAT = F3 platform height (P9-C5)
         struct FloorHandle // one floor-contact edge (P9-C3): written back with the state it belongs to
         {
             int track;
@@ -62,6 +62,15 @@ namespace ORB_SLAM3
             ped::VertexFloorLevel *v;
         };
         std::vector<LevelHandle> levels;
+        struct FootprintHandle // P9-H A7: one stance footprint vertex of this call (logged to ped_footprints.log at write-back)
+        {
+            int track;
+            KeyFrame *kf;                  // the first keyframe of the stance run
+            g2o::VertexSBAPointXYZ *v;
+            int levelId;                   // level the footprint is associated with (-1: none)
+            bool fl;                       // an FL factor was added
+        };
+        std::vector<FootprintHandle> footprints;
         std::vector<BiasHandle> biases; // P9-C3b: one per track with a bias vertex (written back to Map::SetPedBias)
         int nFloor = 0, nFloorNoObs = 0, nFloorNoZf = 0, nFloorNoNeighbours = 0, nFloorGrazing = 0;
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
