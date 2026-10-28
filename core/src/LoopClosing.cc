@@ -39,7 +39,7 @@ namespace ORB_SLAM3
     LoopClosing::LoopClosing(Atlas *pAtlas, KeyFrameDatabase *pDB, ORBVocabulary *pVoc, const bool bFixScale, const bool bActiveLC) : mbResetRequested(false), mbResetActiveMapRequested(false), mbFinishRequested(false), mbFinished(true), mpAtlas(pAtlas),
                                                                                                                                       mpKeyFrameDB(pDB), mpORBVocabulary(pVoc), mpMatchedKF(NULL), mLastLoopKFid(0), mbRunningGBA(false), mbFinishedGBA(true),
                                                                                                                                       mbStopGBA(false), mpThreadGBA(NULL), mbFixScale(bFixScale), mnFullBAIdx(0), mnLoopNumCoincidences(0), mnMergeNumCoincidences(0),
-                                                                                                                                      mbLoopDetected(false), mbMergeDetected(false), mnLoopNumNotFound(0), mnMergeNumNotFound(0), mbActiveLC(bActiveLC)
+                                                                                                                                      mbLoopDetected(false), mbMergeDetected(false), mpCurrentKF(nullptr), mpLastCurrentKF(nullptr), mnLoopNumNotFound(0), mnMergeNumNotFound(0), mbActiveLC(bActiveLC)
     {
         mnCovisibilityConsistencyTh = 3;
         mpLastCurrentKF = static_cast<KeyFrame *>(NULL);
@@ -374,6 +374,7 @@ namespace ORB_SLAM3
                 mlpLoopKeyFrameQueue.pop_front();
             }
             mpKeyFrameDB->add(mpCurrentKF);
+            mpCurrentKF->SetErase();
             return false;
         }
 
