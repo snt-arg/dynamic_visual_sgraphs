@@ -72,7 +72,9 @@ int main()
     }
     CHECK(before.size() == 2, "setup: two levels");
     const unsigned long e0 = map.PedLevelsEpoch();
-    map.ApplyScaledRotation(Sophus::SE3f(R, t), s, true, "STAGE1", 12.5, 345);
+    const Sophus::SE3f T1(R, t);   // Sophus re-orthonormalises R in float: the analytic reference uses the rotation the map is actually given
+    const Eigen::Matrix3d Rm = T1.rotationMatrix().cast<double>();
+    map.ApplyScaledRotation(T1, s, true, "STAGE1", 12.5, 345);
     {
         std::unique_lock<std::mutex> lk(map.PedLevelsMutex());
         const auto &Ls = map.PedLevels(P).Levels();
@@ -81,7 +83,7 @@ int main()
         for (size_t i = 0; i < Ls.size() && i < before.size(); ++i)
         {
             const Eigen::Vector3d c(before[i][0], before[i][1], before[i][2]);
-            const Eigen::Vector3d e = static_cast<double>(s) * R.cast<double>() * c + t.cast<double>();
+            const Eigen::Vector3d e = static_cast<double>(s) * Rm * c + T1.translation().cast<double>();
             worst = std::max({worst, std::abs(Ls[i].mx - e(0)), std::abs(Ls[i].my - e(1)), std::abs(Ls[i].z - e(2))});
         }
         CHECK(worst < 1e-9, "Map::ApplyScaledRotation carries (x, y, z) as s R c + t within 1e-9 (worst " << worst << ")");
