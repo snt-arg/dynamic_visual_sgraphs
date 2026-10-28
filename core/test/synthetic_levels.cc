@@ -248,6 +248,8 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
     std::uniform_real_distribution<double> U01(0, 1);
     W = World();
     W.bTrue = S.bTrue;
+    if (EnvD("P9H_B0", 0) != 0) // diagnostic only (A7 S2 diagnosis): no stature bias, so the root height over the floor is exactly the T1 model value
+        for (double &b : W.bTrue) b = 0.0;
     W.levelOf = S.level;
     W.levelsTrue = S.trueLevels;
     W.stepSurfaces = S.stepSurfaces;
@@ -309,7 +311,7 @@ static bool MakeWorld(const Scen &S, int seed, int nkf, double sigmaPt, World &W
             const double fl = S.camClimb ? (S.level[w] == 1 ? 1.5 : 0.0) : S.terrain.Floor(a.p(0));
             o.floorTrue = fl;
             o.stairContact = S.terrain.OnStairs(a.p(0));
-            const double H = H0 * std::exp(S.bTrue[w]);
+            const double H = H0 * std::exp(W.bTrue[w]);
             o.p = Eigen::Vector3d(a.p(0), a.p(1), fl + 0.55 * H);
             o.vel = Eigen::Vector3d(a.v(0), a.v(1), 0.0);
             Eigen::Vector2d px;
@@ -547,7 +549,8 @@ int main(int argc, char **argv)
     int seedsLevelAtStep = 0, seedsFurnitureLevel = 0, seedsAnyLevelAt = 0, nLevelsNoContactsCheck = 0;
     std::vector<double> levelErr;       // |z - nearest true| of every final level with >= 20 contacts
     long nLevelsTotal = 0, nLevelsBad = 0, nSeedsWithLevels = 0, nFlEdgesLast = 0, nStatesStance = 0, nStatesAll = 0, nRootN = 0;
-    double rootSq = 0;
+    double rootSq = 0, rootZSq = 0, rootStSq = 0, rootNoSq = 0;
+    long nSt = 0, nNo = 0;
     std::vector<double> bHatAbs;
     std::map<int, std::vector<double>> byLenAbs;
     for (int seed = 1; seed <= nseeds; ++seed)
@@ -818,8 +821,8 @@ int main(int argc, char **argv)
                     for (size_t c : kv.second)
                     {
                         const int w = who[c].first, k = who[c].second;
-                        if (flPairs.count({w, k}))
-                            continue;   // P9-H A7.1: no F1 for a pair with an FL factor
+                        if (flPairs.count({w, k}) && EnvD("P9H_KEEP_F1", 0) == 0)
+                            continue;   // P9-H A7.1: no F1 for a pair with an FL factor (P9H_KEEP_F1=1: diagnostic only)
                         const Obs &o = W.obs[w][k];
                         auto *f1 = new EdgePedLevelPx<g2o::VertexSE3Expmap>(F, F, CXP, CYP, o.mu, o.mv, DELTA_V);
                         f1->setVertex(0, st[w][k]);
@@ -989,6 +992,9 @@ int main(int argc, char **argv)
                 // S6 / S3 / S4 criteria 1-3 are judged on contacts on level ground; the range error is judged for all samples of the track in the scenarios other than S6
                 sg.push_back((Xc.norm() - Xt.norm()) / Xt.norm() * 100.0);
                 rootSq += (est[w][k].head<3>() - o.p).squaredNorm();   // P9-H A7 S2: root-position error (world frame; the camera poses are exact)
+                (o.stance >= 0 ? rootStSq : rootNoSq) += (est[w][k].head<3>() - o.p).squaredNorm();
+                (o.stance >= 0 ? nSt : nNo) += 1;
+                rootZSq += (est[w][k](2) - o.p(2)) * (est[w][k](2) - o.p(2));
                 ++nRootN;
                 ++nStatesAll;
                 nStatesStance += o.stance >= 0 ? 1 : 0;
@@ -1080,8 +1086,8 @@ int main(int argc, char **argv)
     double lvSq = 0;
     for (double e : levelErr)
         lvSq += e * e;
-    std::printf("FLRES scen=%s cand=%s stance=%d fl=%d seeds=%d nkf=%d level_rmse_m=%.5f levels_n=%zu root_rmse_m=%.5f root_n=%ld stance_frac=%.4f fl_edges_last_call=%ld\n", scen.c_str(), cand.c_str(), STANCE ? 1 : 0, FLON ? 1 : 0, nseeds, NKF,
-                levelErr.empty() ? 0.0 : std::sqrt(lvSq / levelErr.size()), levelErr.size(), nRootN ? std::sqrt(rootSq / nRootN) : 0.0, nRootN, nStatesAll ? double(nStatesStance) / nStatesAll : 0.0, nFlEdgesLast);
+    std::printf("FLRES scen=%s cand=%s stance=%d fl=%d seeds=%d nkf=%d level_rmse_m=%.5f levels_n=%zu root_rmse_m=%.5f root_n=%ld stance_frac=%.4f fl_edges_last_call=%ld root_z_rmse_m=%.5f root_stance_rmse_m=%.5f root_nonstance_rmse_m=%.5f\n", scen.c_str(), cand.c_str(), STANCE ? 1 : 0, FLON ? 1 : 0, nseeds, NKF,
+                levelErr.empty() ? 0.0 : std::sqrt(lvSq / levelErr.size()), levelErr.size(), nRootN ? std::sqrt(rootSq / nRootN) : 0.0, nRootN, nStatesAll ? double(nStatesStance) / nStatesAll : 0.0, nFlEdgesLast, nRootN ? std::sqrt(rootZSq / nRootN) : 0.0, nSt ? std::sqrt(rootStSq / nSt) : 0.0, nNo ? std::sqrt(rootNoSq / nNo) : 0.0);
     std::sort(levelErr.begin(), levelErr.end());
     std::printf("scen=%s cand=%s NKF=%d seeds=%d tracks=%zu spread_sd_pct=%.4f median_abs_pct_all=%.4f median_abs_pct_pm5=%.4f median_abs_pct_pm5_upper=%.4f median_signed_pct=%.4f "
                 "levels_ge20=%ld levels_bad_5cm=%ld max_level_err_m=%.4f seeds_with_levels=%ld seeds_furniture_level=%d seeds_level_off_truth_10cm=%d "
