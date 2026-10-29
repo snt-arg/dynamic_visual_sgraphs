@@ -77,3 +77,8 @@ target_link_libraries(synthetic_levels ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so 
   ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
 set_target_properties(synthetic_levels PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
   INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")
+
+# init-trap: header-only test of the event log (core/include/InitEvents.h), no library needed
+add_executable(test_init_events test_init_events.cc)
+target_include_directories(test_init_events PRIVATE ${ORB_SLAM3_DIR}/include ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(test_init_events ${OpenCV_LIBS})

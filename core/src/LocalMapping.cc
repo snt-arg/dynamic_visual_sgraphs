@@ -26,6 +26,7 @@
 #include "Optimizer.h"
 #include "Converter.h"
 #include "GeometricTools.h"
+#include "InitEvents.h"
 
 #include <mutex>
 #include <stdexcept>
@@ -1277,7 +1278,7 @@ namespace ORB_SLAM3
         int nMinKF;
         if (mbMonocular)
         {
-            minTime = 2.0;
+            minTime = InitEvents::InitMinTimeMono(); // Debug.InitMinTime, default 2.0 (P9-H A8)
             nMinKF = 10;
         }
         else

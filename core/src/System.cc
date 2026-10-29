@@ -23,6 +23,7 @@
 #include "System.h"
 #include "Converter.h"
 #include "Deterministic.h"
+#include "InitEvents.h"
 #include "Thirdparty/DBoW2/DUtils/Random.h"
 #include <sys/personality.h>
 #include <cstdlib>
@@ -111,6 +112,9 @@ namespace ORB_SLAM3
 
         // [P9-B] Deterministic mode is configured before any module that could start a thread exists
         ConfigureDeterministicMode(fsSettings, bUseViewer);
+
+        // [P9-H A8] Debug.InitMinTime (init-trap V2); Debug.InitEventsFile / Debug.DisableNEMReset are read but unused in this build
+        InitEvents::Configure(fsSettings);
 
         // [P9-C] pedestrian factors: mono-inertial only, every Pedestrians.* key required when enabled
         if (PedestrianParams::Configure(fsSettings) && mSensor != IMU_MONOCULAR)
