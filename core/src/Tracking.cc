@@ -668,6 +668,7 @@ namespace ORB_SLAM3
         imuThresh = settings->imuThreshold();
         mInsertKFsLost = settings->insertKFsWhenLost();
         mbImuAidedReloc = settings->imuAidedReloc();
+        time_recently_lost = settings->recentlyLostTime(); // P9-T M1: required setting Tracking.RecentlyLostTime (the 5.0 of the initialiser list is the legacy-settings path only)
         mImuPer = 1.0 / static_cast<double>(mImuFreq);
         mnFramesToResetIMU = mMaxFrames; // P9-C4 I: the legacy-settings branch (line 83) sets it, this one did not
         float Ng = settings->noiseGyro();

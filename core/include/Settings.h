@@ -100,6 +100,7 @@ namespace ORB_SLAM3
         Sophus::SE3f Tbc() { return Tbc_; }
         bool insertKFsWhenLost() { return insertKFsWhenLost_; }
         bool imuAidedReloc() { return imuAidedReloc_; }
+        float recentlyLostTime() { return recentlyLostTime_; }
 
         float depthMapFactor() { return depthMapFactor_; }
 
@@ -207,6 +208,7 @@ namespace ORB_SLAM3
         Sophus::SE3f Tbc_;
         bool insertKFsWhenLost_;
         bool imuAidedReloc_;
+        float recentlyLostTime_;
 
         /*
          * RGBD stuff

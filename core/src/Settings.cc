@@ -31,6 +31,7 @@
 #include <opencv2/core/eigen.hpp>
 
 #include <iostream>
+#include <stdexcept>
 
 using namespace std;
 
@@ -488,6 +489,12 @@ namespace ORB_SLAM3
             imuAidedReloc_ = (bool)readParameter<int>(fSettings, "IMU.ImuAidedReloc", found, false);
         else
             imuAidedReloc_ = false;
+
+        // P9-T M1: seconds of IMU-only prediction (state RECENTLY_LOST) before the map is declared LOST. Was the hard-coded
+        // time_recently_lost(5.0) of the Tracking constructor. Required (no default); a missing key throws.
+        recentlyLostTime_ = readParameter<float>(fSettings, "Tracking.RecentlyLostTime", found, false);
+        if (!found)
+            throw std::runtime_error("[Settings] Tracking.RecentlyLostTime is required (seconds of IMU-only tracking before LOST; vanilla ORB-SLAM3 value 5.0)");
     }
 
     void Settings::readRGBD(cv::FileStorage &fSettings)
