@@ -42,6 +42,17 @@
 
 namespace ORB_SLAM3
 {
+    // P9-T fix 2: Sophus::SO3f(R) aborts with "R is not orthogonal" when |R R^T - I| >= Sophus' float epsilon, which can happen after the last
+    // LocalInertialBA iteration (ImuCamPose::Update re-orthonormalises only every third update). R is returned unchanged whenever Sophus' own check passes.
+    static Eigen::Matrix3f SophusSafeRotation(const Eigen::Matrix3f &R)
+    {
+        if (Sophus::isOrthogonal(R))
+            return R;
+        Eigen::Quaternionf q(R);
+        q.normalize();
+        return q.toRotationMatrix();
+    }
+
     bool sortByVal(const pair<MapPoint *, int> &a, const pair<MapPoint *, int> &b)
     {
         return (a.second < b.second);
@@ -4411,7 +4422,7 @@ namespace ORB_SLAM3
             KeyFrame *pKFi = vpOptimizableKFs[i];
 
             VertexPose *VP = static_cast<VertexPose *>(optimizer.vertex(pKFi->mnId));
-            Sophus::SE3f Tcw(VP->estimate().Rcw[0].cast<float>(), VP->estimate().tcw[0].cast<float>());
+            Sophus::SE3f Tcw(SophusSafeRotation(VP->estimate().Rcw[0].cast<float>()), VP->estimate().tcw[0].cast<float>());
             pKFi->SetPose(Tcw);
             pKFi->mnBALocalForKF = 0;
 
@@ -4432,7 +4443,7 @@ namespace ORB_SLAM3
         {
             KeyFrame *pKFi = *it;
             VertexPose *VP = static_cast<VertexPose *>(optimizer.vertex(pKFi->mnId));
-            Sophus::SE3f Tcw(VP->estimate().Rcw[0].cast<float>(), VP->estimate().tcw[0].cast<float>());
+            Sophus::SE3f Tcw(SophusSafeRotation(VP->estimate().Rcw[0].cast<float>()), VP->estimate().tcw[0].cast<float>());
             pKFi->SetPose(Tcw);
             pKFi->mnBALocalForKF = 0;
         }
