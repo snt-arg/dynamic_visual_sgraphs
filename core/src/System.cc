@@ -731,11 +731,14 @@ namespace ORB_SLAM3
             Sophus::SE3f Trw;
 
             // If the reference keyframe was culled, traverse the spanning tree to get a suitable keyframe.
-            while (pKF->isBad())
+            // P9-T fix: the chain can end in a bad keyframe without a parent (NULL); skip that frame.
+            while (pKF && pKF->isBad())
             {
                 Trw = Trw * pKF->mTcp;
                 pKF = pKF->GetParent();
             }
+            if (!pKF)
+                continue;
 
             Trw = Trw * pKF->GetPose() * Two;
 
@@ -866,7 +869,8 @@ namespace ORB_SLAM3
             if (!pKF)
                 continue;
 
-            while (pKF->isBad())
+            // P9-T fix: stop at a NULL parent (checked below)
+            while (pKF && pKF->isBad())
             {
                 Trw = Trw * pKF->mTcp;
                 pKF = pKF->GetParent();
@@ -946,7 +950,8 @@ namespace ORB_SLAM3
             if (!pKF)
                 continue;
 
-            while (pKF->isBad())
+            // P9-T fix: stop at a NULL parent (checked below)
+            while (pKF && pKF->isBad())
             {
                 Trw = Trw * pKF->mTcp;
                 pKF = pKF->GetParent();
@@ -1111,11 +1116,14 @@ namespace ORB_SLAM3
             if (!pKF)
                 continue;
 
-            while (pKF->isBad())
+            // P9-T fix: the chain can end in a bad keyframe without a parent (NULL); skip that frame.
+            while (pKF && pKF->isBad())
             {
                 Trw = Trw * pKF->mTcp;
                 pKF = pKF->GetParent();
             }
+            if (!pKF)
+                continue;
 
             Trw = Trw * pKF->GetPose() * Tow;
 

@@ -4350,10 +4350,13 @@ namespace ORB_SLAM3
 
             KeyFrame *pKF = *lRit;
 
-            while (pKF->isBad())
+            // P9-T fix: the chain can end in a bad keyframe without a parent (NULL); skip that frame.
+            while (pKF && pKF->isBad())
             {
                 pKF = pKF->GetParent();
             }
+            if (!pKF)
+                continue;
 
             if (pKF->GetMap() == pMap)
             {

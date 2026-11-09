@@ -912,7 +912,8 @@ namespace ORB_SLAM3
             }
 
             // If a children has no covisibility links with any parent candidate, assign to the original parent of this KF
-            if (!mspChildrens.empty())
+            // P9-T fix: mpParent is NULL for a keyframe that never got a parent (UpdateConnections found no shared map point); ChangeParent(NULL) crashes in AddChild.
+            if (!mspChildrens.empty() && mpParent)
             {
                 for (set<KeyFrame *>::iterator sit = mspChildrens.begin(); sit != mspChildrens.end(); sit++)
                 {
