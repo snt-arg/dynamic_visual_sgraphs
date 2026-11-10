@@ -153,17 +153,7 @@ namespace ORB_SLAM3
                                 mTinit += mpCurrentKeyFrame->mTimeStamp - mpCurrentKeyFrame->mPrevKF->mTimeStamp;
                             if (!mpCurrentKeyFrame->GetMap()->GetIniertialBA2())
                             {
-                                // Guard: don't reset within the first 3s of map creation. A map that
-                                // starts with the sensor stationary (e.g. before the platform begins
-                                // moving) has near-zero motion by construction, but the map itself is
-                                // still valid — resetting here just discards a good map and restarts
-                                // the whole init process for no benefit.
-                                float elapsedSinceMapCreation = 0.f;
-                                const std::vector<KeyFrame *> &vpOrigins = mpCurrentKeyFrame->GetMap()->mvpKeyFrameOrigins;
-                                if (!vpOrigins.empty())
-                                    elapsedSinceMapCreation = mpCurrentKeyFrame->mTimeStamp - vpOrigins.front()->mTimeStamp;
-
-                                if ((mTinit < 10.f) && (dist < 0.02) && (elapsedSinceMapCreation > 3.0f))
+                                if ((mTinit < 10.f) && (dist < 0.02)) // [P9-V3 revert H7] upstream rule, no 3 s guard
                                 {
                                     std::cout << "[Mapping] Not enough motion for map initializing. Reseting..." << std::endl;
                                     unique_lock<mutex> lock(mMutexReset);
