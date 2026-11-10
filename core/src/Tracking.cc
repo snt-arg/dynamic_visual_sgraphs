@@ -3291,7 +3291,7 @@ namespace ORB_SLAM3
         // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
         const bool c1a = mCurrentFrame.mnId >= mnLastKeyFrameId + mMaxFrames;
         // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
-        const bool c1b = ((mCurrentFrame.mnId >= mnLastKeyFrameId + mMinFrames) && bLocalMappingIdle && mpLocalMapper->KeyframesInQueue() < 5); // mpLocalMapper->KeyframesInQueue() < 2);
+        const bool c1b = ((mCurrentFrame.mnId >= mnLastKeyFrameId + mMinFrames) && bLocalMappingIdle); // [P9-V3 revert H5] upstream: no queue limit // mpLocalMapper->KeyframesInQueue() < 2);
         // Condition 1c: tracking is weak
         const bool c1c = mSensor != System::MONOCULAR && mSensor != System::IMU_MONOCULAR && mSensor != System::IMU_STEREO && mSensor != System::IMU_RGBD && (mnMatchesInliers < nRefMatches * 0.25 || bNeedToInsertClose);
         // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
@@ -3333,7 +3333,7 @@ namespace ORB_SLAM3
                 mpLocalMapper->InterruptBA();
                 if (mSensor != System::MONOCULAR && mSensor != System::IMU_MONOCULAR)
                 {
-                    if (mpLocalMapper->KeyframesInQueue() < 8)
+                    if (mpLocalMapper->KeyframesInQueue() < 3)
                         return true;
                     else
                         return false;
