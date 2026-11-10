@@ -1178,6 +1178,9 @@ namespace ORB_SLAM3
         if (mbSynchronous)
         {
             ResetIfRequested();
+            // [P9-V3] Synchronous mode: the tracker-initiated reset (Tracking::ResetActiveMap, reached from Tracking::Track() when it sees mbBadImu)
+            // is the only place that consumes the "bad IMU" request; ResetIfRequested() leaves it set when the mapper itself runs it (see there).
+            mbBadImu = false;
             return;
         }
 
@@ -1232,7 +1235,11 @@ namespace ORB_SLAM3
                 mTinit = 0.f;
                 mbNotBA2 = true;
                 mbNotBA1 = true;
-                mbBadImu = false;
+                // [P9-V3] In synchronous mode this function also runs at the end of the RunOnce() that set mbBadImu (the "Not enough motion" rule), before
+                // the tracker can look at the flag at the start of its next Track(); clearing it here made that reset request vanish (followup.md sec. 1).
+                // Synchronous mode clears it in RequestResetActiveMap() instead, i.e. when the tracker has acted on it.
+                if (!mbSynchronous)
+                    mbBadImu = false;
                 mbResetRequested = false;
                 mbResetRequestedActiveMap = false;
 
