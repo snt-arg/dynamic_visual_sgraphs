@@ -668,7 +668,7 @@ namespace ORB_SLAM3
         imuThresh = settings->imuThreshold();
         mInsertKFsLost = settings->insertKFsWhenLost();
         mbImuAidedReloc = settings->imuAidedReloc();
-        mImuPer = 1.0 / static_cast<double>(mImuFreq);
+        mImuPer = 0.001; // [P9-V3 revert H1] upstream value (was 1.0 / mImuFreq)
         mnFramesToResetIMU = mMaxFrames; // P9-C4 I: the legacy-settings branch (line 83) sets it, this one did not
         float Ng = settings->noiseGyro();
         float Na = settings->noiseAcc();
@@ -1401,7 +1401,7 @@ namespace ORB_SLAM3
         if (!node.empty() && node.isInt())
         {
             mImuFreq = node.operator int();
-            mImuPer = 1.0 / static_cast<double>(mImuFreq);
+            mImuPer = 0.001; // [P9-V3 revert H1] upstream value (was 1.0 / mImuFreq)
         }
         else
         {
