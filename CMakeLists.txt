@@ -9,6 +9,9 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
+# [P9-V3 revert, build flags] upstream Release flags: -march=native (CMakeLists.txt:12-13 of ORB-SLAM3); no OpenMP flag (it comes in through PCL_DEFINITIONS here)
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -29,6 +32,7 @@ MESSAGE(${OpenCV_VERSION})
 
 # Find required packages
 find_package(PCL REQUIRED)
+list(FILTER PCL_DEFINITIONS EXCLUDE REGEX "openmp")   # [P9-V3 revert, build flags] upstream is not built with -fopenmp
 find_package(tf2 REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(rclpy REQUIRED)
@@ -284,4 +288,8 @@ install(TARGETS ${PROJECT_NAME}_lib
 )
 
 # Ament package configuration
+# -fopenmp reaches the targets through the PCL imported targets' OpenMP::OpenMP_CXX interface; the libraries stay linked, only the compile option goes
+if(TARGET OpenMP::OpenMP_CXX)
+  set_target_properties(OpenMP::OpenMP_CXX PROPERTIES INTERFACE_COMPILE_OPTIONS "")
+endif()
 ament_package()
