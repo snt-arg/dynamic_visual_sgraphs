@@ -83,9 +83,9 @@ namespace ORB_SLAM3
 
         // Set up the solver
         g2o::SparseOptimizer optimizer;
-        g2o::BlockSolverX::LinearSolverType *linearSolver;
-        linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
-        g2o::BlockSolverX *solver_ptr = new g2o::BlockSolverX(linearSolver);
+        g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
+        linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
+        g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
         g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
         optimizer.setAlgorithm(solver);
         optimizer.setVerbose(false);
