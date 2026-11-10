@@ -669,7 +669,7 @@ namespace ORB_SLAM3
         mInsertKFsLost = settings->insertKFsWhenLost();
         mbImuAidedReloc = settings->imuAidedReloc();
         mImuPer = 0.001; // [P9-V3 revert H1] upstream value (was 1.0 / mImuFreq)
-        mnFramesToResetIMU = mMaxFrames; // P9-C4 I: the legacy-settings branch (line 83) sets it, this one did not
+        // [P9-V3 revert H2] mnFramesToResetIMU is not assigned in this constructor path (upstream); the header default 0 applies
         float Ng = settings->noiseGyro();
         float Na = settings->noiseAcc();
         float Ngw = settings->gyroWalk();
