@@ -2269,28 +2269,7 @@ namespace ORB_SLAM3
             {
                 if (bOK)
                 {
-                    // Post-relocalization grace window: TrackLocalMap optimizes these frames
-                    // vision-only, so their world velocity (mVw) is never re-estimated — it
-                    // stays whatever dead-reckoning predicted at the moment of the loss, and
-                    // propagates unchanged frame-to-frame via the Frame constructor. Handing
-                    // that ~1s-stale velocity to the first inertial optimization after the
-                    // window made its stiff inertial edge reject every visual match and
-                    // diverge to NaN (confirmed via gdb on Marco_Dynamics). Re-seed each
-                    // grace-window frame's velocity from the vision-tracked pose difference —
-                    // the lightweight version of what the ResetFrameIMU() stub below was
-                    // meant to do.
-                    if (mnLastRelocFrameId > 0 && mCurrentFrame.mnId > mnLastRelocFrameId &&
-                        mCurrentFrame.mnId <= (mnLastRelocFrameId + mnFramesToResetIMU) &&
-                        mCurrentFrame.HasPose() && mLastFrame.HasPose())
-                    {
-                        const double dt = mCurrentFrame.mTimeStamp - mLastFrame.mTimeStamp;
-                        if (dt > 1e-4)
-                        {
-                            const Eigen::Vector3f vwb =
-                                (mCurrentFrame.GetImuPosition() - mLastFrame.GetImuPosition()) / static_cast<float>(dt);
-                            mCurrentFrame.SetVelocity(vwb);
-                        }
-                    }
+                    // [P9-V3 revert H6] the post-relocalisation velocity re-seed (f1cb866) is removed
 
                     if (mCurrentFrame.mnId == (mnLastRelocFrameId + mnFramesToResetIMU))
                     {
