@@ -1887,11 +1887,11 @@ namespace ORB_SLAM3
 
         // [LBA] Setup optimizer
         g2o::SparseOptimizer optimizer;
-        g2o::BlockSolverX::LinearSolverType *linearSolver;
+        g2o::BlockSolver_6_3::LinearSolverType *linearSolver;
 
-        linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolverX::PoseMatrixType>();
+        linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();
 
-        g2o::BlockSolverX *solver_ptr = new g2o::BlockSolverX(linearSolver);
+        g2o::BlockSolver_6_3 *solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
 
         g2o::OptimizationAlgorithmLevenberg *solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);
         if (pMap->IsInertial())
