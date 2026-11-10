@@ -3170,7 +3170,7 @@ namespace ORB_SLAM3
 
         if (mSensor == System::IMU_MONOCULAR)
         {
-            if ((mnMatchesInliers < 15 && mpAtlas->isImuInitialized()) || (mnMatchesInliers < 25 && !mpAtlas->isImuInitialized()))
+            if ((mnMatchesInliers < 15 && mpAtlas->isImuInitialized()) || (mnMatchesInliers < 50 && !mpAtlas->isImuInitialized()))
             {
                 return false;
             }
