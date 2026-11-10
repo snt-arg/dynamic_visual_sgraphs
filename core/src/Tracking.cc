@@ -3162,7 +3162,7 @@ namespace ORB_SLAM3
         // Decide if the tracking was succesful
         // More restrictive if there was a relocalization recently
         mpLocalMapper->mnMatchesInliers = mnMatchesInliers;
-        if (mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && mnMatchesInliers < 25)
+        if (mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && mnMatchesInliers < 50) // [P9-V3 revert H3] upstream 50
             return false;
 
         if ((mnMatchesInliers > 10) && (mState == RECENTLY_LOST))
