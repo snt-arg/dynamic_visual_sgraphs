@@ -90,24 +90,40 @@ namespace ORB_SLAM3
             p.floorMode = FloorMode::Levels; // = levels + the platform-height prior F3 (Pedestrians.PlatformHeightM / PlatformSigmaM required; no PlatformHeight key)
         else
             throw std::runtime_error("[Pedestrians] Pedestrians.FloorContact must be none, regional, joint, shadow, regional_px, joint_px, levels, levels_platform or levels_shadow, got " + fm);
+        {
+            // P9-M: per-track bias b_j switched by its own required key, in every floor mode (no default)
+            const double tb = Req(fs, "Pedestrians.TrackBias", true);
+            if (tb != 0 && tb != 1)
+                throw std::runtime_error("[Pedestrians] Pedestrians.TrackBias must be 0 or 1");
+            p.trackBias = tb == 1;
+            if (p.trackBias)
+            {
+                p.biasSigma = Req(fs, "Pedestrians.BiasSigma");
+                p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
+                if (!(p.biasSigma > 0))
+                    throw std::runtime_error("[Pedestrians] Pedestrians.BiasSigma must be > 0");
+                if (p.biasMinContacts < 0)
+                    throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
+            }
+            std::cout << "[Pedestrians] track bias b_j " << (p.trackBias ? "on" : "off");
+            if (p.trackBias)
+                std::cout << ": bias sigma " << p.biasSigma << " (min contacts " << p.biasMinContacts << ")";
+            std::cout << std::endl;
+        }
         if (p.floorMode == FloorMode::Levels || p.floorMode == FloorMode::LevelsShadow)
         {
             p.floorMidDeltaM = Req(fs, "Pedestrians.FloorMidDeltaM");
             p.floorSigmaPxU = Req(fs, "Pedestrians.FloorSigmaPxU");
             p.floorSigmaPxV = Req(fs, "Pedestrians.FloorSigmaPxV");
-            p.biasSigma = Req(fs, "Pedestrians.BiasSigma");
-            p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
             p.levelSigmaA = Req(fs, "Pedestrians.LevelSigmaA");
             p.levelSigmaPt = Req(fs, "Pedestrians.LevelSigmaPt");
             p.levelSMax = Req(fs, "Pedestrians.LevelSMax");
             p.footGateTau = Req(fs, "Pedestrians.FootGateTau", true);
-            for (double v : {p.floorMidDeltaM, p.floorSigmaPxU, p.floorSigmaPxV, p.biasSigma, p.levelSigmaA, p.levelSigmaPt, p.levelSMax})
+            for (double v : {p.floorMidDeltaM, p.floorSigmaPxU, p.floorSigmaPxV, p.levelSigmaA, p.levelSigmaPt, p.levelSMax})
                 if (!(v > 0))
-                    throw std::runtime_error("[Pedestrians] levels: FloorMidDeltaM, FloorSigmaPx*, BiasSigma, LevelSigmaA, LevelSigmaPt, LevelSMax must be > 0");
+                    throw std::runtime_error("[Pedestrians] levels: FloorMidDeltaM, FloorSigmaPx*, LevelSigmaA, LevelSigmaPt, LevelSMax must be > 0");
             if (p.footGateTau < 0)
                 throw std::runtime_error("[Pedestrians] Pedestrians.FootGateTau must be >= 0 (0 = gate off)");
-            if (p.biasMinContacts < 0)
-                throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
             const cv::FileNode ph = fs["Pedestrians.PlatformHeight"];
             const bool aliasPlatform = fm == "levels_platform";
             if (aliasPlatform && !ph.empty())
@@ -154,10 +170,6 @@ namespace ORB_SLAM3
                         throw std::runtime_error("[Pedestrians] midpoint floor contact: FloorMidDeltaM, FloorSigmaPx*, FloorRaisedMaxM, FloorPlaneSigmaMaxM must be > 0");
             }
             p.floorRegionRadiusM = Req(fs, "Pedestrians.FloorRegionRadiusM");
-            p.biasSigma = Req(fs, "Pedestrians.BiasSigma");
-            p.biasMinContacts = static_cast<int>(Req(fs, "Pedestrians.BiasMinContacts", true));
-            if (p.biasMinContacts < 0)
-                throw std::runtime_error("[Pedestrians] Pedestrians.BiasMinContacts must be >= 0");
             p.floorLowModeFraction = Req(fs, "Pedestrians.FloorLowModeFraction");
             p.floorMinPoints = static_cast<int>(Req(fs, "Pedestrians.FloorMinPoints"));
             p.floorBinM = Req(fs, "Pedestrians.FloorBinM");
@@ -173,7 +185,7 @@ namespace ORB_SLAM3
                 if (!(p.floorNeighbourRadiusM > 0 && p.floorBandM > 0))
                     throw std::runtime_error("[Pedestrians] joint floor contact: FloorNeighbourRadiusM and FloorBandM must be > 0");
             }
-            for (double v : {p.floorRegionRadiusM, p.floorBinM, p.floorPlausM, p.floorLowModeFraction, p.biasSigma})
+            for (double v : {p.floorRegionRadiusM, p.floorBinM, p.floorPlausM, p.floorLowModeFraction})
                 if (!(v > 0))
                     throw std::runtime_error("[Pedestrians] every floor-contact sigma / radius / bin must be > 0");
             if (!px)

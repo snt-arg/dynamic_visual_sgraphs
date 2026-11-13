@@ -381,9 +381,10 @@ namespace ORB_SLAM3
 
                 const double Hcur = P.statureFixedM; // fixed stature (P9-C2 5d): not a state
 
-                // P9-C3b: per-track log-scale bias b_j (Variants A / B only; "none" keeps b = 0 and the 2-vertex range edge)
+                // P9-C3b: per-track log-scale bias b_j; P9-M: switched by Pedestrians.TrackBias in every floor mode (was: floorOn, i.e. FloorContact != none),
+                // still only in metric graphs (the range edge it enters is metric only) and never in the shadow modes; TrackBias 0 keeps b = 0 and the 2-vertex range edge
                 ped::VertexPedBias *vbias = nullptr;
-                if (floorOn && !shadowMode && !levelsShadow)
+                if (P.trackBias && metric && !shadowMode && !levelsShadow)
                 {
                     const int contacts = static_cast<int>(std::count_if(E.begin(), E.end(), [](const Entry &en) { return en.obs->hasFoot && !en.fixed; }));
                     if (contacts >= P.biasMinContacts)

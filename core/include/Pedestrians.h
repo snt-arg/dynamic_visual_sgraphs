@@ -105,8 +105,10 @@ namespace ORB_SLAM3
         double footGateTau = 0;      // P9-L: foot-validity gate, a contact whose foot pixel is more than tau * maskH above the mask bottom is rejected; 0 = off
         bool platformHeight = false;                   // Pedestrians.PlatformHeight: off | on (F3)
         double platformHeightM = 0, platformSigmaM = 0; // h_cam, sigma_h (read only when on)
-        // P9-C3b per-track log-scale bias b_j (read only when FloorContact != none): prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with
+        // P9-C3b per-track log-scale bias b_j: prior N(0, biasSigma^2); biasMinContacts > 0: b_j exists only for tracks with
         // at least that many foot observations on free states in the BA window (otherwise b = 0 for that call); 0: always.
+        // P9-M: Pedestrians.TrackBias (0 | 1, required in every floor mode) switches b_j; BiasSigma / BiasMinContacts are read only when it is 1.
+        bool trackBias = false;
         double biasSigma = 0;
         int biasMinContacts = 0;
         // P9-C4 motion prior (Pedestrians.MotionPrior: isotropic | anisotropic). isotropic: Q = qv (x) [[dt^3/3, dt^2/2],[dt^2/2, dt]] on all three axes (P9-C..C3);

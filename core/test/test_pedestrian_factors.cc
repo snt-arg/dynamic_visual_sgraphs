@@ -393,7 +393,7 @@ static void FloorIoTests()
         "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
         "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
         "Pedestrians.GateK: 0.0\nPedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 0\nPedestrians.Dir: /x\n";
-    const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\nPedestrians.BiasSigma: 0.042\nPedestrians.BiasMinContacts: 0\n"
+    const std::string fl = "Pedestrians.FloorSigmaRadialM: 0.4\nPedestrians.FloorSigmaTangentialM: 0.2\nPedestrians.FloorRegionRadiusM: 3.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.FloorContactOffsetM: 0.036\nPedestrians.TrackBias: 1\nPedestrians.BiasSigma: 0.042\nPedestrians.BiasMinContacts: 0\n"
                            "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
     auto cfg = [&](const std::string &extra) {
         cv::FileStorage fs(base + extra, cv::FileStorage::READ | cv::FileStorage::MEMORY);
@@ -402,7 +402,7 @@ static void FloorIoTests()
     threw = false;
     try { cfg(""); } catch (const std::runtime_error &) { threw = true; }
     CHECK(threw, "settings: Pedestrians.FloorContact is required when the flag is on (no default)");
-    CHECK(cfg("Pedestrians.FloorContact: none\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "settings: FloorContact none reads no floor key");
+    CHECK(cfg("Pedestrians.FloorContact: none\nPedestrians.TrackBias: 0\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "settings: FloorContact none reads no floor key");
     threw = false;
     try { cfg("Pedestrians.FloorContact: regional\n"); } catch (const std::runtime_error &) { threw = true; }
     CHECK(threw, "settings: FloorContact regional with missing sigma keys throws");
@@ -469,7 +469,7 @@ static void C4Tests()
             "Pedestrians.StatureFixedM: 1.7\nPedestrians.Qv: 0.1386\nPedestrians.FootprintPxSigma: 2.0\nPedestrians.T1Sigma: 0.02\nPedestrians.T2Sigma: 0.1\n"
             "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
             "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
-            "Pedestrians.GateK: 0.0\nPedestrians.FloorContact: none\nPedestrians.Dir: /x\n";
+            "Pedestrians.GateK: 0.0\nPedestrians.FloorContact: none\nPedestrians.TrackBias: 0\nPedestrians.Dir: /x\n";
         const std::string gate = "Pedestrians.InnovGate: 1\nPedestrians.InnovChi2Dof2: 9.21034\nPedestrians.InnovChi2Dof3: 11.34487\nPedestrians.InnovFreeKeyframes: 2\n"
                                  "Pedestrians.InnovReinitRejections: 3\nPedestrians.InnovP0PosXY: 0.2\nPedestrians.InnovP0PosZ: 0.06\nPedestrians.InnovP0VelXY: 0.19\nPedestrians.InnovP0VelZ: 0.08\n"
                                  "Pedestrians.InnovScaleK3: 0.5\nPedestrians.InnovScaleK4: 0.8\nPedestrians.InnovScaleK5: 1.5\nPedestrians.InnovScaleK6: 2.0\n";
@@ -674,7 +674,7 @@ static void FloorPxSettingsTests()
         "Pedestrians.CRoot: 0.55\nPedestrians.CLeg: 0.55\nPedestrians.MinTrackKeyframes: 3\nPedestrians.MinStanceBoxPx: 80\nPedestrians.MinFootObservations: 2\n"
         "Pedestrians.MinLpx: 0.0\nPedestrians.HuberScale: 1.0\nPedestrians.MaskHeightM: 1.773\nPedestrians.GateCenter: -0.0043\nPedestrians.GateSigma: 0.0417\n"
         "Pedestrians.GateK: 0.0\nPedestrians.MotionPrior: isotropic\nPedestrians.InnovGate: 0\nPedestrians.Dir: /x\n";
-    const std::string common = "Pedestrians.FloorRegionRadiusM: 6.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n"
+    const std::string common = "Pedestrians.FloorRegionRadiusM: 6.0\nPedestrians.FloorMinPoints: 30\nPedestrians.FloorLowModeFraction: 0.25\nPedestrians.TrackBias: 1\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n"
                                "Pedestrians.FloorBinM: 0.05\nPedestrians.FloorBelowCameraM: 0.3\nPedestrians.FloorPlausM: 0.3\n";
     const std::string px = "Pedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\nPedestrians.FloorZfBiasM: 0.02\nPedestrians.FloorRaisedMaxM: 0.10\n"
                            "Pedestrians.FloorMinElevDeg: 8.0\nPedestrians.FloorPlaneSigmaMaxM: 0.02\n";
@@ -694,10 +694,22 @@ static void FloorPxSettingsTests()
     CHECK(throws("Pedestrians.FloorContact: joint_px\n" + common + px), "C3c settings: joint_px without FloorNeighbours / radius / band throws");
     CHECK(cfg("Pedestrians.FloorContact: joint_px\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::JointPx && PedestrianParams::Get().floorNeighbours == 5, "C3c settings: joint_px");
     CHECK(cfg("Pedestrians.FloorContact: shadow\n" + common + px + nb) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Shadow, "C3c settings: shadow");
-    CHECK(cfg("Pedestrians.FloorContact: none\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "C3c settings: none reads no floor key");
+    CHECK(cfg("Pedestrians.FloorContact: none\nPedestrians.TrackBias: 0\n") && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None, "C3c settings: none reads no floor key");
+    // P9-M: Pedestrians.TrackBias is required in every floor mode and switches b_j independently of FloorContact
+    CHECK(throws("Pedestrians.FloorContact: none\n"), "P9-M settings: a missing TrackBias throws (mode none)");
+    CHECK(throws("Pedestrians.FloorContact: none\nPedestrians.TrackBias: 2\n"), "P9-M settings: TrackBias other than 0 / 1 throws");
+    CHECK(throws("Pedestrians.FloorContact: none\nPedestrians.TrackBias: 1\n"), "P9-M settings: TrackBias 1 without BiasSigma / BiasMinContacts throws");
+    CHECK(cfg("Pedestrians.FloorContact: none\nPedestrians.TrackBias: 1\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n") && PedestrianParams::Get().trackBias &&
+              PedestrianParams::Get().biasSigma == 0.0422 && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::None,
+          "P9-M settings: mode none with TrackBias 1 reads the bias keys (arm ON+b)");
     // P9-C5 levels: every calibrated key is required, no defaults
-    const std::string lv = "Pedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n"
-                           "Pedestrians.LevelSigmaA: 0.05\nPedestrians.LevelSigmaPt: 0.03\nPedestrians.LevelSMax: 0.2\nPedestrians.FootGateTau: 0.08\n";
+    const std::string lvNoBias = "Pedestrians.FloorMidDeltaM: 0.053\nPedestrians.FloorSigmaPxU: 6.0\nPedestrians.FloorSigmaPxV: 3.0\n"
+                                 "Pedestrians.LevelSigmaA: 0.05\nPedestrians.LevelSigmaPt: 0.03\nPedestrians.LevelSMax: 0.2\nPedestrians.FootGateTau: 0.08\n";
+    const std::string lv = lvNoBias + "Pedestrians.TrackBias: 1\nPedestrians.BiasSigma: 0.0422\nPedestrians.BiasMinContacts: 0\n";
+    CHECK(cfg("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\nPedestrians.TrackBias: 0\n" + lvNoBias) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Levels &&
+              !PedestrianParams::Get().trackBias,
+          "P9-M settings: levels with TrackBias 0 needs no bias key (arm LEV-b)");
+    CHECK(cfg("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\n" + lv) && PedestrianParams::Get().trackBias, "P9-M settings: levels with TrackBias 1 (arm LEV)");
     CHECK(cfg("Pedestrians.FloorContact: levels\nPedestrians.PlatformHeight: off\n" + lv) && PedestrianParams::Get().floorMode == PedestrianParams::FloorMode::Levels &&
               !PedestrianParams::Get().platformHeight && PedestrianParams::Get().levelSigmaA == 0.05 && PedestrianParams::Get().levelSMax == 0.2 && PedestrianParams::Get().footGateTau == 0.08,
           "C5 settings: levels, platform off");
