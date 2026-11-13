@@ -9,9 +9,9 @@ MESSAGE("Build type: " ${CMAKE_BUILD_TYPE})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall   -O3")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3")
-# [P9-V3 revert, build flags] upstream Release flags: -march=native (CMakeLists.txt:12-13 of ORB-SLAM3); no OpenMP flag (it comes in through PCL_DEFINITIONS here)
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -march=native")
-set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+# [P9-V4 M1, build flags] fixed portable target x86-64-v3 (AVX2, FMA) instead of the host-specific -march=native; no OpenMP flag (it comes in through PCL_DEFINITIONS here)
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -mavx2 -mfma")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -mavx2 -mfma")
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
