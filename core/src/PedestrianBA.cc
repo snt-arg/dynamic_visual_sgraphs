@@ -226,10 +226,10 @@ namespace ORB_SLAM3
             };
             std::vector<StaticPt> statics;
             std::vector<Eigen::Vector3d> staticXyz;
-            if (floorOn)
-            {
-                if (!pMap)
-                    throw std::runtime_error("[Pedestrians] floor contact needs the map");
+            // R5: with the levels floor mode (not its shadow variant) the points are read only by F2, i.e. for a level that has a usable contact in THIS call
+            // (lvContacts below); the copy is then made at that point instead of on every call. The other floor modes read them as before.
+            const bool lazyStatics = levelsMode && !levelsShadow;
+            auto collectStatics = [&]() {
                 for (MapPoint *mp : pMap->GetAllMapPoints())
                 {
                     if (!mp || mp->isBad())
@@ -240,9 +240,18 @@ namespace ORB_SLAM3
                     statics.push_back({mp->mnId, mp->GetWorldPos().cast<double>(), vv});
                 }
                 std::sort(statics.begin(), statics.end(), [](const StaticPt &a, const StaticPt &b) { return a.id < b.id; });
-                staticXyz.reserve(statics.size());
-                for (const StaticPt &sp : statics)
-                    staticXyz.push_back(sp.x);
+            };
+            if (floorOn)
+            {
+                if (!pMap)
+                    throw std::runtime_error("[Pedestrians] floor contact needs the map");
+                if (!lazyStatics)
+                {
+                    collectStatics();
+                    staticXyz.reserve(statics.size());
+                    for (const StaticPt &sp : statics)
+                        staticXyz.push_back(sp.x);
+                }
             }
 
             // 1. per-track keyframe lists, ordered by time (then keyframe id) -> deterministic
@@ -891,6 +900,8 @@ namespace ORB_SLAM3
                 for (size_t i = 0; i < cs.size(); ++i)
                     if (cs[i].level >= 0 && !ce[i]->fixed)
                         lvContacts[cs[i].level].push_back(i);
+                if (lazyStatics && !lvContacts.empty())
+                    collectStatics(); // R5: F2 below is the only reader of the points in this mode
                 for (const auto &lv : LS.Levels())
                 {
                     LevelStat &st = gLevelStat[{mapId, lv.id}];
