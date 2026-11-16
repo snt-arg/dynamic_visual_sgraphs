@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <iostream>
 #include <fstream>
@@ -167,6 +168,43 @@ namespace ORB_SLAM3
         };
         long gDetCall = 0;
         std::mutex gLogMutex;
+
+        // R16 scale anchor (prototype): per-BA log, written only when the environment variable P9_ANCHOR_LOG names a file (opened at the first row). With the key at 0 the rows carry the
+        // call time only (0 edges): the timing reference of the ON arm.
+        struct AnchorLog
+        {
+            const char *path = nullptr;
+            std::FILE *f = nullptr;
+            long n = 0;
+            AnchorLog() { path = std::getenv("P9_ANCHOR_LOG"); }
+        };
+        AnchorLog &AL()
+        {
+            static AnchorLog a;
+            return a;
+        }
+        const double kAnchorHuber = 1.345; // in units of sigma (the information is 1 / sigma^2)
+        double NowS() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+        // median, q25, q75 (linear interpolation, as numpy) of v and the share of |v| > th; zeros when empty
+        void AnchorStats(std::vector<double> v, double th, double out[4])
+        {
+            out[0] = out[1] = out[2] = out[3] = 0;
+            if (v.empty())
+                return;
+            long nl = 0;
+            for (double x : v)
+                nl += std::abs(x) > th;
+            std::sort(v.begin(), v.end());
+            auto q = [&](double f) {
+                const double pos = f * (v.size() - 1);
+                const size_t i = static_cast<size_t>(pos);
+                return i + 1 < v.size() ? v[i] + (pos - i) * (v[i + 1] - v[i]) : v[i];
+            };
+            out[0] = q(0.5);
+            out[1] = q(0.25);
+            out[2] = q(0.75);
+            out[3] = static_cast<double>(nl) / v.size();
+        }
 
         // Huber thresholds: the same chi2 95% values the local BAs use (Optimizer.cc:1994-1995 thHuber1D / thHuberMono).
         const double kHuber1D = std::sqrt(3.841);
@@ -361,6 +399,98 @@ namespace ORB_SLAM3
                     }
                     tr.second = kept;
                 }
+
+            // R16 scale anchor (prototype; Pedestrians.ScaleAnchor: 1, metric graphs only). One edge per pedestrian observation that qualifies as in T4 (p9z_scale_obs.py, 5d601b9):
+            // valid l_px, foot keypoint score >= 0.3, foot row > cy + 5, >= 3 map points observed in that keyframe within +-60 px horizontally and from 3 px above to 30 px below the
+            // foot row (depth > 0.3, row > cy + 5). The edge ties the keyframe pose to the point whose foot-row-corrected depth is the median of the selected points (lower middle for an
+            // even count; ties by map-point id). It exists only if that point has a vertex in this BA. Built before any pedestrian vertex is created: the map-point vertex lookup by id
+            // must not meet one of this helper's own vertices.
+            if (AL().path)
+                G.anchorT0 = NowS();
+            if (metric && P.scaleAnchor)
+            {
+                const double sig = P.scaleAnchorSigma;
+                std::vector<double> e0;
+                for (const PedGraphKF &g : kfs)
+                {
+                    if (!g.kf->mpPedFrame || g.kf->isBad())
+                        continue;
+                    auto *vpose = dynamic_cast<PoseV *>(opt.vertex(g.kf->mnId));
+                    if (!vpose)
+                        continue;
+                    const Cam c = CameraOf(g.kf);
+                    Eigen::Matrix3d Rcw;
+                    Eigen::Vector3d tcw;
+                    ped::PoseTraits<PoseV>::Get(vpose, Rcw, tcw);
+                    const std::vector<MapPoint *> vpMP = g.kf->GetMapPointMatches();
+                    struct Cand
+                    {
+                        double u, v, zc;
+                        unsigned long id;
+                    };
+                    std::vector<Cand> cand; // the keyframe's map points below the horizon margin, in keypoint order
+                    bool candDone = false;
+                    for (const PedObs &o : g.kf->mpPedFrame->obs)
+                    {
+                        if (!(o.lpx > 0) || !o.hasFoot || !(o.footScore >= 0.3) || !(o.footV > c.cy + 5.0))
+                            continue;
+                        if (!candDone)
+                        {
+                            candDone = true;
+                            for (size_t i = 0; i < vpMP.size() && i < g.kf->mvKeysUn.size(); ++i)
+                            {
+                                MapPoint *mp = vpMP[i];
+                                if (!mp || mp->isBad())
+                                    continue;
+                                const cv::KeyPoint &kp = g.kf->mvKeysUn[i];
+                                if (!(kp.pt.y > c.cy + 5.0))
+                                    continue;
+                                const double zc = (Rcw * mp->GetWorldPos().cast<double>() + tcw)(2);
+                                if (!(zc > 0.3))
+                                    continue;
+                                cand.push_back({kp.pt.x, kp.pt.y, zc, mp->mnId});
+                            }
+                        }
+                        std::vector<std::tuple<double, unsigned long, double>> selPts; // (corrected depth, map-point id, log row ratio)
+                        for (const Cand &q : cand)
+                            if (std::abs(q.u - o.footU) <= 60.0 && q.v >= o.footV - 3.0 && q.v <= o.footV + 30.0)
+                            {
+                                const double ratio = (q.v - c.cy) / (o.footV - c.cy);
+                                selPts.push_back(std::make_tuple(q.zc * ratio, q.id, std::log(ratio)));
+                            }
+                        if (selPts.size() < 3)
+                            continue;
+                        ++G.nAnchorObs;
+                        std::sort(selPts.begin(), selPts.end());
+                        const auto &m = selPts[(selPts.size() - 1) / 2];
+                        auto *pv = dynamic_cast<g2o::VertexSBAPointXYZ *>(opt.vertex(static_cast<int>(std::get<1>(m) + mpVertexBase)));
+                        if (!pv)
+                        {
+                            ++G.nAnchorNoVertex;
+                            continue;
+                        }
+                        auto *ea = new ped::EdgePedScaleAnchor<PoseV>();
+                        ea->setVertex(0, pv);
+                        ea->setVertex(1, vpose);
+                        // log z_m - log(row ratio); z_m = f cL H0 / l_px, the constants of the range factor (P.skelOverStature, P.statureFixedM)
+                        ea->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(o.lpx) - std::get<2>(m));
+                        ea->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (sig * sig));
+                        auto *rk = new g2o::RobustKernelHuber();
+                        rk->setDelta(kAnchorHuber);
+                        ea->setRobustKernel(rk);
+                        opt.addEdge(ea);
+                        G.anchors.push_back(ea);
+                        if (AL().path)
+                        {
+                            ea->computeError();
+                            e0.push_back(ea->error()(0));
+                        }
+                    }
+                }
+                if (AL().path)
+                    AnchorStats(e0, kAnchorHuber * sig, G.anchorPre);
+            }
+            G.anchorLogged = AL().path != nullptr;
 
             int nextId = 0; // above every id in the graph (the container is unordered; the maximum does not depend on its order)
             for (const auto &kv : opt.vertices())
@@ -1227,6 +1357,33 @@ namespace ORB_SLAM3
             r.active[ty] = act;
             gCreatedT[ty] += r.created[ty];
             gActiveT[ty] += act;
+        }
+        if (g.anchorLogged)
+        {
+            // R16: one row per BA call that reached the write-back (P9_ANCHOR_LOG); e in log-depth units, huber share = |e| > 1.345 sigma; dt = from the start of PedestrianBA::Add to here
+            std::vector<double> e1;
+            for (g2o::OptimizableGraph::Edge *e : g.anchors)
+            {
+                e->computeError();
+                e1.push_back(e->errorData()[0]);
+            }
+            double post[4];
+            AnchorStats(e1, kAnchorHuber * PedestrianParams::Get().scaleAnchorSigma, post);
+            const double dtMs = 1e3 * (NowS() - g.anchorT0);
+            std::lock_guard<std::mutex> lk(gLogMutex);
+            AnchorLog &L = AL();
+            if (!L.f)
+            {
+                L.f = std::fopen(L.path, "w");
+                if (L.f)
+                    std::fprintf(L.f, "call,kind,stamp,n_obs_qualifying,n_no_vertex,n_edges,e_med_pre,e_q25_pre,e_q75_pre,huber_share_pre,e_med_post,e_q25_post,e_q75_post,huber_share_post,add_to_writeback_ms\n");
+            }
+            if (L.f)
+            {
+                std::fprintf(L.f, "%ld,%s,%.6f,%d,%d,%zu,%.6f,%.6f,%.6f,%.4f,%.6f,%.6f,%.6f,%.4f,%.3f\n", L.n++, kind, stamp, g.nAnchorObs, g.nAnchorNoVertex, g.anchors.size(),
+                             g.anchorPre[0], g.anchorPre[1], g.anchorPre[2], g.anchorPre[3], post[0], post[1], post[2], post[3], dtMs);
+                std::fflush(L.f);
+            }
         }
         std::lock_guard<std::mutex> lk(gLogMutex);
         gCalls.push_back(r);

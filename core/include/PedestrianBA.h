@@ -64,6 +64,11 @@ namespace ORB_SLAM3
         std::vector<LevelHandle> levels;
         std::vector<BiasHandle> biases; // P9-C3b: one per track with a bias vertex (written back to Map::SetPedBias)
         int nFloor = 0, nFloorNoObs = 0, nFloorNoZf = 0, nFloorNoNeighbours = 0, nFloorGrazing = 0;
+        // R16 scale anchor (prototype): its edges are kept apart from `edges` / `byType` (the counters file and the edge totals of the other factors are unchanged)
+        std::vector<g2o::OptimizableGraph::Edge *> anchors;
+        int nAnchorObs = 0, nAnchorNoVertex = 0;               // qualifying observations (T4 rule) in the window; of them, without an edge because the chosen point has no vertex in this BA
+        bool anchorLogged = false;                             // a log row is pending for this call (P9_ANCHOR_LOG set)
+        double anchorT0 = 0, anchorPre[4] = {0, 0, 0, 0};      // steady-clock time at Add; median, q25, q75 of e and share with |e| > 1.345 sigma before the solve
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
         std::vector<g2o::OptimizableGraph::Edge *> byType[NTYPES];
         // counters (also printed once per call when non-zero)

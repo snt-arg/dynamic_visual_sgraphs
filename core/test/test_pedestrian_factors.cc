@@ -148,7 +148,7 @@ static Eigen::MatrixXd Analytic(g2o::OptimizableGraph::Edge *e, int vi)
         TryMulti<EdgePedTie2>(e, vi, J) || TryMulti<EdgePedFloorContact<SE3>>(e, vi, J) || TryMulti<EdgePedFloorContact<VertexPose>>(e, vi, J) ||
         TryMulti<EdgePedFloorPx<SE3>>(e, vi, J) || TryMulti<EdgePedFloorPx<VertexPose>>(e, vi, J) ||
         TryMulti<EdgePedLevelPx<SE3>>(e, vi, J) || TryMulti<EdgePedLevelPx<VertexPose>>(e, vi, J) ||
-        TryBinary<EdgePedPointOnLevel>(e, vi, J) || TryBinary<EdgePedPlatformHeight<SE3>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<VertexPose>>(e, vi, J))
+        TryBinary<EdgePedPointOnLevel>(e, vi, J) || TryBinary<EdgePedScaleAnchor<SE3>>(e, vi, J) || TryBinary<EdgePedScaleAnchor<VertexPose>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<SE3>>(e, vi, J) || TryBinary<EdgePedPlatformHeight<VertexPose>>(e, vi, J))
         return J;
     throw std::runtime_error("unhandled edge type in Analytic()");
 }
@@ -199,6 +199,33 @@ static void JacobianTests(const char *tag)
         e.setVertex(1, pose);
         e.setMeasurement(Eigen::Vector2d(355.0, 290.0));
         CheckEdge(&e, std::string("footprint reprojection [") + tag + "]");
+    }
+    {
+        // R16 scale anchor: e = log z_corr - log z_m with z_corr = z_c (v_p - cy) / (v_f - cy); residual value, zero point, sign under a map rescale, Jacobians
+        const double fx = 415.7, cy = 240.0, cL = 0.855387, H0 = 1.70, lpx = 97.0, vp = 301.0, vf = 310.0;
+        const Eigen::Vector3d Xc3 = R * foot.estimate() + t;
+        const double zm = fx * cL * H0 / lpx, ratio = (vp - cy) / (vf - cy);
+        EdgePedScaleAnchor<PoseV> e;
+        e.setVertex(0, &foot);
+        e.setVertex(1, pose);
+        e.setMeasurement(std::log(zm) - std::log(ratio));
+        e.computeError();
+        CHECK(std::abs(e.error()(0) - (std::log(Xc3(2) * ratio) - std::log(zm))) < 1e-12, std::string("scale anchor [") + tag + "]: e = log z_corr - log z_m");
+        CheckEdge(&e, std::string("scale anchor [") + tag + "]");
+        // a point at the stature-implied depth has e = 0; the same map shrunk by s about the camera has e = log s
+        g2o::VertexSBAPointXYZ pt;
+        const Eigen::Vector3d Xc0(0.3, 0.9, zm / ratio);
+        pt.setEstimate(R.transpose() * (Xc0 - t));
+        EdgePedScaleAnchor<PoseV> e2;
+        e2.setVertex(0, &pt);
+        e2.setVertex(1, pose);
+        e2.setMeasurement(std::log(zm) - std::log(ratio));
+        e2.computeError();
+        CHECK(std::abs(e2.error()(0)) < 1e-12, std::string("scale anchor [") + tag + "]: zero at the stature-implied depth");
+        pt.setEstimate(R.transpose() * (0.87 * Xc0 - t));
+        e2.computeError();
+        CHECK(std::abs(e2.error()(0) - std::log(0.87)) < 1e-12, std::string("scale anchor [") + tag + "]: a map too small by s gives e = log s < 0");
+        CheckEdge(&e2, std::string("scale anchor, shrunk [") + tag + "]");
     }
     {
         EdgePedLogRange<PoseV> e;
