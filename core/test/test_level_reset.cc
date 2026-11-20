@@ -2,7 +2,7 @@
 // Path under test = the one Tracking::ResetActiveMap takes: Atlas::clearMap(stamp, frame) -> Map::clear(stamp, frame). Then an IMU-initialisation similarity
 // with s = 58 (Map::ApplyScaledRotation, cause IMU_INIT0): no level may survive or be carried. Controls: a map without a level set is left untouched by
 // clear (epoch unchanged, no EPOCH row: OFF / ON runs unchanged); a map whose set is not cleared still carries its levels (the carry itself is intact).
-// On M0 (28cc0f4) the first block fails: the two levels survive the clear and are carried to 58 x their height.
+// (Not compiled against M0: M0's Atlas::clearMap takes no arguments. On M0 Map::clear leaves mPedLevels untouched, so the levels would survive.)
 #include "Atlas.h"
 #include "Map.h"
 #include "PedestrianBA.h"
