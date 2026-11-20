@@ -47,6 +47,20 @@ namespace ORB_SLAM3
                 std::cout << "[Pedestrians] poster rejection ON: >= " << p.posterMinDurationS << " s, parallax >= " << p.posterMinParallaxDeg << " deg, extent <= " << p.posterMaxExtentM << " m" << std::endl;
             }
         }
+        {
+            // R16 prototype: optional (default off)
+            const cv::FileNode sa = fs["Pedestrians.ScaleAnchor"];
+            p.scaleAnchor = !sa.empty() && static_cast<int>(sa) != 0;
+            if (p.scaleAnchor)
+            {
+                const cv::FileNode ss = fs["Pedestrians.ScaleAnchorSigma"];
+                if (!ss.empty())
+                    p.scaleAnchorSigma = static_cast<double>(ss);
+                if (!(p.scaleAnchorSigma > 0))
+                    throw std::runtime_error("[Pedestrians] Pedestrians.ScaleAnchorSigma must be > 0");
+                std::cout << "[Pedestrians] scale anchor ON: sigma " << p.scaleAnchorSigma << " (log depth), Huber at 1.345 sigma" << std::endl;
+            }
+        }
         p.rootPxSigma = Req(fs, "Pedestrians.RootPxSigma");
         p.logDepthSigma = Req(fs, "Pedestrians.LogDepthSigma");
         p.skelOverStature = Req(fs, "Pedestrians.SkeletonOverStature");

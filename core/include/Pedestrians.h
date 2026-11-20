@@ -124,6 +124,10 @@ namespace ORB_SLAM3
         int innovFreeKeyframes = 0;                    // the first this-many accepted measurements of a track are not gated
         int innovReinitRejections = 0;                 // this many consecutive rejections re-initialise the track
         double innovP0PosXY = 0, innovP0PosZ = 0, innovP0VelXY = 0, innovP0VelZ = 0; // state standard deviations of P0 = diag(...)^2 (world frame; m, m/s)
+        // R16 (prototype): Pedestrians.ScaleAnchor 0 | 1 (optional, default 0 = no new code path). 1: one log-depth edge per qualifying pedestrian observation between the keyframe pose
+        // and the static map point next to the foot (PedestrianBA.cc, EdgePedScaleAnchor). ScaleAnchorSigma: optional, read only when on (default 0.20; the declared sigma sweep).
+        bool scaleAnchor = false;
+        double scaleAnchorSigma = 0.20;
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 
