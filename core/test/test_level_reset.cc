@@ -102,7 +102,7 @@ int main()
         CHECK(Ls.size() == 2 && std::abs(Ls[0].z - (1.1 * z0 + Timu.translation()(2))) < 1e-4, "control: an uncleared set is still carried through the similarity");
     }
 
-    // event log: one RESET_ACTIVE_MAP EPOCH row (map 0 only); no CARRY row of map 0 after the reset; map 8 carries 2
+    // event log: one RESET_ACTIVE_MAP EPOCH row (the atlas map only); no CARRY row of that map after the reset; the control map carries 2
     const std::string base = "/tmp/p9_level_reset_test";
     PedestrianBA::DumpLevelsLog(base + ".log");
     std::ifstream f(base + "_events.log");
@@ -118,7 +118,7 @@ int main()
         while (ss >> tok) v.push_back(tok);
         if (v.size() != 13) { ++bad; continue; }
         if (v[0] == "EPOCH" && v[12] == "RESET_ACTIVE_MAP") { if (v[3] == std::to_string(m->GetId())) { ++resetRows; resetT = std::stod(v[1]); } else ++resetRowsOther; }
-        if (v[0] == "CARRY") { if (v[3] == std::to_string(m->GetId())) ++carry0; else if (v[3] == "8") ++carry8; }
+        if (v[0] == "CARRY") { if (v[3] == std::to_string(m->GetId())) ++carry0; else if (v[3] == std::to_string(kept.GetId())) ++carry8; }   // Map(n): n is the init keyframe id, not the map id
     }
     CHECK(bad == 0, "every event row has 13 fields");
     CHECK(resetRows == 1 && resetRowsOther == 0 && std::abs(resetT - 100.5) < 1e-6, "one EPOCH row RESET_ACTIVE_MAP, at the reset's stamp, only for the map that had levels");
