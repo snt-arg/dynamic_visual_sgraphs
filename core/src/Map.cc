@@ -442,8 +442,19 @@ namespace ORB_SLAM3
         mIsInUse = false;
     }
 
-    void Map::clear()
+    void Map::clear(double stamp, unsigned long frame)
     {
+        {
+            // [p9-level-reset] reset_active_map: the keyframes and points go, so the level set goes too (handover section 2, Epochs: level sets are rebuilt
+            // on reset), as on a merge (ResetPedestriansLocked, keepLevels = false): set destroyed, epoch advanced, one EPOCH row. Only when a set exists,
+            // so runs without levels (OFF / ON) are unchanged. Without this, the next IMU initialisation carried the stale levels through its similarity.
+            unique_lock<mutex> lk(mMutexPedLevels);
+            if (mPedLevels.Existing())
+            {
+                mPedLevels.Reset();
+                PedestrianBA::RecordEvent("EPOCH", stamp, frame, mnId, mPedLevels.Epoch(), -1, -1, 0, 0, 0, 0, 0, "RESET_ACTIVE_MAP");
+            }
+        }
         for (set<KeyFrame *>::iterator sit = mspKeyFrames.begin(), send = mspKeyFrames.end(); sit != send; sit++)
         {
             KeyFrame *pKF = *sit;

@@ -407,10 +407,10 @@ namespace ORB_SLAM3
         return mspMaps.size();
     }
 
-    void Atlas::clearMap()
+    void Atlas::clearMap(double stamp, unsigned long frame)
     {
         unique_lock<mutex> lock(mMutexAtlas);
-        mpCurrentMap->clear();
+        mpCurrentMap->clear(stamp, frame);
     }
 
     void Atlas::clearAtlas()

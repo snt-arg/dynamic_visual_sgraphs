@@ -82,3 +82,12 @@ set_target_properties(synthetic_levels PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
 add_executable(test_init_events test_init_events.cc)
 target_include_directories(test_init_events PRIVATE ${ORB_SLAM3_DIR}/include ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(test_init_events ${OpenCV_LIBS})
+
+# [p9-level-reset] gate 1: reset_active_map destroys the level set
+add_executable(test_level_reset test_level_reset.cc)
+target_include_directories(test_level_reset PRIVATE ${ORB_SLAM3_DIR} ${ORB_SLAM3_DIR}/include ${ORB_SLAM3_DIR}/include/CameraModels
+  ${ORB_SLAM3_DIR}/Thirdparty/Sophus ${EIGEN3_INCLUDE_DIR} ${PCL_INCLUDE_DIRS} ${Pangolin_INCLUDE_DIRS})
+target_link_libraries(test_level_reset ${ORB_SLAM3_DIR}/lib/libvs_graphs_lib.so ${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib/libDBoW2.so
+  ${ORB_SLAM3_DIR}/Thirdparty/g2o/lib/libg2o.so ${OpenCV_LIBS} ${PCL_LIBRARIES} ${Pangolin_LIBRARIES})
+set_target_properties(test_level_reset PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE
+  INSTALL_RPATH "${ORB_SLAM3_DIR}/lib;${ORB_SLAM3_DIR}/Thirdparty/DBoW2/lib;${ORB_SLAM3_DIR}/Thirdparty/g2o/lib")

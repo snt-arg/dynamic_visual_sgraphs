@@ -148,7 +148,7 @@ namespace ORB_SLAM3
 
         int CountMaps();
 
-        void clearMap();
+        void clearMap(double stamp = -1, unsigned long frame = 0); // stamp / frame: logging of the level-set reset only
 
         void clearAtlas();
 

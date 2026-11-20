@@ -4252,8 +4252,8 @@ namespace ORB_SLAM3
         mpKeyFrameDB->clearMap(pMap);
         Verbose::PrintMess("[Tracking] Finished resetting 'Database'!", Verbose::VERBOSITY_NORMAL);
 
-        // Clear Map (this erase MapPoints and KeyFrames)
-        mpAtlas->clearMap();
+        // Clear Map (this erase MapPoints and KeyFrames) [p9-level-reset: and the level set, logged at the current frame]
+        mpAtlas->clearMap(mCurrentFrame.mTimeStamp, mCurrentFrame.mnId);
 
         mnLastInitFrameId = Frame::nNextId;
         mState = NO_IMAGES_YET;

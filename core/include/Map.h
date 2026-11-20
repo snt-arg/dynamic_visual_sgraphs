@@ -178,7 +178,7 @@ namespace ORB_SLAM3
             return ped::ApplyLevelHeights(mPedLevels, epoch, heights, p, skipped);
         }
 
-        void clear();
+        void clear(double stamp = -1, unsigned long frame = 0); // [p9-level-reset] also destroys the level set (if one exists) and advances its epoch
 
         int GetLastMapChange();
         int GetMapChangeIndex();
