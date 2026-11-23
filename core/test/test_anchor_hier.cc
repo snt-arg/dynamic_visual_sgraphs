@@ -232,7 +232,10 @@ static void TestJacobians()
     e.setVertex(2, et);
     e.setMeasurement(1.2);
     e.setInformation(Eigen::Matrix<double, 1, 1>::Identity());
-    e.linearizeOplus();
+    g2o::JacobianWorkspace ws; // g2o's Jacobian members are Eigen::Maps into a workspace (as test_pedestrian_factors.cc Analytic)
+    ws.updateSize(&e);
+    ws.allocate();
+    e.linearizeOplus(ws);
     const double h = 1e-6;
     double maxd = 0;
     g2o::OptimizableGraph::Vertex *vs[3] = {pt, kf, et};
