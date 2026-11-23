@@ -235,7 +235,7 @@ static void TestJacobians()
     g2o::JacobianWorkspace ws; // g2o's Jacobian members are Eigen::Maps into a workspace (as test_pedestrian_factors.cc Analytic)
     ws.updateSize(&e);
     ws.allocate();
-    e.linearizeOplus(ws);
+    static_cast<g2o::OptimizableGraph::Edge &>(e).linearizeOplus(ws); // base-class overload (hidden by the override)
     const double h = 1e-6;
     double maxd = 0;
     g2o::OptimizableGraph::Vertex *vs[3] = {pt, kf, et};
