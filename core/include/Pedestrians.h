@@ -128,6 +128,12 @@ namespace ORB_SLAM3
         // and the static map point next to the foot (PedestrianBA.cc, EdgePedScaleAnchor). ScaleAnchorSigma: optional, read only when on (default 0.20; the declared sigma sweep).
         bool scaleAnchor = false;
         double scaleAnchorSigma = 0.20;
+        // Hierarchical anchor (order of 23 Nov 2026), read only when ScaleAnchor is on. ScaleAnchorMode: fixed (default; the anchor above, unchanged) | hier: residual
+        // e = log z_metric - log z_map - kappa - eta_j with sigma ScaleAnchorSigmaObs, a per-track, per-call offset eta_j ~ N(0, ScaleAnchorSigmaPerson^2) and the map's population
+        // offset kappa (PedAnchorKappa.h; no edges until ScaleAnchorMinTracks tracks have contributed). ScaleAnchorSigma is not used in hier mode.
+        bool scaleAnchorHier = false;
+        double scaleAnchorSigmaObs = 0, scaleAnchorSigmaPerson = 0;
+        int scaleAnchorMinTracks = 5;
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 

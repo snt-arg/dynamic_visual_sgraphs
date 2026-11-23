@@ -4,6 +4,7 @@
 #include "PedestrianGate.h"
 
 #include <algorithm>
+#include "PedAnchorKappa.h"
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -409,8 +410,24 @@ namespace ORB_SLAM3
                 G.anchorT0 = NowS();
             if (metric && P.scaleAnchor)
             {
-                const double sig = P.scaleAnchorSigma;
+                const double sig = P.scaleAnchorHier ? P.scaleAnchorSigmaObs : P.scaleAnchorSigma;
                 std::vector<double> e0;
+                // hier anchor: kappa of this map, held fixed during the call; edges only once MinTracks tracks have contributed
+                struct HEdge
+                {
+                    int track;
+                    g2o::VertexSBAPointXYZ *pv;
+                    PoseV *vpose;
+                    double meas;
+                };
+                std::vector<HEdge> hEdges;
+                if (P.scaleAnchorHier)
+                {
+                    G.anchorHier = true;
+                    if (pMap)
+                        pMap->GetPedAnchorKappa(G.anchorKappa, G.anchorKappaTracks);
+                    G.anchorActive = G.anchorKappaTracks >= P.scaleAnchorMinTracks;
+                }
                 for (const PedGraphKF &g : kfs)
                 {
                     if (!g.kf->mpPedFrame || g.kf->isBad())
@@ -469,6 +486,22 @@ namespace ORB_SLAM3
                             ++G.nAnchorNoVertex;
                             continue;
                         }
+                        if (P.scaleAnchorHier)
+                        {
+                            if (o.trackId < 0)
+                                continue;
+                            const double meas = std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(o.lpx) - std::get<2>(m);
+                            G.anchorCands.push_back({o.trackId, meas, [pv, vpose]() {
+                                                         Eigen::Matrix3d R;
+                                                         Eigen::Vector3d t;
+                                                         ped::PoseTraits<PoseV>::Get(vpose, R, t);
+                                                         const double z = (R * pv->estimate() + t)(2);
+                                                         return std::log(z > 1e-6 ? z : 1e-6);
+                                                     }});
+                            if (G.anchorActive)
+                                hEdges.push_back({o.trackId, pv, vpose, meas});
+                            continue;
+                        }
                         auto *ea = new ped::EdgePedScaleAnchor<PoseV>();
                         ea->setVertex(0, pv);
                         ea->setVertex(1, vpose);
@@ -480,6 +513,52 @@ namespace ORB_SLAM3
                         ea->setRobustKernel(rk);
                         opt.addEdge(ea);
                         G.anchors.push_back(ea);
+                        if (AL().path)
+                        {
+                            ea->computeError();
+                            e0.push_back(ea->error()(0));
+                        }
+                    }
+                }
+                if (!hEdges.empty())
+                {
+                    // one eta vertex per track with edges in this call (prior N(0, sigma_person^2)), created after the loop so that no map-point lookup can meet one; ids above every
+                    // vertex in the graph, tracks in id order; edges in observation order
+                    int id = 0;
+                    for (const auto &kv : opt.vertices())
+                        id = std::max(id, kv.first + 1);
+                    std::map<int, size_t> etaOf;
+                    for (const HEdge &h : hEdges)
+                        etaOf[h.track] = 0;
+                    for (auto &kv : etaOf)
+                    {
+                        auto *v = new ped::VertexPedBias();
+                        v->setId(id++);
+                        v->setEstimate(0.0);
+                        opt.addVertex(v);
+                        auto *pr = new ped::EdgePedBiasPrior();
+                        pr->setVertex(0, v);
+                        pr->setMeasurement(0.0);
+                        pr->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.scaleAnchorSigmaPerson * P.scaleAnchorSigmaPerson));
+                        opt.addEdge(pr);
+                        kv.second = G.etas.size();
+                        G.etas.push_back({kv.first, v, 0});
+                    }
+                    for (const HEdge &h : hEdges)
+                    {
+                        PedGraph::EtaHandle &eh = G.etas[etaOf[h.track]];
+                        auto *ea = new ped::EdgePedScaleAnchorH<PoseV>();
+                        ea->setVertex(0, h.pv);
+                        ea->setVertex(1, h.vpose);
+                        ea->setVertex(2, eh.v);
+                        ea->setMeasurement(h.meas - G.anchorKappa);
+                        ea->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (sig * sig));
+                        auto *rk = new g2o::RobustKernelHuber();
+                        rk->setDelta(kAnchorHuber);
+                        ea->setRobustKernel(rk);
+                        opt.addEdge(ea);
+                        G.anchors.push_back(ea);
+                        ++eh.nEdges;
                         if (AL().path)
                         {
                             ea->computeError();
@@ -1335,6 +1414,8 @@ namespace ORB_SLAM3
 
     void PedestrianBA::Account(const PedGraph &g, const char *kind, double stamp)
     {
+        g.anchorKind = kind;
+        g.anchorStamp = stamp;
         CallRec r;
         r.kind = kind;
         r.stamp = stamp;
@@ -1368,7 +1449,8 @@ namespace ORB_SLAM3
                 e1.push_back(e->errorData()[0]);
             }
             double post[4];
-            AnchorStats(e1, kAnchorHuber * PedestrianParams::Get().scaleAnchorSigma, post);
+            const PedestrianParams &PA = PedestrianParams::Get();
+            AnchorStats(e1, kAnchorHuber * (PA.scaleAnchorHier ? PA.scaleAnchorSigmaObs : PA.scaleAnchorSigma), post);
             const double dtMs = 1e3 * (NowS() - g.anchorT0);
             std::lock_guard<std::mutex> lk(gLogMutex);
             AnchorLog &L = AL();
@@ -1632,8 +1714,69 @@ namespace ORB_SLAM3
         }
     }
 
+    // hier anchor, after the solve: each track's median x = meas - log z_c over its qualifying observations of this call feeds the map's kappa; optional logs
+    // <P9_ANCHOR_LOG>.hier.csv (one row per call) and <P9_ANCHOR_LOG>.eta.csv (one row per call and track)
+    static void AnchorHierWriteBack(const PedGraph &g, Map *pMap)
+    {
+        std::map<int, std::vector<double>> xs;
+        for (const PedGraph::AnchorCand &a : g.anchorCands)
+            xs[a.track].push_back(a.meas - a.logZc());
+        std::map<int, double> med;
+        for (const auto &kv : xs)
+            med[kv.first] = ped::MedianOf(kv.second);
+        double kAfter = g.anchorKappa;
+        int nAfter = g.anchorKappaTracks;
+        if (!med.empty())
+            pMap->UpdatePedAnchorKappa(med, kAfter, nAfter);
+        AnchorLog &L = AL();
+        if (!L.path)
+            return;
+        std::vector<double> e1;
+        for (g2o::OptimizableGraph::Edge *e : g.anchors)
+        {
+            e->computeError();
+            e1.push_back(e->errorData()[0]);
+        }
+        double post[4];
+        AnchorStats(e1, kAnchorHuber * PedestrianParams::Get().scaleAnchorSigmaObs, post);
+        static std::FILE *fh = nullptr, *fe = nullptr;
+        static long nh = 0;
+        std::lock_guard<std::mutex> lk(gLogMutex);
+        if (!fh)
+        {
+            fh = std::fopen((std::string(L.path) + ".hier.csv").c_str(), "w");
+            fe = std::fopen((std::string(L.path) + ".eta.csv").c_str(), "w");
+            if (fh)
+                std::fprintf(fh, "call,kind,stamp,map_id,active,kappa_used,n_tracks_kappa_used,n_obs_qualifying,n_no_vertex,n_cand,n_edges,n_eta,e_med_pre,e_med_post,n_tracks_call,kappa_after,n_tracks_kappa_after\n");
+            if (fe)
+                std::fprintf(fe, "call,map_id,track,n_cand,n_edges,x_med,eta_hat\n");
+        }
+        const long call = nh++;
+        if (fh)
+        {
+            std::fprintf(fh, "%ld,%s,%.6f,%lu,%d,%.6f,%d,%d,%d,%zu,%zu,%zu,%.6f,%.6f,%zu,%.6f,%d\n", call, g.anchorKind.c_str(), g.anchorStamp, pMap->GetId(), g.anchorActive ? 1 : 0,
+                         g.anchorKappa, g.anchorKappaTracks, g.nAnchorObs, g.nAnchorNoVertex, g.anchorCands.size(), g.anchors.size(), g.etas.size(), g.anchorPre[0], post[0], med.size(), kAfter, nAfter);
+            std::fflush(fh);
+        }
+        if (fe)
+        {
+            for (const auto &kv : med)
+            {
+                const PedGraph::EtaHandle *eh = nullptr;
+                for (const PedGraph::EtaHandle &h : g.etas)
+                    if (h.track == kv.first)
+                        eh = &h;
+                std::fprintf(fe, "%ld,%lu,%d,%zu,%d,%.6f,%s\n", call, pMap->GetId(), kv.first, xs[kv.first].size(), eh ? eh->nEdges : 0, kv.second,
+                             eh ? std::to_string(eh->v->estimate()).c_str() : "nan");
+            }
+            std::fflush(fe);
+        }
+    }
+
     void PedestrianBA::WriteBack(const PedGraph &g, Map *pMap)
     {
+        if (g.anchorHier && pMap)
+            AnchorHierWriteBack(g, pMap);
         if (PedestrianParams::Get().posterReject) // P9-L Part 4 step 1b: feed the poster detector with the solved root estimates
         {
             const PedestrianParams &Q = PedestrianParams::Get();

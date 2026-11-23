@@ -25,6 +25,7 @@
 
 #include "MapPoint.h"
 #include "PedestrianLevels.h"
+#include "PedAnchorKappa.h"
 #include "KeyFrame.h"
 #include "Semantic/Room.h"
 #include "Semantic/Floor.h"
@@ -166,6 +167,9 @@ namespace ORB_SLAM3
         // [P9-C3b] persistent per-track log-scale bias b_j (Pedestrians.FloorContact != none); cleared with the person states
         bool GetPedBias(int trackId, double &b);
         void SetPedBias(int trackId, double b);
+        // [hier anchor] the map's population offset kappa (PedAnchorKappa.h): read at the start of a BA call, updated after it; cleared / carried with the level set
+        void GetPedAnchorKappa(double &kappa, int &nTracks);
+        void UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks);
         // [P9-C5] floor levels of this map (Pedestrians.FloorContact: levels | levels_shadow); persistent like map points, cleared with the person states.
         // The caller locks PedLevelsMutex() for as long as it uses the returned set; created on first use with `p`.
         std::mutex &PedLevelsMutex() { return mMutexPedLevels; }
@@ -223,6 +227,7 @@ namespace ORB_SLAM3
         void ResetPedestriansLocked(const char *cause, double stamp, unsigned long frame, bool keepLevels = false, const Sophus::SE3f *T = nullptr, float s = 1.f);
         std::mutex mMutexPedMap;
         std::map<int, double> mPedBias;
+        ped::AnchorKappaStore mPedAnchorKappa; // [hier anchor] guarded by mMutexPedMap
         std::mutex mMutexPedLevels;
         ped::LevelStore mPedLevels;
         vector<KeyFrame *> mvpKeyFrameOrigins;

@@ -12,6 +12,8 @@
 #include "Map.h"
 #include "PedestrianFactors.h"
 #include "Pedestrians.h"
+#include <functional>
+#include <string>
 #include "Thirdparty/g2o/g2o/core/sparse_optimizer.h"
 
 namespace ORB_SLAM3
@@ -69,6 +71,27 @@ namespace ORB_SLAM3
         int nAnchorObs = 0, nAnchorNoVertex = 0;               // qualifying observations (T4 rule) in the window; of them, without an edge because the chosen point has no vertex in this BA
         bool anchorLogged = false;                             // a log row is pending for this call (P9_ANCHOR_LOG set)
         double anchorT0 = 0, anchorPre[4] = {0, 0, 0, 0};      // steady-clock time at Add; median, q25, q75 of e and share with |e| > 1.345 sigma before the solve
+        // hier anchor (Pedestrians.ScaleAnchorMode: hier): kappa used in this call (read from the map in Add), whether edges were made, every qualifying observation with a
+        // point vertex (edge or not; its x = meas - log z_c at the solved estimates feeds kappa in WriteBack) and the per-track eta vertices of this call
+        bool anchorHier = false, anchorActive = false;
+        double anchorKappa = 0;
+        int anchorKappaTracks = 0;
+        struct AnchorCand
+        {
+            int track;
+            double meas;                    // log z_metric - log(row ratio) (the fixed anchor's measurement, without kappa)
+            std::function<double()> logZc;  // log of the point's camera depth at the current vertex estimates
+        };
+        std::vector<AnchorCand> anchorCands;
+        struct EtaHandle
+        {
+            int track;
+            ped::VertexPedBias *v;
+            int nEdges;
+        };
+        std::vector<EtaHandle> etas;
+        mutable std::string anchorKind;     // set by Account (the hier log rows are written in WriteBack)
+        mutable double anchorStamp = 0;
         std::vector<g2o::OptimizableGraph::Edge *> edges;      // every edge added (for tests / logging)
         std::vector<g2o::OptimizableGraph::Edge *> byType[NTYPES];
         // counters (also printed once per call when non-zero)

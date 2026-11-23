@@ -25,6 +25,7 @@
 #include "PedestrianBA.h"
 #include "Geometric/Plane.h"
 
+#include <cmath>
 #include <mutex>
 
 namespace ORB_SLAM3
@@ -454,6 +455,11 @@ namespace ORB_SLAM3
                 mPedLevels.Reset();
                 PedestrianBA::RecordEvent("EPOCH", stamp, frame, mnId, mPedLevels.Epoch(), -1, -1, 0, 0, 0, 0, 0, "RESET_ACTIVE_MAP");
             }
+        }
+        {
+            // [hier anchor] kappa goes with the map's keyframes and points, like the level set above (empty store: no effect)
+            unique_lock<mutex> lk(mMutexPedMap);
+            mPedAnchorKappa.Clear();
         }
         for (set<KeyFrame *>::iterator sit = mspKeyFrames.begin(), send = mspKeyFrames.end(); sit != send; sit++)
         {
@@ -887,11 +893,31 @@ namespace ORB_SLAM3
                 PedestrianBA::RecordEvent("MERGE", stamp, frame, mapId, newEpoch, ev.id, ev.otherId, ev.z, ev.otherZ, ev.n, ev.otherN, 0, cause);
     }
 
+    void Map::GetPedAnchorKappa(double &kappa, int &nTracks)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        kappa = mPedAnchorKappa.Kappa();
+        nTracks = mPedAnchorKappa.N();
+    }
+
+    void Map::UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        mPedAnchorKappa.Update(trackMedians);
+        kappa = mPedAnchorKappa.Kappa();
+        nTracks = mPedAnchorKappa.N();
+    }
+
     void Map::ResetPedestriansLocked(const char *cause, double stamp, unsigned long frame, bool keepLevels, const Sophus::SE3f *T, float s)
     {
         {
             unique_lock<mutex> lock(mMutexPedMap);
             mPedBias.clear();
+            // [hier anchor] carried through a similarity like the level set (lengths x s: every x = log z_metric - log z_map shifts by -log s), destroyed otherwise
+            if (keepLevels && T)
+                mPedAnchorKappa.Shift(-std::log(static_cast<double>(s)));
+            else if (!keepLevels)
+                mPedAnchorKappa.Clear();
         }
         {
             unique_lock<mutex> lock(mMutexPedLevels);

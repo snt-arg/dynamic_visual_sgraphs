@@ -58,7 +58,29 @@ namespace ORB_SLAM3
                     p.scaleAnchorSigma = static_cast<double>(ss);
                 if (!(p.scaleAnchorSigma > 0))
                     throw std::runtime_error("[Pedestrians] Pedestrians.ScaleAnchorSigma must be > 0");
-                std::cout << "[Pedestrians] scale anchor ON: sigma " << p.scaleAnchorSigma << " (log depth), Huber at 1.345 sigma" << std::endl;
+                const cv::FileNode sm = fs["Pedestrians.ScaleAnchorMode"];
+                if (!sm.empty())
+                {
+                    const std::string mode = static_cast<std::string>(sm);
+                    if (mode == "hier")
+                        p.scaleAnchorHier = true;
+                    else if (mode != "fixed")
+                        throw std::runtime_error("[Pedestrians] Pedestrians.ScaleAnchorMode must be fixed or hier");
+                }
+                if (p.scaleAnchorHier)
+                {
+                    p.scaleAnchorSigmaObs = Req(fs, "Pedestrians.ScaleAnchorSigmaObs");
+                    p.scaleAnchorSigmaPerson = Req(fs, "Pedestrians.ScaleAnchorSigmaPerson");
+                    const cv::FileNode mt = fs["Pedestrians.ScaleAnchorMinTracks"];
+                    if (!mt.empty())
+                        p.scaleAnchorMinTracks = static_cast<int>(mt);
+                    if (!(p.scaleAnchorSigmaObs > 0) || !(p.scaleAnchorSigmaPerson > 0) || p.scaleAnchorMinTracks < 1)
+                        throw std::runtime_error("[Pedestrians] hier scale anchor: SigmaObs and SigmaPerson must be > 0, MinTracks >= 1");
+                    std::cout << "[Pedestrians] scale anchor ON, hier: sigma_obs " << p.scaleAnchorSigmaObs << ", sigma_person " << p.scaleAnchorSigmaPerson << ", min tracks "
+                              << p.scaleAnchorMinTracks << " (log depth), Huber at 1.345 sigma_obs" << std::endl;
+                }
+                else
+                    std::cout << "[Pedestrians] scale anchor ON: sigma " << p.scaleAnchorSigma << " (log depth), Huber at 1.345 sigma" << std::endl;
             }
         }
         p.rootPxSigma = Req(fs, "Pedestrians.RootPxSigma");

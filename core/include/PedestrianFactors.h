@@ -695,6 +695,45 @@ namespace ORB_SLAM3
             }
         };
 
+        // Hierarchical anchor (Pedestrians.ScaleAnchorMode: hier). Vertices: (0) g2o::VertexSBAPointXYZ, (1) camera pose, (2) VertexPedBias = eta_j, the per-track stature offset
+        // of this call. e = log z_corr - log z_metric + kappa + eta_j = -(x - kappa - eta_j),  x = log z_metric - log z_map. kappa (the map's population offset) is held fixed
+        // during the call and folded into the measurement:  _measurement = (log z_m - log((v_p - cy) / (v_f - cy))) - kappa,  e = log z_c - _measurement + eta.
+        // Jacobians: as EdgePedScaleAnchor for (0) and (1); de/deta = +1.
+        template <class PoseV>
+        class EdgePedScaleAnchorH : public g2o::BaseMultiEdge<1, double>
+        {
+        public:
+            EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+            EdgePedScaleAnchorH() { this->resize(3); }
+            Eigen::MatrixXd Jac(int i) const { return this->_jacobianOplus[i]; } // read access for the unit test
+            bool read(std::istream &) override { return false; }
+            bool write(std::ostream &) const override { return false; }
+            Eigen::Vector3d Xc(Eigen::Matrix3d *Rcw_out = nullptr) const
+            {
+                Eigen::Matrix3d Rcw;
+                Eigen::Vector3d tcw;
+                PoseTraits<PoseV>::Get(static_cast<const PoseV *>(this->_vertices[1]), Rcw, tcw);
+                if (Rcw_out)
+                    *Rcw_out = Rcw;
+                return Rcw * static_cast<const g2o::VertexSBAPointXYZ *>(this->_vertices[0])->estimate() + tcw;
+            }
+            double Eta() const { return static_cast<const VertexPedBias *>(this->_vertices[2])->estimate(); }
+            void computeError() override
+            {
+                const double z = Xc()(2);
+                this->_error(0) = std::log(z > 1e-6 ? z : 1e-6) - this->_measurement + Eta();
+            }
+            void linearizeOplus() override
+            {
+                Eigen::Matrix3d Rcw;
+                const Eigen::Vector3d X = Xc(&Rcw);
+                const double z = X(2) > 1e-6 ? X(2) : 1e-6;
+                this->_jacobianOplus[0] = Rcw.row(2) / z;
+                this->_jacobianOplus[1] = PoseTraits<PoseV>::dXc(static_cast<const PoseV *>(this->_vertices[1]), X).row(2) / z;
+                this->_jacobianOplus[2](0, 0) = 1.0;
+            }
+        };
+
     } // namespace ped
 } // namespace ORB_SLAM3
 
