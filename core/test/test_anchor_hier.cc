@@ -6,6 +6,7 @@
 //      (no edges: fewer than 5 tracks known) the store's kappa is within 0.5 % of +6 %; a noisy population (200 tracks, sigma_person 0.173, sigma_obs 0.072) is reported, not gated.
 //   2. with kappa set, the hier solve leaves the map scale unchanged (|s - 1| < 0.5 %).
 //   3. the map is scaled by 1.10 after kappa is set: the hier solve (kappa held) pulls the scale back to within 1 % of 1.
+//   F (variant F, freeze): see TestFreeze.
 //   Reported, not gated: the fixed anchor (sigma 0.05, no kappa, no eta) from the same +10 % start, which pulls the scale to the absolute stature reference (about 1.06).
 // usage: test_anchor_hier
 #include <cmath>
@@ -267,6 +268,71 @@ static void TestJacobians()
     delete et;
 }
 
+// Variant F (ScaleAnchorFreezeTracks N > 0; order of 24 Nov 2026): kappa is frozen once N tracks have contributed
+static void TestFreeze(const World &truth, const std::vector<Obs> &obs)
+{
+    // (a) the store: frozen after N = 27 tracks, the live (counterfactual) median keeps moving
+    {
+        AnchorKappaStore s;
+        bool froze = false;
+        int at = -1;
+        for (int j = 0; j < 40; ++j)
+            if (s.Update({{j, 0.001 * j}}, 27, 10.0 + j) && !froze)
+                froze = true, at = j + 1;
+        CHECK(froze && at == 27 && s.Frozen() && s.NAtFreeze() == 27, "F: kappa freezes when the 27th track contributes");
+        CHECK(std::abs(s.Kappa() - 0.013) < 1e-12 && std::abs(s.KappaAtFreeze() - 0.013) < 1e-12 && s.FreezeStamp() == 36.0,
+              "F: frozen kappa = the median of the first 27 tracks, freeze time recorded");
+        CHECK(std::abs(s.KappaLive() - 0.0195) < 1e-12, "F: later tracks move only the live (unfrozen counterfactual) median");
+    }
+    // (b) frozen at the true scale, then a +10 % map scale change: pulled back
+    double kf = 0;
+    {
+        AnchorKappaStore s;
+        Graph G;
+        Build(G, truth, truth);
+        Solve(G);
+        s.Update(TrackMedians(G, obs), 10, 1.0);
+        kf = s.Kappa();
+        CHECK(s.Frozen() && std::abs(std::exp(kf) / 1.06 - 1) < 0.005, "F: frozen at the shared +6 % offset (10 tracks, N = 10)");
+        Graph G2;
+        Build(G2, truth, Scaled(truth, 1.10));
+        AddHier(G2, obs, s.Kappa());
+        Solve(G2);
+        const double sc = MapScale(G2, truth);
+        std::printf("F: +10 %% after the freeze: map scale %.6f\n", sc);
+        CHECK(std::abs(sc - 1) < 0.01, "F: a +10 % scale change after the freeze is pulled back to within 1 %");
+    }
+    // (c) the map is at +10 % before the freeze: the change is absorbed into kappa, the solve keeps the map where it is
+    {
+        AnchorKappaStore s;
+        Graph G;
+        Build(G, truth, Scaled(truth, 1.10));
+        Solve(G);
+        s.Update(TrackMedians(G, obs), 10, 1.0);
+        std::printf("F: kappa frozen on the +10 %% map: %+.4f %% (expected %+.4f %%)\n", 100 * (std::exp(s.Kappa()) - 1), 100 * (1.06 / 1.10 - 1));
+        CHECK(std::abs(std::exp(s.Kappa()) / (1.06 / 1.10) - 1) < 0.005, "F: a scale change before the freeze is absorbed into kappa");
+        Graph G2;
+        Build(G2, truth, Scaled(truth, 1.10));
+        AddHier(G2, obs, s.Kappa());
+        Solve(G2);
+        const double sc = MapScale(G2, truth);
+        std::printf("F: solve with that kappa from +10 %%: map scale %.6f\n", sc);
+        CHECK(std::abs(sc - 1.10) < 0.0055, "F: ... and the solve leaves the map at +10 % (within 0.5 %)");
+    }
+    // (d) IMU rescale (similarity s) and reset, as in hier
+    {
+        AnchorKappaStore s;
+        s.Update({{1, 0.10}, {2, 0.20}, {3, 0.30}}, 3, 5.0);
+        s.Shift(-std::log(1.5));
+        CHECK(s.Frozen() && std::abs(s.Kappa() - (0.20 - std::log(1.5))) < 1e-12 && std::abs(s.KappaLive() - (0.20 - std::log(1.5))) < 1e-12,
+              "F: a similarity shifts the frozen kappa and the stored x by -log s, kappa stays frozen");
+        s.Clear();
+        CHECK(!s.Frozen() && s.N() == 0 && s.Kappa() == 0.0, "F: reset clears and unfreezes");
+        s.Update({{7, 0.5}, {8, 0.7}, {9, 0.9}}, 3, 9.0);
+        CHECK(s.Frozen() && std::abs(s.Kappa() - 0.7) < 1e-12, "F: after a reset kappa is learned and frozen again from the new map's tracks");
+    }
+}
+
 int main()
 {
     TestJacobians();
@@ -347,6 +413,8 @@ int main()
         s3.Clear();
         CHECK(s3.N() == 0 && s3.Kappa() == 0.0, "reset clears the store");
     }
+
+    TestFreeze(truth, obs);
 
     std::cout << (failures ? "FAILED " : "PASSED ") << failures << std::endl;
     return failures ? 1 : 0;

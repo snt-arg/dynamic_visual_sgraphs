@@ -893,19 +893,30 @@ namespace ORB_SLAM3
                 PedestrianBA::RecordEvent("MERGE", stamp, frame, mapId, newEpoch, ev.id, ev.otherId, ev.z, ev.otherZ, ev.n, ev.otherN, 0, cause);
     }
 
-    void Map::GetPedAnchorKappa(double &kappa, int &nTracks)
+    void Map::GetPedAnchorKappa(double &kappa, int &nTracks, bool *frozen)
     {
         unique_lock<mutex> lock(mMutexPedMap);
+        kappa = mPedAnchorKappa.Kappa();
+        nTracks = mPedAnchorKappa.N();
+        if (frozen)
+            *frozen = mPedAnchorKappa.Frozen();
+    }
+
+    void Map::UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks, int freezeN, double stamp)
+    {
+        unique_lock<mutex> lock(mMutexPedMap);
+        if (freezeN > 0)
+            mPedAnchorKappa.Update(trackMedians, freezeN, stamp);
+        else
+            mPedAnchorKappa.Update(trackMedians);
         kappa = mPedAnchorKappa.Kappa();
         nTracks = mPedAnchorKappa.N();
     }
 
-    void Map::UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks)
+    ped::AnchorKappaStore Map::PedAnchorKappaSnapshot()
     {
         unique_lock<mutex> lock(mMutexPedMap);
-        mPedAnchorKappa.Update(trackMedians);
-        kappa = mPedAnchorKappa.Kappa();
-        nTracks = mPedAnchorKappa.N();
+        return mPedAnchorKappa;
     }
 
     void Map::ResetPedestriansLocked(const char *cause, double stamp, unsigned long frame, bool keepLevels, const Sophus::SE3f *T, float s)

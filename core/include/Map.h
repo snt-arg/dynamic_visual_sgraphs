@@ -168,8 +168,9 @@ namespace ORB_SLAM3
         bool GetPedBias(int trackId, double &b);
         void SetPedBias(int trackId, double b);
         // [hier anchor] the map's population offset kappa (PedAnchorKappa.h): read at the start of a BA call, updated after it; cleared / carried with the level set
-        void GetPedAnchorKappa(double &kappa, int &nTracks);
-        void UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks);
+        void GetPedAnchorKappa(double &kappa, int &nTracks, bool *frozen = nullptr);
+        void UpdatePedAnchorKappa(const std::map<int, double> &trackMedians, double &kappa, int &nTracks, int freezeN = 0, double stamp = -1);
+        ped::AnchorKappaStore PedAnchorKappaSnapshot(); // [variant F] a copy, for the logs
         // [P9-C5] floor levels of this map (Pedestrians.FloorContact: levels | levels_shadow); persistent like map points, cleared with the person states.
         // The caller locks PedLevelsMutex() for as long as it uses the returned set; created on first use with `p`.
         std::mutex &PedLevelsMutex() { return mMutexPedLevels; }

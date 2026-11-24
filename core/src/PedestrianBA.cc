@@ -424,9 +424,11 @@ namespace ORB_SLAM3
                 if (P.scaleAnchorHier)
                 {
                     G.anchorHier = true;
+                    bool frozen = false;
                     if (pMap)
-                        pMap->GetPedAnchorKappa(G.anchorKappa, G.anchorKappaTracks);
-                    G.anchorActive = G.anchorKappaTracks >= P.scaleAnchorMinTracks;
+                        pMap->GetPedAnchorKappa(G.anchorKappa, G.anchorKappaTracks, &frozen);
+                    // variant F: active only once kappa is frozen (replaces MinTracks)
+                    G.anchorActive = P.scaleAnchorFreezeTracks > 0 ? frozen : G.anchorKappaTracks >= P.scaleAnchorMinTracks;
                 }
                 for (const PedGraphKF &g : kfs)
                 {
@@ -1727,7 +1729,7 @@ namespace ORB_SLAM3
         double kAfter = g.anchorKappa;
         int nAfter = g.anchorKappaTracks;
         if (!med.empty())
-            pMap->UpdatePedAnchorKappa(med, kAfter, nAfter);
+            pMap->UpdatePedAnchorKappa(med, kAfter, nAfter, PedestrianParams::Get().scaleAnchorFreezeTracks, g.anchorStamp);
         AnchorLog &L = AL();
         if (!L.path)
             return;
@@ -1747,15 +1749,17 @@ namespace ORB_SLAM3
             fh = std::fopen((std::string(L.path) + ".hier.csv").c_str(), "w");
             fe = std::fopen((std::string(L.path) + ".eta.csv").c_str(), "w");
             if (fh)
-                std::fprintf(fh, "call,kind,stamp,map_id,active,kappa_used,n_tracks_kappa_used,n_obs_qualifying,n_no_vertex,n_cand,n_edges,n_eta,e_med_pre,e_med_post,n_tracks_call,kappa_after,n_tracks_kappa_after\n");
+                std::fprintf(fh, "call,kind,stamp,map_id,active,kappa_used,n_tracks_kappa_used,n_obs_qualifying,n_no_vertex,n_cand,n_edges,n_eta,e_med_pre,e_med_post,n_tracks_call,kappa_after,n_tracks_kappa_after,frozen,kappa_live,freeze_stamp,kappa_at_freeze,n_at_freeze\n");
             if (fe)
                 std::fprintf(fe, "call,map_id,track,n_cand,n_edges,x_med,eta_hat\n");
         }
         const long call = nh++;
         if (fh)
         {
-            std::fprintf(fh, "%ld,%s,%.6f,%lu,%d,%.6f,%d,%d,%d,%zu,%zu,%zu,%.6f,%.6f,%zu,%.6f,%d\n", call, g.anchorKind.c_str(), g.anchorStamp, pMap->GetId(), g.anchorActive ? 1 : 0,
-                         g.anchorKappa, g.anchorKappaTracks, g.nAnchorObs, g.nAnchorNoVertex, g.anchorCands.size(), g.anchors.size(), g.etas.size(), g.anchorPre[0], post[0], med.size(), kAfter, nAfter);
+            const ped::AnchorKappaStore ks = pMap->PedAnchorKappaSnapshot(); // variant F columns (frozen 0 and freeze fields -1 / 0 when FreezeTracks is 0)
+            std::fprintf(fh, "%ld,%s,%.6f,%lu,%d,%.6f,%d,%d,%d,%zu,%zu,%zu,%.6f,%.6f,%zu,%.6f,%d,%d,%.6f,%.6f,%.6f,%d\n", call, g.anchorKind.c_str(), g.anchorStamp, pMap->GetId(), g.anchorActive ? 1 : 0,
+                         g.anchorKappa, g.anchorKappaTracks, g.nAnchorObs, g.nAnchorNoVertex, g.anchorCands.size(), g.anchors.size(), g.etas.size(), g.anchorPre[0], post[0], med.size(), kAfter, nAfter,
+                         ks.Frozen() ? 1 : 0, ks.KappaLive(), ks.FreezeStamp(), ks.KappaAtFreeze(), ks.NAtFreeze());
             std::fflush(fh);
         }
         if (fe)

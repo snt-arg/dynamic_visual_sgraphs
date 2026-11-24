@@ -134,6 +134,9 @@ namespace ORB_SLAM3
         bool scaleAnchorHier = false;
         double scaleAnchorSigmaObs = 0, scaleAnchorSigmaPerson = 0;
         int scaleAnchorMinTracks = 5;
+        // Variant F (order of 24 Nov 2026), hier mode only: ScaleAnchorFreezeTracks N > 0 freezes kappa once N tracks have contributed in the map; the anchor is inactive until then
+        // (replaces MinTracks). 0 / absent = the hier behaviour.
+        int scaleAnchorFreezeTracks = 0;
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 

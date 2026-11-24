@@ -74,10 +74,15 @@ namespace ORB_SLAM3
                     const cv::FileNode mt = fs["Pedestrians.ScaleAnchorMinTracks"];
                     if (!mt.empty())
                         p.scaleAnchorMinTracks = static_cast<int>(mt);
+                    const cv::FileNode ft = fs["Pedestrians.ScaleAnchorFreezeTracks"];
+                    if (!ft.empty())
+                        p.scaleAnchorFreezeTracks = static_cast<int>(ft);
+                    if (p.scaleAnchorFreezeTracks < 0)
+                        throw std::runtime_error("[Pedestrians] Pedestrians.ScaleAnchorFreezeTracks must be >= 0");
                     if (!(p.scaleAnchorSigmaObs > 0) || !(p.scaleAnchorSigmaPerson > 0) || p.scaleAnchorMinTracks < 1)
                         throw std::runtime_error("[Pedestrians] hier scale anchor: SigmaObs and SigmaPerson must be > 0, MinTracks >= 1");
                     std::cout << "[Pedestrians] scale anchor ON, hier: sigma_obs " << p.scaleAnchorSigmaObs << ", sigma_person " << p.scaleAnchorSigmaPerson << ", min tracks "
-                              << p.scaleAnchorMinTracks << " (log depth), Huber at 1.345 sigma_obs" << std::endl;
+                              << p.scaleAnchorMinTracks << ", freeze after " << p.scaleAnchorFreezeTracks << " tracks (0 = never) (log depth), Huber at 1.345 sigma_obs" << std::endl;
                 }
                 else
                     std::cout << "[Pedestrians] scale anchor ON: sigma " << p.scaleAnchorSigma << " (log depth), Huber at 1.345 sigma" << std::endl;
