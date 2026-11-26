@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <unistd.h>
 #include <Eigen/Dense>
 #include <opencv2/core/core.hpp>
 
@@ -816,8 +817,72 @@ static void LevelTests(const char *tag)
     delete pose;
 }
 
+// P9-Z Part A oracle: (i) the reader delivers an O row to its observation; (ii) the oracle value reaches the anchor edge's measurement (O2: GT foot depth; O1-r: recovered
+// stature); (iii) an unmatched observation adds no anchor edge in every oracle arm, and every observation keeps the system value with all keys at 0.
+static void OracleTests()
+{
+    PedestrianParams &P = PedestrianParams::Get();
+    const PedestrianParams saved = P;
+    P.enabled = true;
+    P.skelOverStature = 0.855387;
+    P.statureFixedM = 1.70;
+    char tmpl[] = "/tmp/p9oracle_XXXXXX";
+    const std::string dir = mkdtemp(tmpl);
+    const double stamp = 12.345678;
+    {
+        char name[64];
+        std::snprintf(name, sizeof(name), "%019lld.ped.txt", static_cast<long long>(std::llround(stamp * 1e6)));
+        FILE *f = std::fopen((dir + "/" + name).c_str(), "w");
+        std::fprintf(f, "# test\nP 3 300 250 97 150\nP 7 400 260 80 120\nF 3 302 330 0.9\nF 7 401 320 0.8\nO 3 6.250000 1.812000\n");
+        std::fclose(f);
+    }
+    std::shared_ptr<PedFrame> pf = PedestrianFrameReader(dir).Read(stamp);
+    CHECK(pf->obs.size() == 2, "oracle: reader keeps two P rows");
+    const PedObs &m = pf->obs[0], &u = pf->obs[1];
+    CHECK(m.trackId == 3 && m.oracleMatched && std::abs(m.oracleZ - 6.25) < 1e-12 && std::abs(m.oracleH - 1.812) < 1e-12, "oracle: O row reaches its observation");
+    CHECK(u.trackId == 7 && !u.oracleMatched, "oracle: observation without O row is unmatched");
+    const double fx = 415.692;
+    const double sys_m = std::log(fx * 0.855387 * 1.70 / 97.0), sys_u = std::log(fx * 0.855387 * 1.70 / 80.0);
+    double z = 0;
+    auto set = [&](bool st, bool rg, bool mo) { P.oracleStature = st; P.oracleRange = rg; P.oracleMatchedOnly = mo; };
+    set(false, false, false);
+    CHECK(AnchorLogDepth(P, m, fx, z) && std::abs(z - sys_m) < 1e-12, "oracle keys 0: matched observation keeps the system z_m");
+    CHECK(AnchorLogDepth(P, u, fx, z) && std::abs(z - sys_u) < 1e-12, "oracle keys 0: unmatched observation keeps the system z_m");
+    CHECK(std::abs(P.ObsStature(m) - 1.70) < 1e-12, "oracle keys 0: stature 1.70");
+    set(false, true, false);
+    CHECK(AnchorLogDepth(P, m, fx, z) && std::abs(z - std::log(6.25)) < 1e-12, "O2: anchor z_m = GT foot depth");
+    CHECK(!AnchorLogDepth(P, u, fx, z), "O2: unmatched observation adds no anchor edge");
+    CHECK(std::abs(P.ObsStature(m) - 1.70) < 1e-12, "O2: range factor stature stays 1.70");
+    set(true, false, false);
+    CHECK(AnchorLogDepth(P, m, fx, z) && std::abs(z - std::log(fx * 0.855387 * 1.812 / 97.0)) < 1e-12, "O1-r: anchor z_m from the recovered stature");
+    CHECK(!AnchorLogDepth(P, u, fx, z), "O1-r: unmatched observation adds no anchor edge");
+    CHECK(std::abs(P.ObsStature(m) - 1.812) < 1e-12 && std::abs(P.ObsStature(u) - 1.70) < 1e-12, "O1-r: range-factor stature = recovered (matched), 1.70 (unmatched)");
+    set(false, false, true);
+    CHECK(AnchorLogDepth(P, m, fx, z) && std::abs(z - sys_m) < 1e-12, "A-M: matched observation keeps the system z_m");
+    CHECK(!AnchorLogDepth(P, u, fx, z), "A-M: unmatched observation adds no anchor edge");
+    // the value reaches the edge: a map point at the GT foot depth (row ratio 1) gives e = 0 under O2
+    set(false, true, false);
+    {
+        g2o::VertexSE3Expmap *pose = MakeSE3(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        g2o::VertexSBAPointXYZ pt;
+        pt.setEstimate(Eigen::Vector3d(0.4, 1.1, 6.25));
+        EdgePedScaleAnchor<g2o::VertexSE3Expmap> e;
+        e.setVertex(0, &pt);
+        e.setVertex(1, pose);
+        CHECK(AnchorLogDepth(P, m, fx, z), "O2: edge built");
+        e.setMeasurement(z - std::log(1.0));
+        e.computeError();
+        CHECK(std::abs(e.error()(0)) < 1e-12, "O2: anchor residual 0 at the GT foot depth");
+        delete pose;
+    }
+    P = saved;
+    std::remove((dir + "/" + std::string(std::to_string(std::llround(stamp * 1e6)).insert(0, 19 - std::to_string(std::llround(stamp * 1e6)).size(), '0')) + ".ped.txt").c_str());
+    rmdir(dir.c_str());
+}
+
 int main()
 {
+    OracleTests();
     LevelTests<g2o::VertexSE3Expmap>("SE3");
     LevelTests<VertexPose>("VertexPose");
     FloorPxTests<g2o::VertexSE3Expmap>("SE3");

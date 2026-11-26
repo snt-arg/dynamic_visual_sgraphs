@@ -61,6 +61,16 @@ namespace ORB_SLAM3
                 std::cout << "[Pedestrians] scale anchor ON: sigma " << p.scaleAnchorSigma << " (log depth), Huber at 1.345 sigma" << std::endl;
             }
         }
+        {
+            // P9-Z Part A oracle keys (optional, default 0)
+            auto opt01 = [&](const char *k) { const cv::FileNode n = fs[k]; return !n.empty() && static_cast<int>(n) != 0; };
+            p.oracleStature = opt01("Pedestrians.OracleStature");
+            p.oracleRange = opt01("Pedestrians.OracleRange");
+            p.oracleMatchedOnly = opt01("Pedestrians.OracleMatchedOnly");
+            if (p.OracleAny())
+                std::cout << "[Pedestrians] ORACLE (diagnostic): stature " << p.oracleStature << ", range " << p.oracleRange << ", matched-only " << p.oracleMatchedOnly
+                          << " (anchor edges on matched observations only)" << std::endl;
+        }
         p.rootPxSigma = Req(fs, "Pedestrians.RootPxSigma");
         p.logDepthSigma = Req(fs, "Pedestrians.LogDepthSigma");
         p.skelOverStature = Req(fs, "Pedestrians.SkeletonOverStature");
@@ -362,6 +372,24 @@ namespace ORB_SLAM3
                 target->footU = fu;
                 target->footV = fv;
                 target->footScore = fs;
+            }
+            else if (tag == "O")
+            {
+                // O track z_gt H_gt: oracle values of the observation of the P row with that track id (P9-Z Part A; read always, used only under the oracle keys)
+                int tid;
+                double z, h;
+                ss >> tid >> z >> h;
+                if (ss.fail() || !(z > 0) || !(h > 0))
+                    throw std::runtime_error("[Pedestrians] malformed line in " + path + ": " + line);
+                PedObs *target = nullptr;
+                for (PedObs &o : pf->obs)
+                    if (o.trackId == tid)
+                        target = &o;
+                if (!target || target->oracleMatched)
+                    throw std::runtime_error("[Pedestrians] O row without a P row, or two O rows, in " + path + ": " + line);
+                target->oracleMatched = true;
+                target->oracleZ = z;
+                target->oracleH = h;
             }
             else
                 throw std::runtime_error("[Pedestrians] unknown row tag in " + path + ": " + line);

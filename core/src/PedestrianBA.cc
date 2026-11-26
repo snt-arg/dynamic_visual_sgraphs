@@ -317,7 +317,7 @@ namespace ORB_SLAM3
                         if (PedestrianParams::Get().gateK > 0 && o.maskH > 0)
                         {
                             const PedestrianParams &Q = PedestrianParams::Get();
-                            const double d = std::log(Q.skelOverStature * Q.statureFixedM / o.lpx) - std::log(Q.maskHeightM / o.maskH); // f cancels
+                            const double d = std::log(Q.skelOverStature * Q.ObsStature(o) / o.lpx) - std::log(Q.maskHeightM / o.maskH); // f cancels
                             en.rangeOk = std::abs(d - Q.gateCenter) <= Q.gateK * Q.gateSigma;
                         }
                         tracks[o.trackId].push_back(en);
@@ -361,7 +361,7 @@ namespace ORB_SLAM3
                                     const double sk = P.innovScale[std::min(std::max(kAge, 3), 6) - 3];
                                     t = ped::InnovationTest(P, ps.p, ps.v, dt, Tcw.rotationMatrix().cast<double>(), Tcw.translation().cast<double>(), c.fx, c.fy, c.cx, c.cy,
                                                             e.obs->rootU, e.obs->rootV, e.rangeOk,
-                                                            std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx), sk);
+                                                            std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.ObsStature(*e.obs)) - std::log(e.obs->lpx), sk);
                                 }
                             }
                             if (P.innovShadow)
@@ -434,6 +434,12 @@ namespace ORB_SLAM3
                     {
                         if (!(o.lpx > 0) || !o.hasFoot || !(o.footScore >= 0.3) || !(o.footV > c.cy + 5.0))
                             continue;
+                        double logZm = 0;
+                        if (!AnchorLogDepth(P, o, c.fx, logZm))
+                        {
+                            ++G.nAnchorOracleUnmatched; // oracle arms: an observation without a GT match adds no anchor edge (no fallback)
+                            continue;
+                        }
                         if (!candDone)
                         {
                             candDone = true;
@@ -473,7 +479,8 @@ namespace ORB_SLAM3
                         ea->setVertex(0, pv);
                         ea->setVertex(1, vpose);
                         // log z_m - log(row ratio); z_m = f cL H0 / l_px, the constants of the range factor (P.skelOverStature, P.statureFixedM)
-                        ea->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(o.lpx) - std::get<2>(m));
+                        // logZm from AnchorLogDepth (O2: the GT foot depth; O1-r: the matched GT person's recovered stature; else the system's f cL H0 / l_px)
+                        ea->setMeasurement(logZm - std::get<2>(m));
                         ea->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (sig * sig));
                         auto *rk = new g2o::RobustKernelHuber();
                         rk->setDelta(kAnchorHuber);
@@ -547,7 +554,7 @@ namespace ORB_SLAM3
                         const Eigen::Vector3d b((e.obs->rootU - c.cx) / c.fx, (e.obs->rootV - c.cy) / c.fy, 1.0);
                         // optical-axis depth z = f cL H / l_px (P9-C3b erratum: the length is inversely proportional to z, not to the ray length);
                         // without a skeleton length the mask height gives an initial depth only (the estimate is refined by the BA)
-                        const double z = e.rangeOk ? (c.fx * P.skelOverStature * Hcur / e.obs->lpx)
+                        const double z = e.rangeOk ? (c.fx * P.skelOverStature * (P.oracleStature ? P.ObsStature(*e.obs) : Hcur) / e.obs->lpx)
                                                    : (c.fx * P.maskHeightM / std::max(e.obs->maskH, 1.0));
                         const Sophus::SE3f Twc = e.kf->GetPoseInverse();
                         s.p = (Twc.rotationMatrix() * (z * b).cast<float>() + Twc.translation()).cast<double>();
@@ -600,7 +607,7 @@ namespace ORB_SLAM3
                         edge->setVertex(1, vpose);
                         if (vbias)
                             edge->setVertex(2, vbias);
-                        edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.statureFixedM) - std::log(e.obs->lpx));
+                        edge->setMeasurement(std::log(c.fx) + std::log(P.skelOverStature) + std::log(P.ObsStature(*e.obs)) - std::log(e.obs->lpx));
                         edge->setInformation(Eigen::Matrix<double, 1, 1>::Identity() / (P.logDepthSigma * P.logDepthSigma));
                         auto *rk = new g2o::RobustKernelHuber();
                         rk->setDelta(kHuber1D * P.huberScale);
@@ -1376,12 +1383,12 @@ namespace ORB_SLAM3
             {
                 L.f = std::fopen(L.path, "w");
                 if (L.f)
-                    std::fprintf(L.f, "call,kind,stamp,n_obs_qualifying,n_no_vertex,n_edges,e_med_pre,e_q25_pre,e_q75_pre,huber_share_pre,e_med_post,e_q25_post,e_q75_post,huber_share_post,add_to_writeback_ms\n");
+                    std::fprintf(L.f, "call,kind,stamp,n_obs_qualifying,n_no_vertex,n_edges,e_med_pre,e_q25_pre,e_q75_pre,huber_share_pre,e_med_post,e_q25_post,e_q75_post,huber_share_post,add_to_writeback_ms,n_oracle_unmatched\n");
             }
             if (L.f)
             {
-                std::fprintf(L.f, "%ld,%s,%.6f,%d,%d,%zu,%.6f,%.6f,%.6f,%.4f,%.6f,%.6f,%.6f,%.4f,%.3f\n", L.n++, kind, stamp, g.nAnchorObs, g.nAnchorNoVertex, g.anchors.size(),
-                             g.anchorPre[0], g.anchorPre[1], g.anchorPre[2], g.anchorPre[3], post[0], post[1], post[2], post[3], dtMs);
+                std::fprintf(L.f, "%ld,%s,%.6f,%d,%d,%zu,%.6f,%.6f,%.6f,%.4f,%.6f,%.6f,%.6f,%.4f,%.3f,%d\n", L.n++, kind, stamp, g.nAnchorObs, g.nAnchorNoVertex, g.anchors.size(),
+                             g.anchorPre[0], g.anchorPre[1], g.anchorPre[2], g.anchorPre[3], post[0], post[1], post[2], post[3], dtMs, g.nAnchorOracleUnmatched);
                 std::fflush(L.f);
             }
         }

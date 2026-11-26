@@ -6,6 +6,7 @@
 #define PEDESTRIANS_H
 
 #include <array>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <string>
@@ -27,6 +28,10 @@ namespace ORB_SLAM3
         // P9-C3: lowest foot keypoint (heel or toe, RTMW, score >= 0.3) of this person in this image [px]; `F` row of the per-frame file
         bool hasFoot = false;
         double footU = 0, footV = 0, footScore = 0;
+        // P9-Z Part A oracle (diagnostic only, never a system input): `O track z_gt H_gt` row of the oracle perception copy (sa/oracle/oracle_perception.py). oracleMatched = the
+        // observation is associated with exactly one visible GT person; oracleZ = optical depth of that person's GT foot point in the GT camera; oracleH = its recovered stature (O1-r)
+        bool oracleMatched = false;
+        double oracleZ = 0, oracleH = 0;
     };
 
     // Stance claim of one track at one image, delivered LATE: the P4-S1 agree+timing claim at image t is final only 6 images later
@@ -128,6 +133,13 @@ namespace ORB_SLAM3
         // and the static map point next to the foot (PedestrianBA.cc, EdgePedScaleAnchor). ScaleAnchorSigma: optional, read only when on (default 0.20; the declared sigma sweep).
         bool scaleAnchor = false;
         double scaleAnchorSigma = 0.20;
+        // P9-Z Part A oracle keys (optional, default 0, diagnostic only): OracleStature 1 = O1-r (a matched observation uses its GT person's recovered stature wherever the fixed
+        // stature enters a measurement: log-range edge and its initial depth, anchor, mask gate, innovation gate); OracleRange 1 = O2 (the anchor's z_m = the GT foot depth);
+        // OracleMatchedOnly 1 = A-M. Any of the three: anchor edges only on matched observations (unmatched: no anchor edge; their range factor keeps StatureFixedM).
+        bool oracleStature = false, oracleRange = false, oracleMatchedOnly = false;
+        bool OracleAny() const { return oracleStature || oracleRange || oracleMatchedOnly; }
+        // stature of one observation (O1-r: the matched GT person's recovered stature, else StatureFixedM)
+        double ObsStature(const PedObs &o) const { return (oracleStature && o.oracleMatched) ? o.oracleH : statureFixedM; }
         double huberScale = 0;       // multiplies every Huber threshold of the pedestrian measurement factors (1 = the chi2-95 % values of Optimizer.cc:1994-1995)
         std::string dir;             // per-frame input directory (read by the runner, not by the library)
 
@@ -136,6 +148,16 @@ namespace ORB_SLAM3
         // Reads the Pedestrians.* keys; throws std::runtime_error naming the first missing key. Returns enabled.
         static bool Configure(cv::FileStorage &fs);
     };
+
+    // P9-Z Part A: the anchor's measurement for one qualifying observation. Returns false when the observation adds no anchor edge (an oracle key is on and the observation has
+    // no GT match: no fallback); else logZm = log z_m, z_m = the GT foot depth (OracleRange) or f c_L H / l_px with H = ObsStature (OracleStature) or StatureFixedM.
+    inline bool AnchorLogDepth(const PedestrianParams &P, const PedObs &o, double fx, double &logZm)
+    {
+        if (P.OracleAny() && !o.oracleMatched)
+            return false;
+        logZm = P.oracleRange ? std::log(o.oracleZ) : std::log(fx) + std::log(P.skelOverStature) + std::log(P.ObsStature(o)) - std::log(o.lpx);
+        return true;
+    }
 
     // P9-C4 innovation gate: the decision taken once, when a (keyframe, track) measurement first reaches a metric BA call. Persisted on the keyframe so a
     // later window does not re-decide it (the track's last written-back state moves with every solve).
